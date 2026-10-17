@@ -300,6 +300,7 @@ module console 'modules/console.bicep' = {
 }
 
 // Role assignments (in control RG, but also cross-RG for workload)
+// console roles do not wait for the web apps (a throttled region must not block the control plane)
 module roles 'modules/roles.bicep' = {
   name: 'roles-deployment'
   scope: controlRg
@@ -308,12 +309,35 @@ module roles 'modules/roles.bicep' = {
     storageAccountId: storage.outputs.storageAccountId
     keyVaultId: keyVault.outputs.keyVaultId
     openAIId: useExistingOpenAI ? '' : openAI.outputs.openAIId
+    webAppAPrincipalId: ''
+    webAppBPrincipalId: ''
+  }
+}
+
+module rolesAppA 'modules/roles.bicep' = {
+  name: 'roles-app-a-deployment'
+  scope: controlRg
+  params: {
+    consolePrincipalId: ''
+    storageAccountId: storage.outputs.storageAccountId
+    keyVaultId: keyVault.outputs.keyVaultId
+    openAIId: ''
     webAppAPrincipalId: webAppA.outputs.webAppPrincipalId
+    webAppBPrincipalId: ''
+  }
+}
+
+module rolesAppB 'modules/roles.bicep' = {
+  name: 'roles-app-b-deployment'
+  scope: controlRg
+  params: {
+    consolePrincipalId: ''
+    storageAccountId: storage.outputs.storageAccountId
+    keyVaultId: keyVault.outputs.keyVaultId
+    openAIId: ''
+    webAppAPrincipalId: ''
     webAppBPrincipalId: webAppB.outputs.webAppPrincipalId
   }
-  dependsOn: [
-    workloadRg
-  ]
 }
 
 module rolesWorkload 'modules/roles-workload.bicep' = {

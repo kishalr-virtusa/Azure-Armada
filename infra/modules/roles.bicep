@@ -31,7 +31,7 @@ var cognitiveServicesOpenAIUserRoleId = '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
 var azureAIUserRoleId = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
 
 // Console identity: Storage Table Data Contributor
-resource storageTableRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource storageTableRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(consolePrincipalId)) {
   name: guid(storageAccountId, consolePrincipalId, storageTableDataContributorRoleId)
   scope: resourceGroup()
   properties: {
@@ -42,7 +42,7 @@ resource storageTableRole 'Microsoft.Authorization/roleAssignments@2022-04-01' =
 }
 
 // Console identity: Storage Blob Data Contributor
-resource storageBlobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource storageBlobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(consolePrincipalId)) {
   name: guid(storageAccountId, consolePrincipalId, storageBlobDataContributorRoleId)
   scope: resourceGroup()
   properties: {
@@ -53,7 +53,7 @@ resource storageBlobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = 
 }
 
 // Console identity: Key Vault Secrets User
-resource consoleKeyVaultRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource consoleKeyVaultRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(consolePrincipalId)) {
   name: guid(keyVaultId, consolePrincipalId, keyVaultSecretsUserRoleId)
   scope: resourceGroup()
   properties: {
@@ -64,7 +64,7 @@ resource consoleKeyVaultRole 'Microsoft.Authorization/roleAssignments@2022-04-01
 }
 
 // Console identity: Cognitive Services OpenAI User (if OpenAI resource exists)
-resource openAIUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(openAIId)) {
+resource openAIUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(openAIId) && !empty(consolePrincipalId)) {
   name: guid(openAIId, consolePrincipalId, cognitiveServicesOpenAIUserRoleId)
   scope: resourceGroup()
   properties: {
@@ -75,7 +75,7 @@ resource openAIUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = i
 }
 
 // Web App A: Key Vault Secrets User (for SQL password reference)
-resource webAppAKeyVaultRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource webAppAKeyVaultRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(webAppAPrincipalId)) {
   name: guid(keyVaultId, webAppAPrincipalId, keyVaultSecretsUserRoleId)
   scope: resourceGroup()
   properties: {
@@ -86,7 +86,7 @@ resource webAppAKeyVaultRole 'Microsoft.Authorization/roleAssignments@2022-04-01
 }
 
 // Web App B: Key Vault Secrets User (for SQL password reference)
-resource webAppBKeyVaultRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource webAppBKeyVaultRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(webAppBPrincipalId)) {
   name: guid(keyVaultId, webAppBPrincipalId, keyVaultSecretsUserRoleId)
   scope: resourceGroup()
   properties: {
@@ -97,7 +97,7 @@ resource webAppBKeyVaultRole 'Microsoft.Authorization/roleAssignments@2022-04-01
 }
 
 // Console identity: Azure AI User (Foundry Agent Service: create/run agents in the project)
-resource azureAIUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(openAIId)) {
+resource azureAIUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(openAIId) && !empty(consolePrincipalId)) {
   name: guid(openAIId, consolePrincipalId, azureAIUserRoleId)
   scope: resourceGroup()
   properties: {
