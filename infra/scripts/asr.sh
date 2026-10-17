@@ -82,6 +82,19 @@ enable() {
   ensure "$PI_PATH" \
     "{\"properties\":{\"policyId\":\"$VAULT/replicationPolicies/$POLICY\",\"providerSpecificDetails\":{\"instanceType\":\"A2A\",\"fabricObjectId\":\"$vm_id\",\"recoveryContainerId\":\"$VAULT/replicationFabrics/$FAB_B/replicationProtectionContainers/$PC_B\",\"recoveryResourceGroupId\":\"$REC_RGID\",\"recoveryAzureNetworkId\":\"$vnet_b\",\"recoverySubnetName\":\"default\",\"vmManagedDisks\":[{\"diskId\":\"$disk_id\",\"primaryStagingAzureStorageAccountId\":\"$cache_id\",\"recoveryResourceGroupId\":\"$REC_RGID\",\"recoveryReplicaDiskAccountType\":\"Standard_LRS\",\"recoveryTargetDiskAccountType\":\"StandardSSD_LRS\"}]}}}" \
     "protected item $VM (initial replication continues in the background)" '.properties.protectionState != null'
+
+  # Pin a small recovery VM size that Site Recovery supports for this VM (it otherwise picked an 8-vCPU M-series,
+  # over the Free Trial 4-core quota). Only sizes from ASR's own targetComputeSizes list are accepted.
+  local want="${RECOVERY_VM_SIZE:-Standard_DC2ds_v3}" cur supported
+  cur=$(get "$PI_PATH" | jq -r '.properties.providerSpecificDetails.recoveryAzureVMSize')
+  supported=$(az rest --method get --url "$MGMT$PI_PATH/targetComputeSizes?$API" --query "value[].properties.name" -o tsv 2>/dev/null)
+  if [[ "$cur" != "$want" ]] && grep -qx "$want" <<<"$supported"; then
+    echo "  setting recovery VM size $want (was ${cur:-unset})"
+    az rest --method patch --url "$MGMT$PI_PATH?$API" -o none --body "{\"properties\":{\"recoveryAzureVMName\":\"$VM\",\"recoveryAzureVMSize\":\"$want\",\"selectedRecoveryAzureNetworkId\":\"$RGID/providers/Microsoft.Network/virtualNetworks/dra-vnet-sea-$SFX\",\"providerSpecificDetails\":{\"instanceType\":\"A2A\"}}}" || true
+  elif [[ "$cur" != "$want" ]]; then
+    echo "  WARNING: $want is not in Site Recovery's supported sizes for this VM; recovery size stays ${cur}"
+  fi
+
   status
 }
 
