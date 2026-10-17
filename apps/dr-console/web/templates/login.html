@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — DR Agent Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/virtusa.css">
+</head>
+<body>
+    <div class="login-wrap">
+        <div class="card login-card">
+            <span class="eyebrow">Virtusa Azure Day 2026</span>
+            <h1>🛡️ DR Agent</h1>
+            <p class="sub" style="margin-bottom: 24px;">Enter the console passcode to continue</p>
+            
+            {% if error %}
+            <div class="box" style="background: var(--add-bg); border-color: var(--add); color: var(--add); margin-bottom: 16px;">
+                {{ error }}
+            </div>
+            {% endif %}
+            
+            <form method="POST" action="/login">
+                <div class="form-group">
+                    <input type="password" 
+                           name="passcode" 
+                           class="form-input" 
+                           placeholder="Passcode"
+                           autofocus
+                           required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">
+                    Sign In
+                </button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}DR Agent Console{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/virtusa.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="nav">
+        <a href="/" class="nav-brand">
+            <span>🛡️</span>
+            <span>DR Agent Console</span>
+        </a>
+        
+        <div class="nav-links">
+            <a href="/" class="nav-link {% if active_page == 'overview' %}active{% endif %}">Overview</a>
+            <a href="/phase1" class="nav-link {% if active_page == 'phase1' %}active{% endif %}">Phase 1</a>
+            <a href="/plan" class="nav-link {% if active_page == 'plan' %}active{% endif %}">Plan</a>
+            <a href="/exercise" class="nav-link {% if active_page == 'exercise' %}active{% endif %}">Exercise</a>
+            <a href="/results" class="nav-link {% if active_page == 'results' %}active{% endif %}">Results</a>
+        </div>
+        
+        <div class="nav-right">
+            <div style="position: relative;">
+                <button class="bell-btn" onclick="toggleNotifications()" title="Notifications">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                    <span class="bell-badge hide" id="bellBadge">0</span>
+                </button>
+                <div class="notif-dropdown hide" id="notifDropdown">
+                    <div class="notif-header">Notifications</div>
+                    <div id="notifList">
+                        <div style="padding: 16px; color: var(--ink-3); text-align: center;">No notifications</div>
+                    </div>
+                </div>
+            </div>
+            <a href="/logout" class="nav-link">Logout</a>
+        </div>
+    </nav>
+
+    <main class="wrap">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        <p>DR Agent Console — Virtusa Azure Day 2026</p>
+    </footer>
+
+    <script>
+        // Notification handling
+        let lastNotifId = null;
+        
+        function toggleNotifications() {
+            const dropdown = document.getElementById('notifDropdown');
+            dropdown.classList.toggle('hide');
+        }
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('notifDropdown');
+            const bellBtn = document.querySelector('.bell-btn');
+            if (!dropdown.contains(e.target) && !bellBtn.contains(e.target)) {
+                dropdown.classList.add('hide');
+            }
+        });
+        
+        async function loadNotifications() {
+            try {
+                const url = lastNotifId 
+                    ? `/api/notifications?after=${lastNotifId}` 
+                    : '/api/notifications';
+                const res = await fetch(url);
+                const notifs = await res.json();
+                
+                const list = document.getElementById('notifList');
+                const badge = document.getElementById('bellBadge');
+                
+                if (notifs.length === 0 && !lastNotifId) {
+                    list.innerHTML = '<div style="padding: 16px; color: var(--ink-3); text-align: center;">No notifications</div>';
+                    badge.classList.add('hide');
+                    return;
+                }
+                
+                if (notifs.length > 0) {
+                    // Show new notification popup
+                    const newest = notifs[0];
+                    if (lastNotifId && newest.RowKey !== lastNotifId) {
+                        showNotificationPopup(newest);
+                    }
+                    lastNotifId = newest.RowKey;
+                    
+                    // Count unread
+                    const unread = notifs.filter(n => !n.read).length;
+                    if (unread > 0) {
+                        badge.textContent = unread;
+                        badge.classList.remove('hide');
+                    } else {
+                        badge.classList.add('hide');
+                    }
+                    
+                    // Render list
+                    list.innerHTML = notifs.slice(0, 10).map(n => `
+                        <div class="notif-item ${n.read ? '' : 'unread'}" onclick="openNotification('${n.RowKey}', '${n.link || ''}')">
+                            <div class="notif-kind ${n.kind}">${n.kind}</div>
+                            <div class="notif-title">${n.title}</div>
+                            <div class="notif-body">${n.body}</div>
+                            <div class="notif-time">${formatTime(n.ts)}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error('Failed to load notifications:', e);
+            }
+        }
+        
+        function openNotification(id, link) {
+            // Mark as read
+            fetch(`/api/notifications/${id}/read`, { method: 'POST' });
+            
+            // Navigate if link provided
+            if (link) {
+                window.location.href = link;
+            }
+            
+            // Close dropdown
+            document.getElementById('notifDropdown').classList.add('hide');
+        }
+        
+        function showNotificationPopup(notif) {
+            // Request browser notification permission
+            if (Notification.permission === 'granted') {
+                new Notification(notif.title, {
+                    body: notif.body,
+                    icon: '🛡️',
+                    tag: notif.RowKey,
+                });
+            } else if (Notification.permission !== 'denied') {
+                Notification.requestPermission();
+            }
+        }
+        
+        function formatTime(isoString) {
+            if (!isoString) return '';
+            const d = new Date(isoString);
+            return d.toLocaleTimeString();
+        }
+        
+        // Poll for notifications
+        loadNotifications();
+        setInterval(loadNotifications, 5000);
+    </script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>
