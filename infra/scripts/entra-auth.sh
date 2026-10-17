@@ -91,7 +91,7 @@ enable() {
 
 disable() {
   az rest --method put --url "https://management.azure.com$SITE/config/authsettingsV2?api-version=2024-04-01" -o none \
-    --body '{"properties":{"platform":{"enabled":false}}}'
+    --body '{"properties":{"platform":{"enabled":false},"globalValidation":{"requireAuthentication":false,"unauthenticatedClientAction":"AllowAnonymous"}}}'
   az webapp config appsettings set -g "$CONSOLE_RG" -n "$CONSOLE_APP" --settings ENTRA_AUTH_ENABLED=false -o none
   echo "Entra sign-in disabled (passcode login is active)"
 }
