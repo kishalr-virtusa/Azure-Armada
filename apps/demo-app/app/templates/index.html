@@ -395,6 +395,29 @@
             padding: 16px 0;
             margin-top: auto;
         }
+        .footer-brand {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .footer-logo {
+            height: 14px;
+            margin: 0 2px;
+            vertical-align: middle;
+        }
+        .footer-logo-light { display: inline; }
+        .footer-logo-dark { display: none; }
+        @media (prefers-color-scheme: dark) {
+            .footer-logo-light { display: none; }
+            .footer-logo-dark { display: inline; }
+        }
+        .footer-azure {
+            height: 12px;
+            margin: 0 2px;
+            vertical-align: middle;
+        }
 
         /* Animations */
         @keyframes pulse {
@@ -486,7 +509,7 @@
 
             <!-- Chaos banner -->
             <div class="chaos-banner hide" id="chaosBanner">
-                🔥 A second fault was injected; the Validator agent is handling it
+                🔥 A second fault was injected; Virtusa DR Agent is handling it
             </div>
         </div>
 
@@ -499,7 +522,16 @@
         </div>
 
         <footer class="footer">
-            Contoso Payments — DR Agent Demo<br>Virtusa Azure Day 2026
+            <div class="footer-brand">
+                DR protected by
+                <img src="/static/brand/virtusa.svg" alt="Virtusa" class="footer-logo footer-logo-light">
+                <img src="/static/brand/virtusa-white.svg" alt="Virtusa" class="footer-logo footer-logo-dark">
+                DR Agent
+                ·
+                Powered by
+                <img src="/static/brand/azure.svg" alt="Azure" class="footer-azure">
+                Microsoft Azure
+            </div>
         </footer>
     </div>
 
@@ -666,7 +698,7 @@
             if (state === 'normal' || state === 'armed') {
                 liveCard.className = 'card live-card normal';
                 liveBanner.className = 'live-banner normal';
-                liveBannerText.textContent = 'All systems normal · DR drills verified by DR Agent';
+                liveBannerText.textContent = 'All systems normal · Verified by Virtusa DR Agent';
                 outageView.classList.add('hide');
                 recoveredView.classList.add('hide');
                 payBtn.disabled = false;

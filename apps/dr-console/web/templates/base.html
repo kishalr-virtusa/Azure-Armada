@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}DR Agent Console{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/brand/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -13,8 +14,12 @@
 <body>
     <nav class="nav">
         <a href="/" class="nav-brand">
-            <span>🛡️</span>
-            <span>DR Agent Console</span>
+            <img src="/static/brand/virtusa.svg" alt="Virtusa" class="brand-logo" style="height: 24px;">
+            <span class="brand-logo-dark" style="display: none;">
+                <img src="/static/brand/virtusa-white.svg" alt="Virtusa" style="height: 24px;">
+            </span>
+            <span class="brand-divider" style="width: 1px; height: 24px; background: var(--line-2); margin: 0 12px;"></span>
+            <span style="font-weight: 600;">DR Agent</span>
         </a>
         
         <div class="nav-links">
@@ -27,6 +32,10 @@
         </div>
         
         <div class="nav-right">
+            <div class="azure-badge" style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-3); padding: 6px 10px; background: var(--surface-2); border-radius: 6px;">
+                <img src="/static/brand/azure.svg" alt="Azure" style="height: 18px;">
+                <span>Built on Microsoft Azure · AI Foundry</span>
+            </div>
             <div style="position: relative;">
                 <button class="bell-btn" onclick="toggleNotifications()" title="Notifications">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -51,10 +60,21 @@
     </main>
 
     <footer>
-        <p>DR Agent Console — Virtusa Azure Day 2026</p>
+        <p>© Virtusa · Team Azure Armada · Azure Day 2026</p>
     </footer>
 
     <script>
+        // Dark mode logo swap
+        (function() {
+            const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+            function updateLogos(dark) {
+                document.querySelectorAll('.brand-logo').forEach(el => el.style.display = dark ? 'none' : 'inline');
+                document.querySelectorAll('.brand-logo-dark').forEach(el => el.style.display = dark ? 'inline' : 'none');
+            }
+            updateLogos(darkQuery.matches);
+            darkQuery.addEventListener('change', e => updateLogos(e.matches));
+        })();
+        
         // Notification handling
         let lastNotifId = null;
         

@@ -4,17 +4,78 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login — DR Agent Console</title>
+    <link rel="icon" type="image/svg+xml" href="/static/brand/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/virtusa.css">
+    <style>
+        .login-wrap {
+            position: relative;
+            overflow: hidden;
+        }
+        /* Subtle Virtusa watermark */
+        .login-wrap::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 600px;
+            height: 200px;
+            background: url('/static/brand/virtusa.svg') no-repeat center;
+            background-size: contain;
+            opacity: 0.03;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        @media (prefers-color-scheme: dark) {
+            .login-wrap::before {
+                background-image: url('/static/brand/virtusa-white.svg');
+                opacity: 0.04;
+            }
+        }
+        .brand-section {
+            margin-bottom: 24px;
+        }
+        .brand-logo-container {
+            margin-bottom: 16px;
+        }
+        .brand-logo-light { display: inline; }
+        .brand-logo-dark { display: none; }
+        @media (prefers-color-scheme: dark) {
+            .brand-logo-light { display: none; }
+            .brand-logo-dark { display: inline; }
+        }
+        .azure-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: var(--surface-2);
+            border-radius: 6px;
+            font-size: 11px;
+            color: var(--ink-3);
+        }
+    </style>
 </head>
 <body>
     <div class="login-wrap">
         <div class="card login-card">
-            <span class="eyebrow">Virtusa Azure Day 2026</span>
-            <h1>🛡️ DR Agent</h1>
-            <p class="sub" style="margin-bottom: 24px;">Enter the console passcode to continue</p>
+            <div class="brand-section">
+                <div class="brand-logo-container">
+                    <img src="/static/brand/virtusa.svg" alt="Virtusa" class="brand-logo-light" style="height: 36px;">
+                    <img src="/static/brand/virtusa-white.svg" alt="Virtusa" class="brand-logo-dark" style="height: 36px;">
+                </div>
+                <span class="eyebrow">Azure Day 2026</span>
+                <h1 style="margin-top: 8px;">🛡️ DR Agent</h1>
+                <p class="sub" style="margin-bottom: 16px;">Autonomous Disaster Recovery Validation</p>
+                <div class="azure-badge">
+                    <img src="/static/brand/azure.svg" alt="Azure" style="height: 16px;">
+                    <span>Built on Microsoft Azure</span>
+                </div>
+            </div>
+            
+            <p class="sub" style="margin-bottom: 16px;">Enter the console passcode to continue</p>
             
             {% if error %}
             <div class="box" style="background: var(--add-bg); border-color: var(--add); color: var(--add); margin-bottom: 16px;">
@@ -35,6 +96,10 @@
                     Sign In
                 </button>
             </form>
+            
+            <div style="margin-top: 24px; text-align: center; font-size: 11px; color: var(--ink-3);">
+                Team Azure Armada
+            </div>
         </div>
     </div>
 </body>
