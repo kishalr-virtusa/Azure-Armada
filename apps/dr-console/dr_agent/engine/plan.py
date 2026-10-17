@@ -33,6 +33,7 @@ MANDATORY_SEQUENCE: list[tuple[str, dict[str, str]]] = [
     ("sql_failover", {"target_region": "B", "allow_data_loss": "true"}),
     ("tm_set_endpoint", {"region": "A", "enabled": "false"}),
     ("wait_healthy", {"target": "tm", "expect_region": "B"}),
+    ("functional_txn_check", {}),  # a real payment through Traffic Manager while in the DR region
     ("measure_rpo", {}),
     ("start_webapp", {"region": "A"}),
     ("sql_failover", {"target_region": "A", "allow_data_loss": "false"}),
