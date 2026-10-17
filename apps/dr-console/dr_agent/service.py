@@ -428,8 +428,11 @@ def live_config() -> dict:
     import os
     public = os.environ.get("PUBLIC_URL") or ""
     r = _safe(runner.tm_resolve)
-    return {"public_url": public, "app_url": public or (r.get("url") if isinstance(r, dict) else None),
-            "go_url": "/go", "team_link": team_link(), "access": get_access()}
+    access = get_access()
+    app_url = public or (r.get("url") if isinstance(r, dict) else None)
+    if not access["public"]:
+        app_url = team_link()  # presenter phone frame opens the private app without typing the code
+    return {"public_url": public, "app_url": app_url, "go_url": "/go", "team_link": team_link(), "access": access}
 
 
 def _dt(v: Any) -> Optional[datetime]:

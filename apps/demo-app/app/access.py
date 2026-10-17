@@ -75,8 +75,10 @@ def has_access(request: Request) -> bool:
 
 
 def _grant(resp, request: Request):
-    resp.set_cookie(COOKIE, _token(), max_age=30 * 86400, httponly=True, samesite="lax",
-                    secure=request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https")
+    """Remember the device. SameSite=None + Partitioned so it also works inside the presenter view's phone
+    frame (an iframe on the console's site); the cookie stays HttpOnly and Secure (HTTPS only)."""
+    resp.headers.append("set-cookie", f"{COOKIE}={_token()}; Max-Age={30 * 86400}; Path=/; HttpOnly; Secure; "
+                                      "SameSite=None; Partitioned")
     return resp
 
 
