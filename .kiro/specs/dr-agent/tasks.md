@@ -29,10 +29,10 @@ Execute in order within each track. Tracks A and B can run in parallel. Referenc
 - [ ] B3 [Kiro] `startup.sh` (`gunicorn -k uvicorn.workers.UvicornWorker app.main:app`), `requirements.txt`. Test locally against the deployed DB, or via a docker SQL Edge container if no DB is ready yet. (R1.5)
 
 ## Track C: DR Console: foundations
-- [ ] C1 [Kiro] Skeleton `apps/dr-console`: `config.py` (env), `models.py` (exactly design §4.2), `store.py` (Tables/Blob), passcode auth, base layout + CSS (design §4.7). (R9)
+- [ ] C1 [Kiro] Skeleton `apps/dr-console`: `config.py` (env), `models.py` is ALREADY WRITTEN by Claude (do not modify; import from `dr_agent.models`), `store.py` (Tables/Blob), passcode auth, base layout + CSS (design §4.7). (R9)
 - [ ] C2 [Kiro] Tools: `azure_webapp.py`, `azure_trafficmanager.py`, `probes.py`, `notify.py`, `inventory.py` per design §4.5. Each has a tiny CLI `python -m dr_agent.tools.<x> --help` for manual testing. (R3, R5.6)
-- [ ] C3 [Claude] `azure_sql.py` (forced/planned failover on the correct server, FOG status) + `heartbeat.py` + `engine/measurements.py` + unit tests. (R5.6, R6)
-- [ ] C4 [Claude] `llm.py` (AzureOpenAI with Entra token provider, structured output helper, 20s timeout, fallback hook).
+- [x] C3 [Claude] `azure_sql.py` (forced/planned failover on the correct server, FOG status) + `heartbeat.py` + `engine/measurements.py` + unit tests. (R5.6, R6)
+- [x] C4 [Claude] `llm.py` (AzureOpenAI with Entra token provider, structured output helper, 20s timeout, fallback hook).
 
 ## Track D: Agents & engine
 - [ ] D1 [Claude] Agent prompts (`agents/prompts/*.md`) + Architect, Readiness, Runbook agents with fallbacks. (R3)

@@ -83,7 +83,7 @@ Scripts:
 - `ReadinessReport{checks:list[Check], go:bool, summary}`
 - `RunbookStepReview{step_no, text, verdict:"valid|stale|missing", reason, suggested}`
 - `RunbookReview{steps, updated_runbook_md}`
-- `PlanStep{id, phase, title, owner_team, type:"human|automated", action:str|None, params:dict, depends_on:list[str], success_criteria, abort_on_failure:bool}`
+- `PlanStep{id, phase, title, owner_team, type:"human|automated", action:str|None, params:list[Param{key,value}] (strict JSON schema forbids dicts), depends_on:list[str], success_criteria, abort_on_failure:bool}`
 - `ExercisePlan{steps:list[PlanStep], assumptions:list[str]}`
 - `Diagnosis{likely_cause, evidence, recommended_action:"retry|rollback|continue"}`
 - `Measurement{t0, t_failover, t_recovered, rto_s, rpo_s, rto_target_s, rpo_target_s, rto_met, rpo_met, evidence}`
