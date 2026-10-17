@@ -136,3 +136,14 @@ Azure logo 18–24 px next to the text "Microsoft Azure". Use the white Virtusa 
   / "✉ sent via Azure Monitor" / "✉ failed" (tooltip = email_errors). No chip when the fields are absent.
 - Settings/Overview: a **"Send test email"** button → `POST /api/notifications/test-email` (takes up to ~20 s,
   show a spinner) → show result: channel, duration, recipient, or the errors.
+
+## L6 [Kiro] Instant alerts in the console (primary notification channel for the demo)
+- `base.html`: poll `GET /api/notifications` every 3 s (already exists). For each NEW notification:
+  - in-page toast (top-right, Virtusa status colours by kind, auto-hide 8 s, click → `link`), plus a short
+    WebAudio chime (distinct tones for action / success / failure); mute toggle in the header.
+  - **Desktop notification** via the browser Notification API (`new Notification(title, {body, icon:
+    '/static/brand/virtusa.svg', tag: id, requireInteraction: kind === 'action'})`, click focuses the tab and
+    opens `link`). Ask permission from an explicit "Enable desktop alerts" button (browsers require a gesture).
+  - Update the bell badge count and the page `<title>` ("(2) DR Agent").
+- Kinds `action` (approval needed) must be the most prominent: amber, stays until clicked.
+- Feature-detect; never throw if Notification/WebAudio are unavailable.
