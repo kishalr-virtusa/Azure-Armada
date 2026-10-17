@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -324,7 +324,7 @@ def _bool(v: Any) -> bool:
 # ------------------------------------------------------------------ public live feed (judges' phones)
 _live_cache: dict[str, Any] = {"t": 0.0, "v": None}
 _serving_cache: dict[str, Any] = {"t": 0.0, "v": None}
-PUBLIC_EVENT_KINDS = {"info", "measurement", "approval", "diagnosis", "chaos", "remediation", "error"}
+PUBLIC_EVENT_KINDS = {"info", "measurement", "approval", "diagnosis", "chaos", "remediation"}  # no raw errors
 FINISHED = ("completed", "rolled_back", "aborted", "failed", "killed")
 DEFAULT_ETA_S = 45.0
 
@@ -414,7 +414,7 @@ def live_config() -> dict:
     public = os.environ.get("PUBLIC_URL") or ""
     r = _safe(runner.tm_resolve)
     return {"public_url": public, "app_url": public or (r.get("url") if isinstance(r, dict) else None),
-            "go_url": "/go"}
+            "go_url": "/go", "team_link": team_link(), "access": get_access()}
 
 
 def _dt(v: Any) -> Optional[datetime]:
@@ -425,3 +425,49 @@ def _dt(v: Any) -> Optional[datetime]:
         return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
     except ValueError:
         return None
+
+
+# ------------------------------------------------------------------ public/private access to Contoso Payments
+ACCESS = "settings"  # exercises-table row holding the access mode
+DEFAULT_PUBLIC_MINUTES = 120
+_access_cache: dict[str, Any] = {"t": 0.0, "v": None}
+
+
+def get_access() -> dict:
+    """Current mode. Public is time-boxed: it lapses back to private at `public_until` (fail closed)."""
+    if _access_cache["v"] is not None and time.monotonic() - _access_cache["t"] < 2:
+        return _access_cache["v"]
+    row = store.get_exercise(ACCESS) or {}
+    until = _dt(row.get("public_until"))
+    public = _bool(row.get("public")) and bool(until) and datetime.now(timezone.utc) < until
+    v = {"public": public, "public_until": until.isoformat() if public else None,
+         "changed_by": row.get("changed_by"), "changed_at": row.get("changed_at")}
+    _access_cache.update(t=time.monotonic(), v=v)
+    return v
+
+
+def set_access(public: bool, by: str, minutes: int = DEFAULT_PUBLIC_MINUTES) -> dict:
+    by = (by or "").strip() or "console user"
+    minutes = max(5, min(int(minutes or DEFAULT_PUBLIC_MINUTES), 8 * 60))
+    now = datetime.now(timezone.utc)
+    until = now + timedelta(minutes=minutes) if public else None
+    store.upsert_exercise(ACCESS, {"public": "true" if public else "", "public_until": until.isoformat() if until else "",
+                                   "changed_by": by, "changed_at": now.isoformat()})
+    _access_cache.update(t=0.0, v=None)
+    title = (f"Contoso Payments is now PUBLIC until {until.strftime('%H:%M')} UTC" if public
+             else "Contoso Payments is now PRIVATE")
+    log.warning("ACCESS MODE CHANGED: %s by %s", title, by)  # audit trail in App Service logs / Log Analytics
+    try:
+        from dr_agent.tools.notify import notify
+        notify("info", title, f"Changed by {by}.", link="/live", send_email=False)
+    except Exception:  # noqa: BLE001
+        log.exception("could not record access change notification")
+    return get_access()
+
+
+def team_link() -> str:
+    """Private link for the team (carries the access code once; the phone then remembers it)."""
+    import os
+    base = os.environ.get("PUBLIC_URL") or "/pay"
+    code = os.environ.get("APP_ACCESS_CODE", "")
+    return f"{base}?code={code}" if code else base

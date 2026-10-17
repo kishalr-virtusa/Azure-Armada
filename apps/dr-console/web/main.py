@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from urllib.parse import quote
 from typing import Optional
 
 from fastapi import Body, Depends, FastAPI, Form, Request
@@ -72,7 +73,7 @@ async def public_live():
 
 @app.get("/pay")
 @app.get("/go")
-async def go():
+async def go(request: Request):
     """Send a phone to the region Traffic Manager currently routes to (fresh DNS lookup on every call)."""
     from dr_agent.engine.runner import tm_resolve
     r = await run_in_threadpool(tm_resolve)
@@ -80,7 +81,17 @@ async def go():
     if not url:
         return HTMLResponse("<h3>Contoso Payments is recovering. Retry in a few seconds.</h3>", status_code=503,
                             headers={"Refresh": "3", "Cache-Control": "no-store"})
-    return RedirectResponse(url + "/", status_code=302, headers={"Cache-Control": "no-store"})
+    code = request.query_params.get("code")
+    target = url + "/" + (f"?code={quote(code)}" if code else "")  # team link: hand the code to the app once
+    return RedirectResponse(target, status_code=302, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/public/access-mode")
+async def public_access_mode():
+    """Read by Contoso Payments (server side) to decide whether to admit visitors without the team code."""
+    data = await run_in_threadpool(service.get_access)
+    return JSONResponse({"public": data["public"], "public_until": data["public_until"]},
+                        headers={"Cache-Control": "no-store"})
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -220,6 +231,18 @@ async def api_generate_plan():
 async def api_approve(data: dict = Body(...)):
     return await run_in_threadpool(service.approve_and_start, data.get("approver_name", ""), data.get("plan"),
                                    bool(data.get("chaos")))
+
+
+@app.get("/api/access", dependencies=[api])
+async def api_get_access():
+    return await run_in_threadpool(service.get_access)
+
+
+@app.post("/api/access", dependencies=[api])
+async def api_set_access(data: dict = Body(...)):
+    """{"public": true|false, "minutes": 120, "by": "name"}: switch Contoso Payments between private and public."""
+    return await run_in_threadpool(service.set_access, bool(data.get("public")), data.get("by", ""),
+                                   data.get("minutes") or service.DEFAULT_PUBLIC_MINUTES)
 
 
 @app.get("/api/live-config", dependencies=[api])

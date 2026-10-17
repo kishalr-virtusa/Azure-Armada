@@ -33,6 +33,11 @@ app = FastAPI(title="Contoso Payments", description="Demo payment app for DR Age
 
 # Static files and templates
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+# Private/public access gate (mode is switched in the DR console; see app/access.py)
+from app.access import access_post, gate_middleware  # noqa: E402
+app.middleware("http")(gate_middleware)
+app.add_api_route("/access", access_post, methods=["POST"], include_in_schema=False)
 templates = Jinja2Templates(directory="app/templates")
 
 

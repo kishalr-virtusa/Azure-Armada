@@ -22,6 +22,11 @@ if [[ ! -f "$SECRETS_FILE" ]]; then
 fi
 # shellcheck disable=SC1090
 source "$SECRETS_FILE"
+if [[ -z "${APP_ACCESS_CODE:-}" ]]; then  # team access code for the private demo app (added once)
+  APP_ACCESS_CODE=$(LC_ALL=C tr -dc 'A-HJ-NP-Z2-9' </dev/urandom | head -c 8)
+  echo "export APP_ACCESS_CODE=$APP_ACCESS_CODE" >> "$SECRETS_FILE"
+  export APP_ACCESS_CODE
+fi
 
 for p in Microsoft.Web Microsoft.Sql Microsoft.Network Microsoft.Storage Microsoft.KeyVault \
          Microsoft.CognitiveServices Microsoft.OperationalInsights Microsoft.Insights \

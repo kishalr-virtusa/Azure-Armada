@@ -118,6 +118,10 @@ resource consoleApp 'Microsoft.Web/sites@2023-01-01' = {
       minTlsVersion: '1.2'
       appSettings: concat([
         {
+          name: 'APP_ACCESS_CODE'
+          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=app-access-code)'
+        }
+        {
           name: 'PUBLIC_URL'
           value: publicUrl
         }

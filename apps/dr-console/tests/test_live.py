@@ -58,3 +58,21 @@ def test_public_live_normal_when_last_drill_is_old(monkeypatch):
     old = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
     svc = _fake_store(monkeypatch, {"status": "completed", "finished_at": old})
     assert svc.public_live()["state"] == "normal"
+
+
+def test_access_mode_is_time_boxed_and_fails_closed(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from dr_agent import service
+    rows = {}
+    monkeypatch.setattr(service.store, "upsert_exercise", lambda pk, d: rows.setdefault(pk, {}).update(d))
+    monkeypatch.setattr(service.store, "get_exercise", lambda pk: rows.get(pk))
+    import dr_agent.tools.notify as n
+    monkeypatch.setattr(n, "notify", lambda *a, **k: None)
+    service._access_cache.update(t=0.0, v=None)
+    assert service.get_access()["public"] is False                      # default private
+    assert service.set_access(True, "kishal", 30)["public"] is True
+    assert rows["settings"]["changed_by"] == "kishal"
+    rows["settings"]["public_until"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+    service._access_cache.update(t=0.0, v=None)
+    assert service.get_access()["public"] is False                      # lapsed -> private
+    assert service.set_access(False, "kishal")["public"] is False

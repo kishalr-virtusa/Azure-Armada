@@ -14,8 +14,8 @@ if ! az account show &>/dev/null; then
     exit 1
 fi
 
-if [[ -z "${SQL_ADMIN_PASSWORD:-}" || -z "${CONSOLE_PASSCODE:-}" ]]; then
-    echo "Error: SQL_ADMIN_PASSWORD and CONSOLE_PASSCODE environment variables are required."
+if [[ -z "${SQL_ADMIN_PASSWORD:-}" || -z "${CONSOLE_PASSCODE:-}" || -z "${APP_ACCESS_CODE:-}" ]]; then
+    echo "Error: SQL_ADMIN_PASSWORD, CONSOLE_PASSCODE and APP_ACCESS_CODE are required (up.sh creates them in ~/.dra-secrets)."
     echo "Optional: NOTIFY_EMAIL_TO (email for DR notifications), PLANT_CONFIG_GAP=true|false, DEPLOY_EMAIL=true|false (default false: blocked on Free Trial)"
     exit 1
 fi
@@ -25,6 +25,10 @@ echo "Deploying to subscription: $SUBSCRIPTION_ID"
 
 # Deploy Bicep at subscription scope
 echo "Starting infrastructure deployment..."
+# SSH key for the IaaS VM (never used for login; Run Command is used). Generated once, kept outside the repo.
+VM_KEY="${DRA_VM_KEY:-$HOME/.dra-vm-key}"
+[[ -f "$VM_KEY" ]] || ssh-keygen -q -t ed25519 -N "" -C "dra-vm" -f "$VM_KEY"
+
 az deployment sub create \
     --name "dra-deployment" \
     --location centralindia \
@@ -32,7 +36,8 @@ az deployment sub create \
     --parameters "$INFRA_DIR/parameters.json" \
     --parameters sqlAdminPassword="$SQL_ADMIN_PASSWORD" consolePasscode="$CONSOLE_PASSCODE" \
     --parameters notifyEmailTo="${NOTIFY_EMAIL_TO:-}" plantConfigGap="${PLANT_CONFIG_GAP:-true}" deployEmail="${DEPLOY_EMAIL:-false}" \
-    --parameters publicUrl="${PUBLIC_URL:-}" altPublicUrl="${ALT_PUBLIC_URL:-}" consoleAppName="${CONSOLE_APP_NAME:-azure-armada}" resendApiKey="${RESEND_API_KEY:-}" \
+    --parameters vmSshPublicKey="$(cat "$VM_KEY.pub")" deployIaas="${DEPLOY_IAAS:-true}" \
+    --parameters publicUrl="${PUBLIC_URL:-}" altPublicUrl="${ALT_PUBLIC_URL:-}" consoleAppName="${CONSOLE_APP_NAME:-azure-armada}" resendApiKey="${RESEND_API_KEY:-}" appAccessCode="$APP_ACCESS_CODE" \
     --output table
 
 # Get deployment outputs

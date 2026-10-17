@@ -419,10 +419,12 @@ class ExerciseRunner(threading.Thread):
         if "error" in dns_info:
             raise StepFailed(dns_info["error"])
         base = dns_info["url"]
-        r = httpx.post(f"{base}/api/txn", timeout=10)
+        import os
+        hdr = {"X-Access-Code": os.environ.get("APP_ACCESS_CODE", "")}  # the agent works in private mode too
+        r = httpx.post(f"{base}/api/txn", timeout=10, headers=hdr)
         r.raise_for_status()
         txn = r.json()
-        recent = httpx.get(f"{base}/api/recent", timeout=10).json()
+        recent = httpx.get(f"{base}/api/recent", timeout=10, headers=hdr).json()
         if not any(str(x.get("id")) == str(txn.get("id")) for x in recent):
             raise StepFailed("payment written but not readable via Traffic Manager")
         return {"txn": txn}

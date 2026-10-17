@@ -157,3 +157,17 @@ Azure logo 18–24 px next to the text "Microsoft Azure". Use the white Virtusa 
   (Demo app: in `haptics.js`, also `window.parent.postMessage(...)` when running inside an iframe.)
 - Everything must stay legible in a 1280×720 compressed screen share: min body text 18 px on `/live`,
   high-contrast tiles, avoid thin fonts and tiny grey text.
+
+## L8 [Kiro] Private / Public switch for Contoso Payments (security feature, show it in the demo)
+Backend exists: `GET /api/access` → `{public, public_until, changed_by, changed_at}`;
+`POST /api/access {"public": true|false, "minutes": 120, "by": "<name>"}`; `GET /api/live-config` now also returns
+`team_link` (private link with the access code) and `access`.
+- Console header (all pages): a status pill **🔒 Private** (grey) / **🌐 Public · until 14:30** (green, countdown).
+  Click → modal: toggle, duration select (30 / 60 / 120 min), name field (prefill last approver), confirm.
+  Making it public needs an explicit confirm ("Anyone with the link can open Contoso Payments until …").
+- Presenter view `/live`: the same toggle next to the QR code. While PRIVATE, the QR shows the **team link**
+  (with code) and a label "Team only"; while PUBLIC it shows the public URL and "Open to everyone".
+  "Copy team link" button for the team chat.
+- Notifications show the audit entries ("Contoso Payments is now PUBLIC until … — changed by …").
+- Contoso app: the gate page lives in `apps/demo-app/app/access.py` (GATE_HTML); you may restyle it to match L1,
+  keep the form fields (`code`, `next`) and POST `/access`.

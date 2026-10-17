@@ -20,6 +20,10 @@ param sqlAdminPassword string
 param consolePasscode string
 
 @secure()
+@description('Team access code for Contoso Payments while it is private')
+param appAccessCode string
+
+@secure()
 @description('Resend API key for instant email (optional)')
 param resendApiKey string = ''
 
@@ -60,6 +64,14 @@ resource resendSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empt
   name: 'resend-api-key'
   properties: {
     value: resendApiKey
+  }
+}
+
+resource appAccessCodeSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'app-access-code'
+  properties: {
+    value: appAccessCode
   }
 }
 

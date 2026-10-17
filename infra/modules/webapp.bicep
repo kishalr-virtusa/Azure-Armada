@@ -107,6 +107,10 @@ resource webApp 'Microsoft.Web/sites@2023-01-01' = {
           value: drLiveUrl
         }
         {
+          name: 'APP_ACCESS_CODE'
+          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=app-access-code)'
+        }
+        {
           name: 'PUBLIC_URL'
           value: publicUrl
         }
