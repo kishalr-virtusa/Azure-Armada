@@ -24,7 +24,7 @@ Acceptance criteria:
 4. THE console App Service SHALL have a system-assigned managed identity with **Contributor on `rg-dra-workload` only**, and Storage Table/Blob Data Contributor on the control storage account.
 5. `infra/scripts/budget.sh` SHALL create a subscription budget with alerts at $50, $100 and $150.
 6. `infra/scripts/teardown.sh` SHALL delete both resource groups after confirmation.
-7. Secrets (SQL admin password, Google Chat webhook URL) SHALL live in Key Vault and be consumed via Key Vault references.
+7. Secrets (SQL admin password, ACS connection string, console passcode) SHALL live in Key Vault and be consumed via Key Vault references.
 
 ## Requirement 3: Phase 1 (DR design & preparation)
 **User story:** As a DR manager, I want the agent to confirm the right strategy and that the DR environment is ready before any exercise.
@@ -58,7 +58,7 @@ Acceptance criteria:
 **User story:** As a DR manager, I want the agent to run automated steps itself, but stop for human steps and approvals.
 
 1. Starting an exercise SHALL require an explicit console approval of the whole plan (recorded with name + time).
-2. WHEN a step is `human` THE engine SHALL pause, post a Google Chat message (step, owner, link to the console) and wait for "Confirm done" in the console.
+2. WHEN a step is `human` THE engine SHALL pause, raise a console notification and send an email (step, owner, link to the console) and wait for "Confirm done" in the console.
 3. WHEN a step is `automated` THE engine SHALL execute the mapped tool, record start/end/result in the timeline, and evaluate `success_criteria`.
 4. IF an automated step fails AND `abort_on_failure` THEN the engine SHALL stop, ask the Validator agent for a diagnosis, and offer **Rollback** (run the failback steps) or **Retry**.
 5. THE console SHALL offer a **Kill switch** at any time. It stops the engine after the current step and offers rollback.
@@ -103,7 +103,7 @@ Acceptance criteria:
    - RTO/RPO results vs targets
    - failback result
    - issues found, and remediation items (owner, priority)
-2. A summary SHALL be posted to Google Chat with a link to the report.
+2. A summary SHALL be sent as a console notification + email, with a link to the report.
 3. (Stretch) For a parity gap, the agent SHALL propose the exact fix (app setting / Bicep diff) and can apply it after approval.
 
 ## Requirement 9: Console UX

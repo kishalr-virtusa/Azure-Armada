@@ -15,6 +15,7 @@ inclusion: always
 | Exercise state / timeline | Azure Storage **Tables**; reports in **Blob** | Standard LRS |
 | Secrets | Key Vault (App Service Key Vault references) | Standard |
 | Logs | Log Analytics + Application Insights | Pay-as-you-go |
+| Email notifications | Azure Communication Services + Email Communication Service (**Azure-managed domain**, sender `DoNotReply@<id>.azurecomm.net`) | Pay-per-email (fractions of a cent) |
 | Outage injection (optional) | Chaos Studio App Service "stop" fault; otherwise `az`/SDK stop | - |
 
 Regions: Region A = `centralindia`, Region B = `southindia` (an Azure paired region). Traffic Manager is global. Azure OpenAI region = `eastus2`.
@@ -23,7 +24,7 @@ Regions: Region A = `centralindia`, Region B = `southindia` (an Azure paired reg
 
 ## Code
 - **Python 3.11**, **FastAPI**, **Jinja2** templates, vanilla JS + hand-written CSS. No frontend build step.
-- Azure SDKs: `azure-identity` (DefaultAzureCredential), `azure-mgmt-web`, `azure-mgmt-sql`, `azure-mgmt-trafficmanager`, `azure-mgmt-resourcegraph`, `azure-data-tables`, `azure-storage-blob`.
+- Azure SDKs: `azure-identity` (DefaultAzureCredential), `azure-mgmt-web`, `azure-mgmt-sql`, `azure-mgmt-trafficmanager`, `azure-mgmt-resourcegraph`, `azure-data-tables`, `azure-storage-blob`, `azure-communication-email`.
 - LLM: the `openai` package's `AzureOpenAI` client, authenticated via Entra ID token (`get_bearer_token_provider`). Use structured outputs: pydantic models + JSON schema `response_format`.
 - SQL from Python: `pymssql` (bundled FreeTDS, no ODBC driver needed). Connection goes to the **failover group listener** `<fog>.database.windows.net`, so it follows failover automatically.
 - Config only via environment variables (App Service app settings). Provide `.env.example`. Never commit secrets.

@@ -3,7 +3,7 @@
 ## 1. Architecture
 
 ```
-                 Google Chat (incoming webhook: notifications + approval links)
+                 Email (Azure Communication Services) + console notification center
                                    ▲
  Presenter ──► DR Console (App Service B1, rg-dra-control, managed identity)
                ├─ web/ (FastAPI + Jinja, polling every 2s)
@@ -40,7 +40,7 @@
 ## 3. Infrastructure (infra/)
 `main.bicep` (subscription scope) creates `rg-dra-workload` and `rg-dra-control`, then these modules:
 - `log.bicep`: Log Analytics workspace + App Insights (shared).
-- `keyvault.bicep`: Key Vault in the control RG (RBAC mode). Secrets: `sql-admin-password`, `gchat-webhook-url`, `console-passcode`. They are seeded by `seed-secrets.sh` from env vars, never stored in the repo.
+- `keyvault.bicep`: Key Vault in the control RG (RBAC mode). Secrets: `sql-admin-password`, `console-passcode`, `acs-connection-string`. They are seeded by `seed-secrets.sh` from env vars, never stored in the repo.
 - `sql.bicep`:
   - server A (centralindia) + server B (southindia), Entra admin + SQL admin
   - `paymentsdb` Basic on A
@@ -57,7 +57,7 @@
     - Each web app MUST have a `hostNameBindings` entry for `<tm>.trafficmanager.net`. Create it after the TM profile + endpoints exist, because Azure validates that the app is a TM endpoint.
     - Users use plain HTTP via TM, so set `httpsOnly=false` on the workload apps. There's no TLS cert for trafficmanager.net; this is acceptable for the demo.
     - Probes and the console can also use HTTPS on each app's `*.azurewebsites.net` host directly.
-  - - `storage.bicep`: control storage account, tables `exercises`, `events`, `heartbeats`, blob container `reports`.
+  - - `storage.bicep`: control storage account, tables `exercises`, `events`, `heartbeats`, `notifications`, blob container `reports`.
 - `console.bicep`: plan B1 + web app (control RG), app settings for every endpoint/name the console needs (see `config.py`), system identity.
 - `roles.bicep`: console identity → Contributor on `rg-dra-workload`, Storage Table Data Contributor + Storage Blob Data Contributor on the control storage, Key Vault Secrets User, and **Cognitive Services OpenAI User** on the OpenAI resource.
 
@@ -143,7 +143,11 @@ Prompt rules (all agents):
   - Background thread, every 2s: connect via the FOG listener and `INSERT heartbeat(seq, client_ts)`.
   - On success, records `acked=true` in the Table; on failure, `acked=false` + error.
   - `newest_in_db()` = `SELECT MAX(client_ts) FROM heartbeat`.
-- `gchat.py`: POST `{"text": ...}` to the webhook URL. Never raises (logs on failure).
+- `notify.py`: `notify(kind, title, body, link)`, where kind is info, action, success or failure.
+  - (1) Always appends to the `notifications` table, which the console bell polls.
+  - (2) If `NOTIFY_EMAIL_TO` is set, sends an email via `azure.communication.email.EmailClient` (connection string from Key Vault) from `ACS_SENDER` (the managed-domain DoNotReply address). Simple HTML using the Virtusa styling, with a button link to the console.
+  - Never raises (logs on failure).
+  - Emails go out only for: exercise started, action needed (human step), recovered (RTO/RPO), failed/aborted, completed (report link).
 - `store.py`: thin wrapper over Tables/Blob.
 
 ### 4.6 Engine

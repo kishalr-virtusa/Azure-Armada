@@ -25,7 +25,7 @@ apps/
       agents/              architect.py, readiness.py, runbook.py, planner.py, validator.py, reporter.py
                            (+ prompts/*.md for each agent's system prompt)
       tools/               azure_webapp.py, azure_sql.py, azure_trafficmanager.py, inventory.py,
-                           probes.py, heartbeat.py, gchat.py, store.py (Tables/Blob)
+                           probes.py, heartbeat.py, notify.py, store.py (Tables/Blob)
       engine/              orchestrator.py (phase state machine), executor.py (runs plan steps),
                            measurements.py (RTO/RPO math)
     web/                   routes.py, templates/, static/
