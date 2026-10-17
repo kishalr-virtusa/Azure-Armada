@@ -87,7 +87,7 @@ def list_exercises(limit: int = 50) -> list[dict[str, Any]]:
         results.append(dict(e))
         if len(results) >= limit:
             break
-    return sorted(results, key=lambda x: x.get("t0", ""), reverse=True)
+    return sorted(results, key=lambda x: x.get("t0") or "", reverse=True)  # selected-but-missing props come back as None
 
 
 # ============== Events Table ==============

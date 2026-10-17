@@ -185,8 +185,9 @@ def generate_plan() -> dict:
 
 
 def get_draft_plan() -> dict:
-    raw = (store.get_exercise(DRAFT) or {}).get("plan_json")
-    return json.loads(raw) if raw else {}
+    row = store.get_exercise(DRAFT) or {}
+    raw = row.get("plan_json")
+    return {**json.loads(raw), "source": row.get("source"), "via": row.get("via")} if raw else {}
 
 
 def approve_and_start(approver: str, plan_data: Optional[dict] = None, chaos: bool = False) -> dict:

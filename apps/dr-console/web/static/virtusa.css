@@ -688,3 +688,9 @@ th { white-space: nowrap; }
 .st { font-size: 11px; letter-spacing: 0.05em; white-space: nowrap; }
 
 footer { font-size: 12px; }
+
+/* plan tables: on phones keep ID / title / owner / type, drop the technical columns */
+@media (max-width: 640px) {
+    .plan-table th:nth-child(n+5), .plan-table td:nth-child(n+5) { display: none; }
+    .plan-table td:nth-child(2) { min-width: 150px; }
+}
