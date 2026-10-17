@@ -575,6 +575,8 @@
         let expectedRegion = null;
         let accessToken = '';          // lets a reconnect keep private-mode access on the other region's hostname
         let returnedHome = false;
+        // users have been moved to the DR region: an unreachable or wrong origin must reconnect
+        const AFTER_RECOVERY = ['recovered', 'failing_back'];
         let balance = 12450.00;
 
         // Elements
@@ -856,7 +858,7 @@
 
                 if (data.status === 'ok' || data.status === 'config_error') {
                     // Check if region matches expected after recovery
-                    if (lastLiveState === 'recovered' && expectedRegion && data.region !== expectedRegion) {
+                    if (AFTER_RECOVERY.includes(lastLiveState) && expectedRegion && data.region !== expectedRegion) {
                         healthFailCount++;
                         if (healthFailCount > 4) { // > 8s
                             reconnect();
@@ -871,7 +873,7 @@
             } catch (e) {
                 healthFailCount++;
                 // If recovered but can't reach this origin for > 8s, try reconnect
-                if (lastLiveState === 'recovered' && healthFailCount > 4) {
+                if (AFTER_RECOVERY.includes(lastLiveState) && healthFailCount > 4) {
                     reconnect();
                 }
             }
