@@ -23,6 +23,10 @@ from azure.mgmt.sql import SqlManagementClient
 log = logging.getLogger(__name__)
 
 
+RESYNC_WAIT_S = 300
+RESYNC_ERRORS = ("GeoReplicationCannotBecomePrimaryDuringUndo", "FailoverGroupOperationInProgress", "ReplicationLinkNotReady")
+
+
 class FailoverGroupController:
     def __init__(self, subscription_id: str, resource_group: str, fog_name: str,
                  servers: dict[str, str], credential=None):
@@ -56,9 +60,21 @@ class FailoverGroupController:
         started = datetime.now(timezone.utc)
         t = time.monotonic()
         ops = self.client.failover_groups
-        poller = (ops.begin_force_failover_allow_data_loss(self.rg, server, self.fog) if allow_data_loss
-                  else ops.begin_failover(self.rg, server, self.fog))
-        poller.result(timeout=timeout_s)
+        if allow_data_loss:
+            ops.begin_force_failover_allow_data_loss(self.rg, server, self.fog).result(timeout=timeout_s)
+        else:
+            # right after a forced failover the old primary is still re-synchronising ("undo"); Azure rejects a
+            # planned failover until it has caught up, so wait and retry instead of failing the failback
+            deadline = time.monotonic() + RESYNC_WAIT_S
+            while True:
+                try:
+                    ops.begin_failover(self.rg, server, self.fog).result(timeout=timeout_s)
+                    break
+                except Exception as e:  # noqa: BLE001
+                    if not any(c in str(e) for c in RESYNC_ERRORS) or time.monotonic() > deadline:
+                        raise
+                    log.info("planned failover not possible yet (%s); retrying in 15s", str(e)[:120])
+                    time.sleep(15)
         after = self.status()
         if after["primary_region"] != target_region:
             raise RuntimeError(f"failover finished but primary is {after['primary_region']!r}, expected {target_region!r}")
