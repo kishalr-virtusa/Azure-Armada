@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "locationA": {
+      "value": "centralindia"
+    },
+    "locationB": {
+      "value": "southindia"
+    },
+    "controlLocation": {
+      "value": "centralindia"
+    },
+    "openAILocation": {
+      "value": "eastus2"
+    },
+    "useExistingOpenAI": {
+      "value": false
+    },
+    "projectTag": {
+      "value": "dr-agent"
+    }
+  }
+}
