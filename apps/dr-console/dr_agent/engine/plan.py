@@ -21,6 +21,9 @@ ALLOWED_ACTIONS: dict[str, tuple[set[str], str]] = {
     "start_webapp": ({"region"}, "Start the web app in `region`."),
     "stop_heartbeat": (set(), "Stop the heartbeat writer."),
     "generate_report": (set(), "Build the exercise report and notify stakeholders."),
+    "asr_test_failover": (set(), "IaaS: start an Azure Site Recovery TEST failover of the reports VM into the isolated Region B network (non-disruptive, runs in the background)."),
+    "asr_verify_recovery": ({"timeout_s"}, "IaaS: wait for the ASR test failover, then run a command inside the recovered VM to prove the service answers from Region B."),
+    "asr_test_cleanup": (set(), "IaaS: clean up the ASR test failover (deletes the test VM)."),
 }
 
 # (action, key params) that must appear, in this relative order
@@ -104,6 +107,7 @@ def default_plan() -> ExercisePlan:
     s = [
         _step("pre-1", "pre-checks", "Snapshot inventory & configuration", "dr-agent", "automated", "snapshot_inventory", criteria="Inventory captured"),
         _step("pre-2", "pre-checks", "Verify SQL failover group replication is healthy", "db", "automated", "check_fog", deps=["pre-1"], criteria="Region A primary, replication CATCH_UP/SEEDED"),
+        _step("iaas-1", "pre-checks", "Start ASR test failover of the reports VM (isolated network)", "infra", "automated", "asr_test_failover", deps=["pre-2"], criteria="Test failover job started", abort=False),
         _step("pre-3", "pre-checks", "DB team confirms go for forced failover", "db", "human", deps=["pre-2"], criteria="Confirmed in console"),
         _step("pre-4", "pre-checks", "Start heartbeat writer (RPO measurement)", "dr-agent", "automated", "start_heartbeat", deps=["pre-3"], criteria="Heartbeats acknowledged"),
         _step("out-1", "outage", "Inject outage: stop Region A web app", "dr-agent", "automated", "inject_outage", {"region": "A"}, ["pre-4"], "Region A /health fails"),
@@ -112,17 +116,20 @@ def default_plan() -> ExercisePlan:
         _step("val-1", "validation", "Wait until users are served from Region B", "app", "automated", "wait_healthy", {"target": "tm", "expect_region": "B", "timeout_s": 900}, ["fo-2"], "TM /health OK from Region B with db_ok"),
         _step("val-2", "validation", "Functional check: make a payment via Traffic Manager", "app", "automated", "functional_txn_check", deps=["val-1"], criteria="Payment written and read back"),
         _step("val-3", "validation", "Measure RPO from heartbeats", "dr-agent", "automated", "measure_rpo", deps=["val-2"], criteria="RPO computed"),
+        _step("iaas-2", "validation", "Verify the recovered reports VM serves from Region B", "infra", "automated", "asr_verify_recovery", {"timeout_s": 1200}, ["iaas-1"], "Recovered VM /health OK in Southeast Asia", abort=False),
         _step("fb-1", "failback", "App team approves failback", "app", "human", deps=["val-3"], criteria="Confirmed in console"),
         _step("fb-2", "failback", "Start Region A web app", "app", "automated", "start_webapp", {"region": "A"}, ["fb-1"], "Region A running"),
         _step("fb-3", "failback", "Wait for Region A to be healthy (direct)", "app", "automated", "wait_healthy", {"target": "A", "expect_region": "A", "timeout_s": 600}, ["fb-2"], "Region A /health OK"),
         _step("fb-4", "failback", "Planned SQL failover back to Region A", "db", "automated", "sql_failover", {"target_region": "A", "allow_data_loss": False}, ["fb-3"], "Region A is SQL primary"),
         _step("fb-5", "failback", "Re-enable Region A Traffic Manager endpoint", "network", "automated", "tm_set_endpoint", {"region": "A", "enabled": True}, ["fb-4"], "Endpoint A enabled"),
         _step("fb-6", "failback", "Wait until users are served from Region A again", "app", "automated", "wait_healthy", {"target": "tm", "expect_region": "A", "timeout_s": 900}, ["fb-5"], "TM /health OK from Region A"),
+        _step("iaas-3", "closure", "Clean up the ASR test failover", "infra", "automated", "asr_test_cleanup", deps=["iaas-2"], criteria="Test VM removed", abort=False),
         _step("cl-1", "closure", "Stop heartbeat writer", "dr-agent", "automated", "stop_heartbeat", deps=["fb-6"], criteria="Writer stopped", abort=False),
         _step("cl-2", "closure", "Generate report & notify stakeholders", "dr-agent", "automated", "generate_report", deps=["cl-1"], criteria="Report published", abort=False),
     ]
     return ExercisePlan(steps=s, assumptions=[
         "Region A (Central India) is primary and Region B (Southeast Asia) is a warm standby.",
+        "The IaaS reports VM is replicated by Azure Site Recovery; it is validated with a non-disruptive TEST failover.",
         "The outage is simulated by stopping the Region A web app; the database is failed over as if Region A were lost.",
         "No production systems are affected; this runs on the demo environment.",
     ])

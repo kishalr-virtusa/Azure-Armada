@@ -321,6 +321,28 @@ class ExerciseRunner(threading.Thread):
             return _jsonable(start_webapp_region(p["region"]))
         if a == "stop_heartbeat":
             return self.stop_heartbeat()
+        if a == "asr_test_failover":
+            from dr_agent.tools.azure_asr import AsrTestFailover
+            started = utcnow()
+            res = AsrTestFailover.from_env().start()
+            self.update(iaas_started=started, iaas_operation=res.get("operation") or "")
+            return {"started": iso(started), "recovery_point": res.get("recovery_point")}
+        if a == "asr_verify_recovery":
+            from dr_agent.tools.azure_asr import AsrTestFailover
+            m = self.meta()
+            if not m.get("iaas_started"):
+                raise StepFailed("ASR test failover was not started")
+            asr = AsrTestFailover.from_env()
+            asr.wait_done(m.get("iaas_operation") or None, int(p.get("timeout_s", 1200)))
+            res = asr.verify()
+            secs = round((utcnow() - parse_dt(m["iaas_started"])).total_seconds(), 1)
+            self.update(iaas_recovered_s=secs, iaas_result_json=json.dumps(res))
+            self.event("measurement", f"IaaS: reports VM recovered by Azure Site Recovery in {M.fmt_duration(secs)} "
+                                      f"(service OK in {res.get('location')})", step.id, {"iaas_recovered_s": secs, **res})
+            return {"iaas_recovered_s": secs, **res}
+        if a == "asr_test_cleanup":
+            from dr_agent.tools.azure_asr import AsrTestFailover
+            return AsrTestFailover.from_env().cleanup()
         if a == "generate_report":
             from dr_agent.engine.reporting import build_report
             url = build_report(self.xid)

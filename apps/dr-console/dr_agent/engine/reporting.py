@@ -76,8 +76,13 @@ def build_report(xid: str) -> str:
     runbook = json.loads(m["runbook_json"]) if m.get("runbook_json") else {}
     open_findings = list(readiness.get("risks", [])) + [f"Runbook step {s['step_no']}: {s['reason']}" for s in runbook.get("steps", [])
                                                         if s.get("verdict") in ("stale", "missing")]
+    iaas_s = num("iaas_recovered_s")
+    iaas = {"tier": "reports VM (Azure Site Recovery test failover, isolated network)",
+            "recovered_in": fmt_duration(iaas_s) if iaas_s is not None else None,
+            "result": json.loads(m["iaas_result_json"]) if m.get("iaas_result_json") else None,
+            "status": "validated" if iaas_s is not None else ("not run" if not m.get("iaas_started") else "failed")}
     facts = {
-        "profile": prof.model_dump(), "strategy": strategy,
+        "profile": prof.model_dump(), "strategy": strategy, "iaas": iaas,
         "results": {"rto": fmt_duration(rto), "rto_target": f"{prof.rto_min} min", "rto_met": rto_met,
                     "rpo": fmt_duration(rpo), "rpo_target": f"{prof.rpo_min} min", "rpo_met": rpo_met,
                     "failback": fmt_duration(fb) if fb is not None else None},
@@ -90,7 +95,7 @@ def build_report(xid: str) -> str:
     html = env.from_string(TEMPLATE).render(
         xid=xid, profile=prof, n=narrative, m=m, ev=ev, events=events, strategy=strategy,
         rto=fmt_duration(rto), rpo=fmt_duration(rpo), failback=fmt_duration(fb),
-        rto_met=rto_met, rpo_met=rpo_met, overall=rto_met and rpo_met,
+        rto_met=rto_met, rpo_met=rpo_met, overall=rto_met and rpo_met, iaas=iaas,
         generated=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         approvals=m.get("approvals_json", ""))
     url = store.upload_report(xid, html)

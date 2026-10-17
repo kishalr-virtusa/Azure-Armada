@@ -72,7 +72,7 @@ enable() {
   ensure "$VAULT/replicationFabrics/$FAB_A/replicationNetworks/azureNetwork/replicationNetworkMappings/$NETMAP" \
     "{\"properties\":{\"recoveryFabricName\":\"$FAB_B\",\"recoveryNetworkId\":\"$vnet_b\",\"fabricSpecificDetails\":{\"instanceType\":\"AzureToAzure\",\"primaryNetworkId\":\"$vnet_a\"}}}" \
     "network mapping A->B"
-  if exists "$PI_PATH" && [[ "$(get "$PI_PATH" | jq -r '.properties.protectionState')" =~ ^(UnprotectedStatesBegin|None|null)$ ]] \
+  if exists "$PI_PATH" && [[ "$(get "$PI_PATH" | jq -r '.properties.protectionState')" =~ ^(UnprotectedStatesBegin|EnablingFailed|None|null)$ ]] \
      && [[ "$(get "$PI_PATH" | jq -r '.properties.replicationHealth')" != "Normal" ]]; then
     echo "  purging failed protected item from an earlier attempt"
     az rest --method delete --url "$MGMT$PI_PATH?$API" -o none || true

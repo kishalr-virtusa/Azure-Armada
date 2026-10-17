@@ -120,9 +120,10 @@ resource vm 'Microsoft.Compute/virtualMachines@2024-07-01' = {
     }
     storageProfile: {
       imageReference: {
+        // Ubuntu 22.04 (kernel 6.8): the 24.04 image now ships kernel 7.0, which the ASR mobility agent does not support yet
         publisher: 'Canonical'
-        offer: 'ubuntu-24_04-lts'
-        sku: 'server'
+        offer: '0001-com-ubuntu-server-jammy'
+        sku: '22_04-lts-gen2'
         version: 'latest'
       }
       osDisk: {

@@ -116,6 +116,8 @@ def gather_readiness_facts() -> dict:
     sb = _safe(list_app_settings, config.webapp_b_name)
     if "error" not in sa and "error" not in sb:
         facts["settings_a"], facts["settings_b"] = sa, sb
+    asr = _safe(lambda: __import__("dr_agent.tools.azure_asr", fromlist=["x"]).AsrTestFailover.from_env().status())
+    facts["asr"] = asr if "error" not in asr else {"protected": False, "state": asr["error"]}
     facts["keyvault_ok"] = bool(config.console_passcode)  # resolved via Key Vault reference at startup
     return facts
 
@@ -364,6 +366,7 @@ def public_live() -> dict:
         "t0": None, "elapsed_s": None, "eta_s": None, "eta_basis": "", "rto_target_s": None, "rpo_target_s": None,
         "rto_s": None, "rpo_s": None, "rto_met": None, "rpo_met": None, "current_step": "", "steps_done": 0,
         "steps_total": 0, "chaos": False, "timeline": [],
+        "iaas": {"state": "idle", "recovered_s": None},
     }
     ex = list_exercises()
     m = store.get_exercise(ex[0]["PartitionKey"]) if ex else None
@@ -386,6 +389,9 @@ def public_live() -> dict:
                        chaos=bool(m.get("chaos_injected")), t0=t0.isoformat() if t0 else None)
             if t0:
                 out["elapsed_s"] = round(((t_rec or now) - t0).total_seconds(), 1)
+            iaas_s = _num(m.get("iaas_recovered_s"))
+            out["iaas"] = {"state": "recovered" if iaas_s is not None else ("recovering" if m.get("iaas_started") else "idle"),
+                           "recovered_s": iaas_s}
             if status in ("rolled_back",):
                 out.update(state="rolled_back", headline="Drill rolled back. Central India is serving again.")
             elif status == "completed":

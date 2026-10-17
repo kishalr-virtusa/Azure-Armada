@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 Strategy = Literal["backup-restore", "pilot-light", "warm-standby", "active-passive", "active-active"]
 Phase = Literal["pre-checks", "outage", "failover", "validation", "failback", "closure"]
-Team = Literal["app", "db", "network", "dr-agent"]
+Team = Literal["app", "db", "network", "infra", "dr-agent"]
 CheckStatus = Literal["pass", "warn", "fail"]
 
 

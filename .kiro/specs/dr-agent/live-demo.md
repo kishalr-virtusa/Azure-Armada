@@ -171,3 +171,14 @@ Backend exists: `GET /api/access` → `{public, public_until, changed_by, change
 - Notifications show the audit entries ("Contoso Payments is now PUBLIC until … — changed by …").
 - Contoso app: the gate page lives in `apps/demo-app/app/access.py` (GATE_HTML); you may restyle it to match L1,
   keep the form fields (`code`, `next`) and POST `/access`.
+
+## L9 [Kiro] IaaS tier (Azure Site Recovery) in the UI
+Backend: the drill now has 3 extra non-blocking steps (owner team `infra`): `asr_test_failover` (iaas-1),
+`asr_verify_recovery` (iaas-2), `asr_test_cleanup` (iaas-3). `/public/live` has `"iaas": {"state":
+"idle|recovering|recovered", "recovered_s": 412.0}`. Readiness has a new check "Azure Site Recovery (reports VM)".
+The report template receives `iaas` = {tier, recovered_in, result{test_vm, location, reported_region}, status}.
+- Presenter view `/live` + exercise page: a second, smaller tile "IaaS · Reports VM (Azure Site Recovery)":
+  idle → "Test failover in progress…" (spinner) → "Recovered in 6m52s · Southeast Asia ✅". Label it clearly as a
+  *test* failover in an isolated network (non-disruptive).
+- Report (`reporting.py` TEMPLATE): add an "IaaS tier" row/card with the same data.
+- Team badge colour for `infra` (use `--mag` family).

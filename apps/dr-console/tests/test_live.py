@@ -44,7 +44,7 @@ def test_public_live_outage_then_recovered(monkeypatch):
                                           {"kind": "step_start", "message": "hidden"}])
     out = svc.public_live()
     assert out["state"] == "outage" and 9 <= out["elapsed_s"] <= 12
-    assert out["eta_s"] is not None and out["steps_total"] == 18 and out["steps_done"] == 2
+    assert out["eta_s"] is not None and out["steps_total"] == 21 and out["steps_done"] == 2
     assert out["current_step"].startswith("Forced SQL failover") and [e["message"] for e in out["timeline"]] == ["hi"]
     assert out["rto_target_s"] == 30 * 60
 
@@ -88,3 +88,19 @@ def test_entra_identity_only_trusted_when_enabled(monkeypatch):
     monkeypatch.setenv("ENTRA_AUTH_ENABLED", "true")
     r = c.get("/api/me", headers={"X-MS-CLIENT-PRINCIPAL-NAME": "kishalr@virtusacsp.onmicrosoft.com"})
     assert r.status_code == 200 and r.json() == {"user": "kishalr@virtusacsp.onmicrosoft.com", "auth": "entra"}
+
+
+def test_asr_readiness_check():
+    from dr_agent.agents.readiness import asr_check
+    assert asr_check({"protected": True, "health": "Normal", "rpo_s": 42}).status == "pass"
+    c = asr_check({"protected": False, "state": "Enabling protection", "initial_replication_pct": 37})
+    assert c.status == "warn" and "37%" in c.detail
+
+
+def test_default_plan_includes_non_blocking_iaas_steps():
+    from dr_agent.engine.plan import default_plan, validate_plan
+    p = default_plan()
+    validate_plan(p)
+    iaas = [s for s in p.steps if s.action and s.action.startswith("asr_")]
+    assert [s.action for s in iaas] == ["asr_test_failover", "asr_verify_recovery", "asr_test_cleanup"]
+    assert all(not s.abort_on_failure for s in iaas)

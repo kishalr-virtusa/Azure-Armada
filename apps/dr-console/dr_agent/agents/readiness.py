@@ -80,6 +80,18 @@ def tm_check(endpoints: list[dict]) -> Check:
                  evidence={"endpoints": endpoints})
 
 
+def asr_check(st: dict) -> Check:
+    """IaaS tier: the VM must be protected by Azure Site Recovery with healthy replication (warn, not block)."""
+    if st.get("protected") and st.get("health") == "Normal":
+        rpo = st.get("rpo_s")
+        return Check(name="Azure Site Recovery (reports VM)", status="pass",
+                     detail=f"Protected, replication healthy{f', RPO {rpo}s' if rpo is not None else ''}", evidence=st)
+    pct = st.get("initial_replication_pct")
+    detail = f"{st.get('state') or 'not protected'}" + (f" (initial replication {pct}%)" if pct is not None else "")
+    return Check(name="Azure Site Recovery (reports VM)", status="warn",
+                 detail=f"{detail}; the IaaS test failover will be skipped", evidence=st)
+
+
 def build_checks(facts: dict) -> list[Check]:
     """facts keys (all optional): fog_status, lag_s, probe_a, probe_b, tm_endpoints, settings_a, settings_b, keyvault_ok."""
     checks: list[Check] = []
@@ -93,6 +105,8 @@ def build_checks(facts: dict) -> list[Check]:
         checks.append(tm_check(facts["tm_endpoints"]))
     if "settings_a" in facts and "settings_b" in facts:
         checks.append(parity_check(facts["settings_a"], facts["settings_b"]))
+    if "asr" in facts:
+        checks.append(asr_check(facts["asr"]))
     if "keyvault_ok" in facts:
         checks.append(Check(name="Key Vault reachable", status="pass" if facts["keyvault_ok"] else "fail",
                             detail="secrets resolvable" if facts["keyvault_ok"] else "Key Vault not reachable"))
