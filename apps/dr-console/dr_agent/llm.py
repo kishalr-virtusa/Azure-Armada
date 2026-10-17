@@ -39,7 +39,7 @@ class LLM:
         from openai import AzureOpenAI
 
         self.endpoint = endpoint or os.environ["AZURE_OPENAI_ENDPOINT"]
-        self.deployment = deployment or os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
+        self.deployment = deployment or os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1-mini")
         self.temperature = temperature
         self.client = AzureOpenAI(
             azure_endpoint=self.endpoint,

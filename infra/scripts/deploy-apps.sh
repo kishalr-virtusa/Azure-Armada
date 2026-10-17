@@ -45,18 +45,14 @@ CONSOLE_ZIP="/tmp/dr-console.zip"
 
 # Deploy demo app to both regions
 echo "Deploying demo app to Region A ($WEBAPP_A)..."
-az webapp deploy --resource-group "$WORKLOAD_RG" --name "$WEBAPP_A" --src-path "$DEMO_ZIP" --type zip --async true
+az webapp deploy --resource-group "$WORKLOAD_RG" --name "$WEBAPP_A" --src-path "$DEMO_ZIP" --type zip --timeout 900000
 
 echo "Deploying demo app to Region B ($WEBAPP_B)..."
-az webapp deploy --resource-group "$WORKLOAD_RG" --name "$WEBAPP_B" --src-path "$DEMO_ZIP" --type zip --async true
+az webapp deploy --resource-group "$WORKLOAD_RG" --name "$WEBAPP_B" --src-path "$DEMO_ZIP" --type zip --timeout 900000
 
 # Deploy console app
 echo "Deploying console app ($CONSOLE_APP)..."
-az webapp deploy --resource-group "$CONTROL_RG" --name "$CONSOLE_APP" --src-path "$CONSOLE_ZIP" --type zip --async true
-
-# Wait for deployments
-echo "Waiting for deployments to complete..."
-sleep 30
+az webapp deploy --resource-group "$CONTROL_RG" --name "$CONSOLE_APP" --src-path "$CONSOLE_ZIP" --type zip --timeout 900000
 
 # Restart apps to pick up new code
 echo "Restarting applications..."

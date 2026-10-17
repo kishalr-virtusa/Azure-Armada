@@ -1,4 +1,4 @@
-// Azure OpenAI (AI Services) with gpt-4o-mini deployment
+// Azure OpenAI (AI Services) with gpt-4.1-mini deployment
 // Optional creation via useExistingOpenAI parameter
 
 @description('Location for Azure OpenAI (default eastus2 for quota)')
@@ -14,13 +14,19 @@ param projectTag string = 'dr-agent'
 param useExistingOpenAI bool = false
 
 @description('Deployment name for the model')
-param deploymentName string = 'gpt-4o-mini'
+param deploymentName string = 'gpt-4.1-mini'
 
 @description('Model name')
-param modelName string = 'gpt-4o-mini'
+param modelName string = 'gpt-4.1-mini'
 
 @description('Model version')
-param modelVersion string = '2024-07-18'
+param modelVersion string = '2025-04-14'
+
+@description('Deployment SKU (Free Trial has GlobalStandard quota for gpt-4.1-mini)')
+param deploymentSku string = 'GlobalStandard'
+
+@description('Capacity in thousands of tokens per minute')
+param capacity int = 30
 
 var openAIName = 'dra-openai-${suffix}'
 
@@ -46,8 +52,8 @@ resource deployment 'Microsoft.CognitiveServices/accounts/deployments@2023-10-01
   parent: openAI
   name: deploymentName
   sku: {
-    name: 'Standard'
-    capacity: 30
+    name: deploymentSku
+    capacity: capacity
   }
   properties: {
     model: {

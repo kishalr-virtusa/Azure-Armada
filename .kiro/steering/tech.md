@@ -11,7 +11,7 @@ inclusion: always
 | Workload DB + replication | Azure SQL logical server per region + **failover group** | Basic DTU database |
 | Global entry + traffic switch | **Azure Traffic Manager** (DNS failover, Priority routing). **Front Door is FORBIDDEN on Free Trial subscriptions (verified 2026-10-17).** | Standard (10s fast probing, TTL 10s) |
 | DR Agent console + engine | App Service (Linux, Python 3.11) in control-plane RG | B1 |
-| LLM | Azure OpenAI in an Azure AI Foundry project | `gpt-4o-mini` deployment, **Standard** sku in `eastus2` (Free Trial quota: 200K TPM; GlobalStandard and gpt-4.1 quotas are 0) |
+| LLM | Azure OpenAI in an Azure AI Foundry project | `gpt-4.1-mini` (2025-04-14) deployment, **GlobalStandard** sku in `eastus2` (Free Trial quota 200K TPM; gpt-4.1-mini is retired) |
 | Exercise state / timeline | Azure Storage **Tables**; reports in **Blob** | Standard LRS |
 | Secrets | Key Vault (App Service Key Vault references) | Standard |
 | Logs | Log Analytics + Application Insights | Pay-as-you-go |

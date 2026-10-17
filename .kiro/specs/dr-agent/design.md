@@ -9,7 +9,7 @@
                ├─ web/ (FastAPI + Jinja, polling every 2s)
                ├─ engine/orchestrator  ── phase state machine, one exercise at a time
                ├─ engine/executor      ── runs plan steps via tools (allowlist)
-               ├─ agents/*             ── Azure OpenAI gpt-4o-mini (AI Foundry), structured outputs
+               ├─ agents/*             ── Azure OpenAI gpt-4.1-mini (AI Foundry), structured outputs
                └─ tools/*              ── Azure SDK (web, sql, cdn/afd, resource graph), probes, heartbeat
                      │ Contributor on rg-dra-workload only
                      ▼
@@ -61,7 +61,7 @@
 - `console.bicep`: plan B1 + web app (control RG), app settings for every endpoint/name the console needs (see `config.py`), system identity.
 - `roles.bicep`: console identity → Contributor on `rg-dra-workload`, Storage Table Data Contributor + Storage Blob Data Contributor on the control storage, Key Vault Secrets User, and **Cognitive Services OpenAI User** on the OpenAI resource.
 
-**Azure OpenAI:** `openai.bicep` creates an AI Foundry/AI Services account in `OPENAI_LOCATION` (parameter, default `eastus2`) with deployment `gpt-4o-mini`, sku GlobalStandard, capacity 30. If it already exists, the parameter `useExistingOpenAI` skips it.
+**Azure OpenAI:** `openai.bicep` creates an AI Foundry/AI Services account in `OPENAI_LOCATION` (parameter, default `eastus2`) with deployment `gpt-4.1-mini`, sku GlobalStandard, capacity 30. If it already exists, the parameter `useExistingOpenAI` skips it.
 
 Scripts:
 - `deploy.sh`: `az deployment sub create`, then `deploy-apps.sh`, which zip-deploys both apps via `az webapp deploy --type zip`.
