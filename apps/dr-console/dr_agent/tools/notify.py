@@ -62,16 +62,95 @@ def notify(
             logger.error(f"Failed to send email: {e}")
             result["email_sent"] = False
             result["email_error"] = str(e)
+    elif send_email and kind in email_kinds and config.notify_email_to and _resend_key():
+        try:
+            _send_via_resend(kind, title, body, link)
+            result["email_sent"] = True
+            result["email_channel"] = "resend"
+        except Exception as e:
+            logger.error(f"Resend email failed, falling back to Azure Monitor: {e}")
+            result["email_error"] = str(e)
+            result["email_sent"] = _try_azure_monitor(kind, title, body, link, exercise_id)
+    elif send_email and kind in email_kinds and config.notify_email_to and config.appinsights_connection_string:
+        try:
+            _send_via_azure_monitor(kind, title, body, link, exercise_id)
+            result["email_sent"] = True
+            result["email_channel"] = "azure-monitor"
+        except Exception as e:
+            logger.error(f"Failed to queue Azure Monitor email: {e}")
+            result["email_sent"] = False
+            result["email_error"] = str(e)
     else:
         result["email_sent"] = False
     
     return result
 
 
-def _send_email(kind: NotifyKind, title: str, body: str, link: str | None) -> None:
-    """Send an email notification via Azure Communication Services."""
-    client = EmailClient.from_connection_string(config.acs_connection_string)
-    
+def _resend_key() -> str:
+    import os
+    return os.getenv("RESEND_API_KEY", "").strip()
+
+
+def _try_azure_monitor(kind, title, body, link, exercise_id) -> bool:
+    if not config.appinsights_connection_string:
+        return False
+    try:
+        _send_via_azure_monitor(kind, title, body, link, exercise_id)
+        return True
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"Azure Monitor email failed: {e}")
+        return False
+
+
+def _send_via_resend(kind: str, title: str, body: str, link: str | None) -> None:
+    """Instant email (seconds) via the Resend API. Without a verified domain Resend only delivers to the
+    account owner's address, which is our DR team inbox (NOTIFY_EMAIL_TO)."""
+    import os
+
+    import httpx
+
+    host = os.getenv("WEBSITE_HOSTNAME", "")
+    full_link = f"https://{host}{link}" if link and host and link.startswith("/") else link
+    html = _build_html(kind, title, body, full_link)
+    r = httpx.post("https://api.resend.com/emails", timeout=10,
+                   headers={"Authorization": f"Bearer {_resend_key()}"},
+                   json={"from": os.getenv("RESEND_FROM", "Virtusa DR Agent <onboarding@resend.dev>"),
+                         "to": [a.strip() for a in config.notify_email_to.split(",") if a.strip()],
+                         "subject": f"[DR Agent] {title}", "html": html})
+    if r.status_code >= 300:
+        raise RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
+
+
+def _parse_connection_string(cs: str) -> dict[str, str]:
+    return {k.strip().lower(): v.strip() for k, v in (p.split("=", 1) for p in cs.split(";") if "=" in p)}
+
+
+def _send_via_azure_monitor(kind: str, title: str, body: str, link: str | None, exercise_id: str | None) -> None:
+    """Emit a DRNotify custom event to Application Insights; the 'DR Agent notification' log alert emails it
+    to the DR team through an Azure Monitor action group (infra/modules/alerts.bicep). ~1-3 min latency."""
+    import os
+    from datetime import datetime, timezone
+
+    import httpx
+
+    cs = _parse_connection_string(config.appinsights_connection_string)
+    ingest = cs.get("ingestionendpoint", "https://dc.services.visualstudio.com/").rstrip("/")
+    host = os.getenv("WEBSITE_HOSTNAME", "")
+    full_link = f"https://{host}{link}" if link and host and link.startswith("/") else (link or "")
+    envelope = [{
+        "name": "Microsoft.ApplicationInsights.Event",
+        "time": datetime.now(timezone.utc).isoformat(),
+        "iKey": cs["instrumentationkey"],
+        "data": {"baseType": "EventData", "baseData": {"ver": 2, "name": "DRNotify", "properties": {
+            "kind": kind, "title": title[:120], "body": body[:400], "link": full_link,
+            "exercise_id": exercise_id or ""}}},
+    }]
+    r = httpx.post(f"{ingest}/v2.1/track", json=envelope, timeout=10)
+    r.raise_for_status()
+
+
+def _build_html(kind: str, title: str, body: str, link: str | None) -> str:
+    """Branded HTML email body shared by all channels."""
     # Determine styling based on kind
     colors = {
         "info": ("#2F5FB3", "#DCE7FA"),
@@ -155,7 +234,14 @@ def _send_email(kind: NotifyKind, title: str, body: str, link: str | None) -> No
     </body>
     </html>
     """
-    
+    return html_content
+
+
+def _send_email(kind: NotifyKind, title: str, body: str, link: str | None) -> None:
+    """Send an email notification via Azure Communication Services."""
+    client = EmailClient.from_connection_string(config.acs_connection_string)
+    html_content = _build_html(kind, title, body, link)
+
     message = {
         "senderAddress": config.acs_sender,
         "recipients": {

@@ -67,6 +67,9 @@ param foundryProjectEndpoint string = ''
 @description('Email address for notifications (empty = console only)')
 param notifyEmailTo string = ''
 
+@description('Read RESEND_API_KEY from Key Vault secret resend-api-key')
+param useResend bool = false
+
 @description('Public URL of Contoso Payments shown as a QR code in the presenter view')
 param publicUrl string = ''
 
@@ -113,7 +116,7 @@ resource consoleApp 'Microsoft.Web/sites@2023-01-01' = {
       alwaysOn: true
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
-      appSettings: [
+      appSettings: concat([
         {
           name: 'PUBLIC_URL'
           value: publicUrl
@@ -231,7 +234,12 @@ resource consoleApp 'Microsoft.Web/sites@2023-01-01' = {
           name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
           value: 'true'
         }
-      ]
+      ], useResend ? [
+        {
+          name: 'RESEND_API_KEY'
+          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=resend-api-key)'
+        }
+      ] : [])
     }
   }
 }

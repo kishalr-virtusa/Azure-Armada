@@ -23,6 +23,10 @@ param sqlAdminPassword string
 @secure()
 param consolePasscode string
 
+@secure()
+@description('Resend API key: instant email to NOTIFY_EMAIL_TO (optional; Azure Monitor email is the fallback)')
+param resendApiKey string = ''
+
 @description('Email address for DR notifications (empty = console only)')
 param notifyEmailTo string = ''
 
@@ -98,6 +102,7 @@ module keyVault 'modules/keyvault.bicep' = {
     projectTag: projectTag
     sqlAdminPassword: sqlAdminPassword
     consolePasscode: consolePasscode
+    resendApiKey: resendApiKey
   }
 }
 
@@ -200,6 +205,19 @@ module openAI 'modules/openai.bicep' = {
   }
 }
 
+// Email via Azure Monitor alerts (works on Free Trial; ACS email does not)
+module alerts 'modules/alerts.bicep' = if (!empty(notifyEmailTo)) {
+  name: 'alerts-deployment'
+  scope: controlRg
+  params: {
+    location: controlLocation
+    suffix: suffix
+    projectTag: projectTag
+    appInsightsId: log.outputs.appInsightsId
+    notifyEmailTo: notifyEmailTo
+  }
+}
+
 // Email / ACS (in control RG)
 module email 'modules/email.bicep' = if (deployEmail) {
   name: 'email-deployment'
@@ -218,6 +236,7 @@ module console 'modules/console.bicep' = {
   scope: controlRg
   params: {
     appName: consoleAppName
+    useResend: !empty(resendApiKey)
     publicUrl: effectivePublicUrl
     location: controlLocation
     suffix: suffix
