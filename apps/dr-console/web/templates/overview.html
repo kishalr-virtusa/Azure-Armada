@@ -14,14 +14,14 @@
 <div class="kpis" id="statusCards">
     <!-- Region A -->
     <div class="kpi" id="cardRegionA">
-        <div class="l">Region A (East Asia)</div>
+        <div class="l">Region A · East Asia</div>
         <div class="v" id="statusA">—</div>
         <div class="x" id="detailA">Loading...</div>
     </div>
     
     <!-- Region B -->
     <div class="kpi region-b" id="cardRegionB">
-        <div class="l">Region B (South India)</div>
+        <div class="l">Region B · Southeast Asia</div>
         <div class="v" id="statusB">—</div>
         <div class="x" id="detailB">Loading...</div>
     </div>
@@ -141,90 +141,88 @@
         }
     }
     
+    const REGION_NAME = { A: 'East Asia', B: 'Southeast Asia' };
+    const MONITOR = {   // Traffic Manager monitor state -> [label, badge class]
+        Online: ['Online', 'pass'], CheckingEndpoint: ['Checking', 'info'], Degraded: ['Degraded', 'warn'],
+        Disabled: ['Disabled', 'neutral'], Inactive: ['Inactive', 'neutral'], Stopped: ['Stopped', 'neutral'],
+    };
+    const REPL = { CATCH_UP: 'Replicating', SEEDING: 'Seeding', PENDING: 'Pending', SUSPENDED: 'Suspended' };
+
+    function setCard(card, statusEl, detailEl, value, detail, cls) {
+        statusEl.textContent = value;
+        detailEl.textContent = detail;
+        detailEl.title = '';
+        card.classList.remove('pass', 'fail', 'warn', 'neutral');
+        if (cls) card.classList.add(cls);
+    }
+
+    // NotDeployed / error / ok handling shared by all cards; returns true when the caller should render data
+    function guard(card, statusEl, detailEl, data) {
+        if (data && data.state === 'NotDeployed') {
+            setCard(card, statusEl, detailEl, 'Not deployed', data.message || '', 'neutral');
+            detailEl.title = data.detail || '';
+            return false;
+        }
+        if (!data || data.error) {
+            setCard(card, statusEl, detailEl, 'Unavailable', 'Could not read status', 'warn');
+            detailEl.title = data?.error || '';
+            return false;
+        }
+        return true;
+    }
+
     function updateCard(cardId, statusId, detailId, data) {
-        const card = document.getElementById(cardId);
-        const status = document.getElementById(statusId);
-        const detail = document.getElementById(detailId);
-        
-        if (!data || data.error) {
-            status.textContent = 'Error';
-            detail.textContent = data?.error || 'Failed to load';
-            card.classList.remove('pass', 'warn');
-            card.classList.add('fail');
-            return;
-        }
-        
-        const isHealthy = data.state === 'Running';
-        status.textContent = isHealthy ? '✓' : '✗';
-        detail.textContent = `${data.state} • ${data.location || ''}`;
-        
-        card.classList.remove('pass', 'fail', 'warn');
-        card.classList.add(isHealthy ? 'pass' : 'fail');
+        const card = document.getElementById(cardId), status = document.getElementById(statusId),
+              detail = document.getElementById(detailId);
+        if (!guard(card, status, detail, data)) return;
+        const healthy = data.state === 'Running';
+        setCard(card, status, detail, data.state, data.location || '', healthy ? 'pass' : 'fail');
     }
-    
+
     function updateTMCard(data) {
-        const card = document.getElementById('cardTM');
-        const status = document.getElementById('statusTM');
-        const detail = document.getElementById('detailTM');
-        
-        if (!data || data.error) {
-            status.textContent = 'Error';
-            detail.textContent = data?.error || 'Failed to load';
-            card.classList.add('fail');
-            return;
-        }
-        
-        const onlineCount = (data.endpoints || []).filter(e => e.endpoint_monitor_status === 'Online').length;
-        status.textContent = `${onlineCount}/${data.endpoints?.length || 0}`;
-        detail.textContent = `${data.profile_status} • TTL ${data.dns_config?.ttl}s`;
-        
-        card.classList.remove('pass', 'fail', 'warn');
-        card.classList.add(onlineCount > 0 ? 'pass' : 'fail');
+        const card = document.getElementById('cardTM'), status = document.getElementById('statusTM'),
+              detail = document.getElementById('detailTM');
+        if (!guard(card, status, detail, data)) return;
+        const eps = data.endpoints || [];
+        const online = eps.filter(e => e.endpoint_monitor_status === 'Online').length;
+        const checking = eps.some(e => e.endpoint_monitor_status === 'CheckingEndpoint');
+        setCard(card, status, detail, `${online} of ${eps.length} online`,
+                `${checking ? 'Health checks starting · ' : ''}Priority routing · TTL ${data.dns_config?.ttl ?? '?'}s`,
+                online > 0 ? 'pass' : (checking ? 'neutral' : 'fail'));
     }
-    
+
     function updateFOGCard(data) {
-        const card = document.getElementById('cardFOG');
-        const status = document.getElementById('statusFOG');
-        const detail = document.getElementById('detailFOG');
-        
-        if (!data || data.error) {
-            status.textContent = 'Error';
-            detail.textContent = data?.error || 'Failed to load';
-            card.classList.add('fail');
+        const card = document.getElementById('cardFOG'), status = document.getElementById('statusFOG'),
+              detail = document.getElementById('detailFOG');
+        if (!guard(card, status, detail, data)) return;
+        if (!data.primary_region) {
+            setCard(card, status, detail, 'Not deployed', 'Failover group is being created', 'neutral');
             return;
         }
-        
-        status.textContent = data.replication_role === 'Primary' ? 'A' : 'B';
-        detail.textContent = `${data.replication_role} • ${data.replication_state}`;
-        
-        const isHealthy = data.replication_state === 'CATCH_UP' || data.replication_state === 'SEEDING';
-        card.classList.remove('pass', 'fail', 'warn');
-        card.classList.add(isHealthy || data.replication_role ? 'pass' : 'warn');
+        const state = data.replication_state;
+        setCard(card, status, detail, `Primary: ${REGION_NAME[data.primary_region] || data.primary_region}`,
+                REPL[state] || state || '', state === 'CATCH_UP' ? 'pass' : 'warn');
     }
-    
+
     function updateEndpointsTable(endpoints) {
         const tbody = document.getElementById('endpointsTable');
-        
-        if (endpoints.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ink-3);">No endpoints</td></tr>';
+        if (!endpoints || endpoints.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty">No endpoints yet</td></tr>';
             return;
         }
-        
         tbody.innerHTML = endpoints.map(ep => {
-            const statusClass = ep.endpoint_status === 'Enabled' ? 'pass' : 'neutral';
-            const monitorClass = ep.endpoint_monitor_status === 'Online' ? 'pass' : 
-                                 ep.endpoint_monitor_status === 'Degraded' ? 'warn' : 'fail';
+            const region = ep.name === 'endpoint-a' ? 'A · East Asia' : ep.name === 'endpoint-b' ? 'B · Southeast Asia' : ep.name;
+            const [mon, monCls] = MONITOR[ep.endpoint_monitor_status] || [ep.endpoint_monitor_status, 'fail'];
             return `
                 <tr>
-                    <td class="f">${ep.name}</td>
+                    <td class="f">${region}</td>
                     <td>${ep.priority}</td>
-                    <td><span class="st ${statusClass}">${ep.endpoint_status}</span></td>
-                    <td><span class="st ${monitorClass}">${ep.endpoint_monitor_status}</span></td>
-                </tr>
-            `;
+                    <td><span class="st ${ep.endpoint_status === 'Enabled' ? 'pass' : 'neutral'}">${ep.endpoint_status}</span></td>
+                    <td><span class="st ${monCls}">${mon}</span></td>
+                </tr>`;
         }).join('');
     }
-    
+
     async function loadExercises() {
         try {
             const res = await fetch('/api/exercises');

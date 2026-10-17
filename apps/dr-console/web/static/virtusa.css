@@ -632,3 +632,59 @@ footer {
     text-align: center;
     margin-top: 24px;
 }
+
+/* =====================================================================================================
+   Presentation polish layer (applies to every console page; overrides the base rules above)
+   ===================================================================================================== */
+body { font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+html, body { overflow-x: hidden; }
+
+/* type scale: 32 / 20 / 16 / 15 / 13 / 11 */
+h1 { font-weight: 700; font-size: clamp(24px, 2.6vw, 32px); line-height: 1.15; letter-spacing: -0.015em; margin: 4px 0 6px; text-wrap: balance; }
+h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+h3 { font-size: 16px; font-weight: 700; }
+.lede { font-size: 15px; color: var(--ink-2); }
+.sub { font-size: 13px; }
+.eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; }
+
+/* header: brand | links | right; links drop to their own scrollable row on narrow screens */
+.nav { gap: 12px 20px; flex-wrap: wrap; padding: 10px max(16px, env(safe-area-inset-left, 0px)); top: env(safe-area-inset-top, 0px); }
+.nav-brand { flex: 0 0 auto; white-space: nowrap; }
+.nav-links { flex: 1 1 auto; justify-content: center; min-width: 0; overflow-x: auto; scrollbar-width: none; gap: 4px; }
+.nav-links::-webkit-scrollbar { display: none; }
+.nav-link { white-space: nowrap; padding: 8px 14px; font-weight: 500; font-size: 14px; }
+.nav-link.active { font-weight: 600; }
+.nav-right { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; }
+.azure-badge { white-space: nowrap; }
+@media (max-width: 1240px) { .azure-badge span { display: none; } }
+@media (max-width: 960px) {
+    .nav-links { order: 3; flex-basis: 100%; justify-content: flex-start; margin: 0 -4px; }
+}
+@media (max-width: 420px) { .brand-divider, .nav-brand > span:last-child { display: none !important; } }
+
+/* buttons are buttons, also when they are links */
+.btn, a.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px;
+    text-decoration: none; line-height: 1.1; font-size: 14px; white-space: nowrap; }
+.btn:focus-visible, .nav-link:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* cards and KPI tiles */
+.card { border-radius: 12px; }
+.kpi { border-radius: 12px; min-width: 0; }
+.kpi .l { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(--ink-2); }
+.kpi .v { font-size: 22px; font-weight: 700; line-height: 1.25; margin: 6px 0 2px; overflow-wrap: anywhere; }
+.kpi .x { font-size: 13px; color: var(--ink-3); }
+.kpi.neutral { border-top-color: var(--line-2); }
+.kpi.neutral .v { color: var(--ink-3); }
+
+/* label/value lists (e.g. "Current routing") */
+dl.srcs { display: grid; grid-template-columns: max-content 1fr; gap: 10px 20px; margin: 12px 0 0; }
+dl.srcs dt { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); padding-top: 2px; }
+dl.srcs dd { margin: 0; font-weight: 500; overflow-wrap: anywhere; min-width: 0; }
+@media (max-width: 480px) { dl.srcs { grid-template-columns: 1fr; gap: 2px; } dl.srcs dd { margin-bottom: 10px; } }
+
+/* tables + status pills */
+td.empty { text-align: center; color: var(--ink-3); padding: 20px 12px; }
+th { white-space: nowrap; }
+.st { font-size: 11px; letter-spacing: 0.05em; white-space: nowrap; }
+
+footer { font-size: 12px; }

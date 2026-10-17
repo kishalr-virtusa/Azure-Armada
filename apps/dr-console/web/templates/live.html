@@ -8,8 +8,7 @@
     .presenter-wrap, .presenter-wrap * {
         font-size: 18px;
     }
-
-    /* Virtusa watermark background */
+        /* (watermark removed: branding lives in the header) */
     .wrap {
         position: relative;
     }
@@ -20,7 +19,7 @@
         left: 50%;
         width: 1200px;
         height: 400px;
-        background: url('/static/brand/virtusa.svg') no-repeat center;
+        background: none;
         background-size: contain;
         opacity: 0.04;
         transform: translate(-50%, -50%);
@@ -29,7 +28,7 @@
     }
     @media (prefers-color-scheme: dark) {
         .wrap::before {
-            background-image: url('/static/brand/virtusa-white.svg');
+            background-image: none;
         }
     }
 
@@ -152,7 +151,8 @@
     }
     .big-kpi .value {
         font-size: 56px;
-        font-weight: 300;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
         line-height: 1;
         color: var(--ink);
     }
@@ -170,7 +170,8 @@
     }
     .stopwatch-value {
         font-size: 72px;
-        font-weight: 300;
+        font-weight: 700;
+        letter-spacing: -0.02em;
         font-variant-numeric: tabular-nums;
         color: var(--add);
     }
@@ -338,8 +339,8 @@
         padding: 16px;
     }
     .chaos-btn {
-        background: linear-gradient(135deg, #FF6B00, #FF0000);
-        color: white;
+        background: var(--add);
+        color: #fff;
         border: none;
         border-radius: 12px;
         padding: 16px 32px;
@@ -350,6 +351,8 @@
         transition: transform 0.1s, opacity 0.2s;
     }
     .chaos-btn:hover { transform: scale(1.02); }
+    .chaos-btn:disabled { background: var(--surface-2); color: var(--ink-3); cursor: not-allowed; transform: none; }
+    header .st { font-size: 12px; padding: 6px 12px; }
     .chaos-btn:disabled {
         opacity: 0.5;
         cursor: not-allowed;
@@ -411,7 +414,7 @@
 
 {% block content %}
 <!-- Presenter header with branding -->
-<div class="presenter-header">
+<div class="presenter-header" style="display:none">
     <div class="presenter-brand">
         <img src="/static/brand/virtusa.svg" alt="Virtusa" class="brand-logo-light">
         <img src="/static/brand/virtusa-white.svg" alt="Virtusa" class="brand-logo-dark" style="display: none;">

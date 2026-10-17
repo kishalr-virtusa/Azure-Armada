@@ -14,7 +14,7 @@
             position: relative;
             overflow: hidden;
         }
-        /* Subtle Virtusa watermark */
+        /* (watermark removed: branding lives in the header) */
         .login-wrap::before {
             content: '';
             position: absolute;
@@ -22,7 +22,7 @@
             left: 50%;
             width: 600px;
             height: 200px;
-            background: url('/static/brand/virtusa.svg') no-repeat center;
+            background: none;
             background-size: contain;
             opacity: 0.03;
             transform: translate(-50%, -50%);
@@ -30,7 +30,7 @@
         }
         @media (prefers-color-scheme: dark) {
             .login-wrap::before {
-                background-image: url('/static/brand/virtusa-white.svg');
+                background-image: none;
                 opacity: 0.04;
             }
         }
