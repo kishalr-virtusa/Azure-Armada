@@ -149,8 +149,8 @@ class ExerciseRunner(threading.Thread):
     def sleep(self, seconds: float) -> None:
         end = time.monotonic() + seconds
         while time.monotonic() < end:
-            self.check_kill()
-            time.sleep(min(1.0, end - time.monotonic()))
+            self.check_kill()  # a storage read: it can outlast the time that was left
+            time.sleep(max(0.0, min(1.0, end - time.monotonic())))
 
     def plan(self) -> ExercisePlan:
         return ExercisePlan.model_validate_json(self.meta()["plan_json"])

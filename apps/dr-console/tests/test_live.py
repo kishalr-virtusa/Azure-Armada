@@ -106,3 +106,11 @@ def test_default_plan_includes_non_blocking_iaas_steps():
     iaas = [s for s in p.steps if s.action and s.action.startswith("asr_")]
     assert [s.action for s in iaas] == ["asr_test_failover", "asr_verify_recovery", "asr_test_cleanup"]
     assert all(not s.abort_on_failure for s in iaas)
+
+
+def test_runner_sleep_never_negative(monkeypatch):
+    import time as _t
+    from dr_agent.engine.runner import ExerciseRunner
+    r = ExerciseRunner("ex-test")
+    monkeypatch.setattr(r, "check_kill", lambda: _t.sleep(0.05))  # slow kill check outlasts the remaining time
+    r.sleep(0.01)
