@@ -18,7 +18,7 @@ inclusion: always
 | Email notifications | Azure Communication Services + Email Communication Service (**Azure-managed domain**, sender `DoNotReply@<id>.azurecomm.net`) | Pay-per-email (fractions of a cent) |
 | Outage injection (optional) | Chaos Studio App Service "stop" fault; otherwise `az`/SDK stop | - |
 
-Regions: Region A = `centralindia`, Region B = `southeastasia` (Singapore). Southeast Asia and West India are restricted for Azure SQL on this Free Trial subscription. Traffic Manager is global. Azure OpenAI region = `eastus2`.
+Regions: Region A = `eastasia` (Hong Kong), Region B = `southeastasia` (Singapore): an official Azure paired region. DR console (control plane) = `southindia`; Key Vault/storage/logs = `centralindia`. Why not India for Region A: Central India throttles App Service plan creation for this subscription, and South/West India do not accept new Azure SQL servers. Traffic Manager is global. Azure OpenAI region = `eastus2`.
 
 **Not allowed (cost):** VMs, Site Recovery, AKS, Firewall, App Gateway, VPN/ExpressRoute, Bastion, Premium SKUs, Defender paid plans.
 

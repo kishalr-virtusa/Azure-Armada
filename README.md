@@ -54,8 +54,8 @@ This creates:
 
 ```
 Traffic Manager (Priority routing, TTL 10s)
-  ├─ Region A (Central India) ─── App Service B1 ─┐
-  └─ Region B (South India)  ─── App Service B1 ─┤─ SQL Failover Group
+  ├─ Region A (East Asia)      ─── App Service B1 ─┐
+  └─ Region B (Southeast Asia) ─── App Service B1 ─┤─ SQL Failover Group
                                                   │   └─ paymentsdb (Basic)
 DR Console (Control RG)                           │
   ├─ LLM Agents (Azure OpenAI gpt-4o-mini)        │

@@ -14,7 +14,7 @@
                      │ Contributor on rg-dra-workload only
                      ▼
  Traffic Manager (Priority routing, DNS TTL 10s, HTTP, probe /health every 10s)
-   endpoints:   A (prio 1) ── App Service B1 centralindia  ─┐
+   endpoints:   A (prio 1) ── App Service B1 eastasia  ─┐
                  B (prio 2) ── App Service B1 southeastasia    ─┤─ SQL failover group listener
    SQL server A (primary) ═══ geo-replication ═══► SQL server B (secondary)   paymentsdb Basic
  Control store: Storage Tables (exercises, events, heartbeats) + Blob (reports)
@@ -33,7 +33,7 @@
   - `SELECT 1`, then `INSERT` and `DELETE` a probe row in `transactions`, inside a single transaction
   - returns `{status:"ok", region, db_ok, db_server: @@SERVERNAME, time}`
 - UI: one Jinja page with a card layout.
-  - Header: "Contoso Payments", a big region pill (blue for Central India, purple for Southeast Asia), a live status dot.
+  - Header: "Contoso Payments", a big region pill (purple for East Asia, magenta for Southeast Asia), a live status dot.
   - Body: a "Make payment" button (POST /api/txn) and a recent-transactions table.
   - Uses `fetch` polling every 3s. If a fetch fails, it shows a red "Service unavailable" banner, which is very visible during the outage.
 
@@ -42,7 +42,7 @@
 - `log.bicep`: Log Analytics workspace + App Insights (shared).
 - `keyvault.bicep`: Key Vault in the control RG (RBAC mode). Secrets: `sql-admin-password`, `console-passcode`, `acs-connection-string`. They are seeded by `seed-secrets.sh` from env vars, never stored in the repo.
 - `sql.bicep`:
-  - server A (centralindia) + server B (southeastasia), Entra admin + SQL admin
+  - server A (eastasia) + server B (southeastasia), Entra admin + SQL admin
   - `paymentsdb` Basic on A
   - failover group `dra-fog-<suffix>`, with partner B, read-write policy **Manual**, containing `paymentsdb` (geo-secondary created by the FOG)
   - firewall: allow Azure services

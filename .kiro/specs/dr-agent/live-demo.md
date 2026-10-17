@@ -188,3 +188,8 @@ The report template receives `iaas` = {tier, recovered_in, result{test_vm, locat
 `{"state": "NotDeployed", "message": "Region A web app is not deployed yet", "detail": "<raw error>"}`.
 Show a neutral grey badge "Not deployed yet" with `message` (tooltip = `detail`) instead of a red error.
 Never print raw Azure exception text in the UI; put it in a tooltip or a collapsed "details" row.
+
+## NOTE (17 Oct, evening): Region A is now **East Asia** (Hong Kong), not Central India
+East Asia ↔ Southeast Asia is an official Azure paired region. Resource names use `eas`
+(`dra-app-eas-<sfx>`, `dra-sql-eas-<sfx>`). Replace any remaining "Central India" text in templates/JS
+with data from the API (`region` fields) or "East Asia". The console still runs in South India.
