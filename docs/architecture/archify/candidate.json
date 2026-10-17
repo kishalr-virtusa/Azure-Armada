@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "DR Agent: Autonomous Disaster Recovery Validation on Azure",
+    "output": "docs/architecture/archify/dr-agent-architecture.html",
+    "quality_profile": "showcase",
+    "locale": "en"
+  },
+  "components": [
+    { "id": "phones", "type": "external", "label": "Users & judges", "sublabel": "phones · /pay", "pos": [40, 360], "size": [122, 62] },
+    { "id": "tm", "type": "cloud", "label": "Traffic Manager", "sublabel": "priority · /health 10s", "pos": [200, 360], "size": [140, 62], "tag": "dra-tm-e23x" },
+    { "id": "app_a", "type": "frontend", "label": "Contoso Payments", "sublabel": "App Service · primary", "pos": [440, 250], "size": [150, 62], "tag": "dra-app-eas" },
+    { "id": "sql_a", "type": "database", "label": "Azure SQL primary", "sublabel": "failover group dra-fog", "pos": [710, 250], "size": [150, 62], "tag": "dra-sql-eas" },
+    { "id": "vm_a", "type": "backend", "label": "Reports VM", "sublabel": "Windows · replicated", "pos": [960, 250], "size": [140, 62], "tag": "dra-vm-reports" },
+    { "id": "app_b", "type": "frontend", "label": "Contoso Payments", "sublabel": "App Service · warm standby", "pos": [440, 470], "size": [150, 62], "tag": "dra-app-sea" },
+    { "id": "sql_b", "type": "database", "label": "Azure SQL secondary", "sublabel": "readable geo-replica", "pos": [710, 470], "size": [150, 62], "tag": "dra-sql-sea" },
+    { "id": "vault", "type": "cloud", "label": "Site Recovery vault", "sublabel": "isolated test network", "pos": [1170, 470], "size": [150, 62], "tag": "dra-rsv-e23x" },
+    { "id": "engine", "type": "security", "label": "DR console + engine", "sublabel": "allowlist · approvals · kill", "pos": [710, 40], "size": [160, 62], "tag": "azure-armada" },
+    { "id": "agents", "type": "backend", "label": "6 AI agents", "sublabel": "gpt-4.1-mini · gpt-5-mini", "pos": [1080, 40], "size": [160, 62], "tag": "Foundry Agent Service" }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Global", "wraps": ["tm"], "pad": 16 },
+    { "kind": "region", "label": "Region A · East Asia (primary)", "wraps": ["app_a", "sql_a", "vm_a"], "pad": 20 },
+    { "kind": "region", "label": "Region B · Southeast Asia (DR, paired region)", "wraps": ["app_b", "sql_b", "vault"], "pad": 20 },
+    { "kind": "security-group", "label": "Control plane · South India", "wraps": ["engine"], "pad": 16 },
+    { "kind": "region", "label": "Azure AI Foundry · East US 2", "wraps": ["agents"], "pad": 16 }
+  ],
+  "connections": [
+    { "from": "phones", "to": "tm", "label": "HTTPS", "variant": "emphasis" },
+    { "from": "tm", "to": "app_a", "label": "priority 1", "variant": "emphasis", "route": "orthogonal-h" },
+    { "from": "tm", "to": "app_b", "label": "priority 2", "variant": "dashed", "route": "orthogonal-h" },
+    { "from": "app_a", "to": "sql_a", "label": "SQL listener" },
+    { "from": "app_b", "to": "sql_b", "label": "SQL listener" },
+    { "from": "sql_a", "to": "sql_b", "label": "geo-replication", "variant": "security", "route": "straight" },
+    { "from": "vm_a", "to": "vault", "label": "ASR replication", "variant": "security", "route": "orthogonal-h" },
+    { "from": "engine", "to": "agents", "label": "plan · diagnose · report" },
+    { "from": "engine", "to": "tm", "label": "endpoint on/off", "variant": "emphasis", "fromSide": "left", "toSide": "top" },
+    { "from": "engine", "to": "app_a", "label": "stop / start", "variant": "emphasis", "toSide": "top" },
+    { "from": "engine", "to": "sql_a", "label": "failover · heartbeat 2s", "variant": "emphasis", "route": "straight" },
+    { "from": "engine", "to": "vault", "label": "test failover · cleanup", "variant": "emphasis", "toSide": "top" }
+  ],
+  "cards": [
+    { "dot": "violet", "title": "Agents decide, the engine acts", "items": ["Architect, Readiness, Runbook, Reporter on gpt-4.1-mini", "Planner and Validator on gpt-5-mini (reasoning)", "Engine runs only allowlisted actions from a validated plan", "Humans approve the plan, the DB go, failback and any fix"] },
+    { "dot": "emerald", "title": "Measured, not estimated", "items": ["RTO: outage injected until healthy via Traffic Manager", "RPO: 2s heartbeats vs rows surviving in the new primary", "IaaS: ASR test failover verified inside the recovered VM"] },
+    { "dot": "rose", "title": "Secure by default", "items": ["Secrets in Key Vault, managed identities, no keys", "Contoso is private; public is time-boxed and audited", "State and reports in Storage; logs in App Insights"] }
+  ]
+}

@@ -1,0 +1,4 @@
+*.finalize*.json
+*.browser-check.json
+*.check.json
+review-*/
