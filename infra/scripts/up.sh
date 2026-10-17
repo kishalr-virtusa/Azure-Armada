@@ -45,11 +45,17 @@ fi
 echo "== 2/4 Infrastructure (Bicep, ~15-25 min)"
 "$DIR/deploy.sh"
 
-echo "== 3/4 Application code"
+echo "== 3/4 Application code + sign-in + Site Recovery"
+"$DIR/entra-auth.sh" || echo "WARNING: Entra sign-in not configured (console uses the passcode); re-run entra-auth.sh"
 "$DIR/deploy-apps.sh"
+if [[ "${DEPLOY_IAAS:-true}" == "true" ]]; then
+  "$DIR/asr.sh" enable || echo "WARNING: ASR replication not enabled yet; re-run asr.sh enable"
+fi
 
 echo "== 4/4 Smoke test"
 "$DIR/smoke.sh" || echo "WARNING: smoke test reported problems (apps may still be warming up; re-run smoke.sh in 2 min)"
 
 echo
-echo "UP. Console passcode is in $SECRETS_FILE (CONSOLE_PASSCODE)."
+echo "UP. Console: https://${CONSOLE_APP_NAME:-azure-armada}.azurewebsites.net (Microsoft Entra ID sign-in;"
+echo "    add teammates with: $DIR/entra-auth.sh add-user <user@tenant>)."
+echo "    Phones (team, private): https://${CONSOLE_APP_NAME:-azure-armada}.azurewebsites.net/pay?code=\$APP_ACCESS_CODE (see $SECRETS_FILE)"

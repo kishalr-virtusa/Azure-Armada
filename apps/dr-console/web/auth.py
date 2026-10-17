@@ -1,6 +1,13 @@
-"""Simple passcode authentication."""
+"""Console authentication.
+
+Microsoft Entra ID (preferred): App Service built-in auth signs users in and injects
+X-MS-CLIENT-PRINCIPAL-NAME (App Service strips client-supplied X-MS-* headers when auth is on).
+We only trust it when ENTRA_AUTH_ENABLED=true, set by infra/scripts/entra-auth.sh together with the auth config.
+Fallback: a shared passcode with an in-memory session (when Entra is not configured).
+"""
 
 import hashlib
+import os
 import secrets
 from datetime import datetime, timedelta
 
@@ -38,8 +45,21 @@ def create_session(response: Response) -> str:
     return session_id
 
 
+def entra_enabled() -> bool:
+    return os.getenv("ENTRA_AUTH_ENABLED", "").lower() == "true"
+
+
+def current_user(request: Request) -> str | None:
+    """Signed-in Entra user (UPN), or None."""
+    if not entra_enabled():
+        return None
+    return request.headers.get("x-ms-client-principal-name") or None
+
+
 def verify_session(request: Request) -> bool:
     """Verify that the request has a valid session."""
+    if entra_enabled():
+        return current_user(request) is not None
     session_id = request.cookies.get(COOKIE_NAME)
     if not session_id:
         return False

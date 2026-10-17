@@ -13,6 +13,9 @@ if [[ "${1:-}" != "--yes" ]]; then
   [[ "$c" == "yes" ]] || { echo "Aborted."; exit 0; }
 fi
 
+# Site Recovery must release the vault before its resource group can be deleted
+"$(dirname "$0")/asr.sh" disable || echo "WARNING: ASR disable reported a problem; continuing"
+
 for rg in "${RGS[@]}"; do
   if [[ "$(az group exists -n "$rg")" == "true" ]]; then
     echo "Deleting $rg ..."

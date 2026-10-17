@@ -67,6 +67,9 @@ param foundryProjectEndpoint string = ''
 @description('Email address for notifications (empty = console only)')
 param notifyEmailTo string = ''
 
+@description('Entra app (client) id for console sign-in; empty = passcode login. Set by scripts/entra-auth.sh')
+param entraClientId string = ''
+
 @description('Read RESEND_API_KEY from Key Vault secret resend-api-key')
 param useResend bool = false
 
@@ -241,6 +244,19 @@ resource consoleApp 'Microsoft.Web/sites@2023-01-01' = {
         {
           name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
           value: 'true'
+        }
+      ], empty(entraClientId) ? [] : [
+        {
+          name: 'ENTRA_AUTH_ENABLED'
+          value: 'true'
+        }
+        {
+          name: 'ENTRA_CLIENT_ID'
+          value: entraClientId
+        }
+        {
+          name: 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET'
+          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=entra-client-secret)'
         }
       ], useResend ? [
         {

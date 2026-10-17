@@ -76,3 +76,15 @@ def test_access_mode_is_time_boxed_and_fails_closed(monkeypatch):
     service._access_cache.update(t=0.0, v=None)
     assert service.get_access()["public"] is False                      # lapsed -> private
     assert service.set_access(False, "kishal")["public"] is False
+
+
+def test_entra_identity_only_trusted_when_enabled(monkeypatch):
+    from fastapi.testclient import TestClient
+    from web import main
+    c = TestClient(main.app)
+    spoof = {"X-MS-CLIENT-PRINCIPAL-NAME": "attacker@evil.com"}
+    monkeypatch.delenv("ENTRA_AUTH_ENABLED", raising=False)
+    assert c.get("/api/me", headers=spoof).status_code == 401          # header ignored without Entra
+    monkeypatch.setenv("ENTRA_AUTH_ENABLED", "true")
+    r = c.get("/api/me", headers={"X-MS-CLIENT-PRINCIPAL-NAME": "kishalr@virtusacsp.onmicrosoft.com"})
+    assert r.status_code == 200 and r.json() == {"user": "kishalr@virtusacsp.onmicrosoft.com", "auth": "entra"}

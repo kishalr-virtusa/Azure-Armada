@@ -96,6 +96,8 @@ async def public_access_mode():
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request, error: Optional[str] = None):
+    if auth.entra_enabled():
+        return RedirectResponse("/.auth/login/aad?post_login_redirect_uri=/", status_code=303)
     return templates.TemplateResponse(request, "login.html", {"error": error})
 
 
@@ -110,6 +112,8 @@ def login(passcode: str = Form(...)):
 
 @app.get("/logout")
 def logout():
+    if auth.entra_enabled():
+        return RedirectResponse("/.auth/logout?post_logout_redirect_uri=/", status_code=303)
     resp = RedirectResponse("/login", status_code=303)
     auth.logout(resp)
     return resp
@@ -169,7 +173,17 @@ async def report(request: Request, xid: str):
     return HTMLResponse(html or "<p>Report not generated yet.</p>", status_code=200 if html else 404)
 
 
+def _who(request: Request, typed: Optional[str]) -> str:
+    """Approver identity: the signed-in Entra user when available (non-repudiable), else the typed name."""
+    return auth.current_user(request) or (typed or "").strip()
+
+
 # ------------------------------------------------------------------ JSON API
+@app.get("/api/me", dependencies=[api])
+def api_me(request: Request):
+    return {"user": auth.current_user(request), "auth": "entra" if auth.entra_enabled() else "passcode"}
+
+
 @app.get("/api/status", dependencies=[api])
 async def api_status():
     return await run_in_threadpool(service.get_status)
@@ -208,8 +222,8 @@ async def api_readiness():
 
 
 @app.post("/api/readiness/fix", dependencies=[api])
-async def api_readiness_fix(data: dict = Body(...)):
-    return await run_in_threadpool(service.apply_parity_fix, data.get("keys", []), data.get("approver_name", ""))
+async def api_readiness_fix(request: Request, data: dict = Body(...)):
+    return await run_in_threadpool(service.apply_parity_fix, data.get("keys", []), _who(request, data.get("approver_name")))
 
 
 @app.post("/api/runbook", dependencies=[api])
@@ -228,8 +242,8 @@ async def api_generate_plan():
 
 
 @app.post("/api/plan/approve", dependencies=[api])
-async def api_approve(data: dict = Body(...)):
-    return await run_in_threadpool(service.approve_and_start, data.get("approver_name", ""), data.get("plan"),
+async def api_approve(request: Request, data: dict = Body(...)):
+    return await run_in_threadpool(service.approve_and_start, _who(request, data.get("approver_name")), data.get("plan"),
                                    bool(data.get("chaos")))
 
 
@@ -239,9 +253,9 @@ async def api_get_access():
 
 
 @app.post("/api/access", dependencies=[api])
-async def api_set_access(data: dict = Body(...)):
+async def api_set_access(request: Request, data: dict = Body(...)):
     """{"public": true|false, "minutes": 120, "by": "name"}: switch Contoso Payments between private and public."""
-    return await run_in_threadpool(service.set_access, bool(data.get("public")), data.get("by", ""),
+    return await run_in_threadpool(service.set_access, bool(data.get("public")), _who(request, data.get("by")),
                                    data.get("minutes") or service.DEFAULT_PUBLIC_MINUTES)
 
 
@@ -267,8 +281,8 @@ async def api_events(xid: str, after: int = 0):
 
 
 @app.post("/api/exercise/{xid}/confirm/{step_id}", dependencies=[api])
-def api_confirm(xid: str, step_id: str, data: Optional[dict] = Body(None)):
-    return service.confirm_step(xid, step_id, (data or {}).get("by", "console user"))
+def api_confirm(request: Request, xid: str, step_id: str, data: Optional[dict] = Body(None)):
+    return service.confirm_step(xid, step_id, _who(request, (data or {}).get("by")) or "console user")
 
 
 @app.post("/api/exercise/{xid}/chaos", dependencies=[api])
