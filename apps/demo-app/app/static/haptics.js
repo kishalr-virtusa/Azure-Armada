@@ -101,6 +101,24 @@ const Haptics = (() => {
         document.head.appendChild(style);
     };
 
+    // Check if running inside an iframe (for presenter view integration)
+    const isInIframe = () => {
+        try {
+            return window.self !== window.top;
+        } catch (_) {
+            return true; // Blocked by CORS = definitely in iframe
+        }
+    };
+
+    // Notify parent frame of haptic (for visual feedback in presenter view)
+    const notifyParent = (type) => {
+        if (isInIframe()) {
+            try {
+                window.parent.postMessage({ type: 'haptic', pattern: type }, '*');
+            } catch (_) { /* ignore */ }
+        }
+    };
+
     /**
      * Trigger haptic feedback.
      * @param {string} type - 'tap' | 'success' | 'error' | 'alert'
@@ -109,6 +127,9 @@ const Haptics = (() => {
     const trigger = (type, inGesture = false) => {
         if (muted) return;
         const pattern = patterns[type] || patterns.tap;
+
+        // Notify parent frame for visual haptic feedback (presenter view)
+        notifyParent(type);
 
         // Android: use Vibration API
         if (canVibrate()) {
