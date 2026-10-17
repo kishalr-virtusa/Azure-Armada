@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contoso Payments</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/virtusa.css">
+</head>
+<body>
+    <div class="wrap">
+        <header>
+            <div>
+                <span class="eyebrow">Demo Application</span>
+                <h1>Contoso Payments</h1>
+            </div>
+            <div class="region-status">
+                <span class="region-pill {% if 'Central' in region %}region-a{% else %}region-b{% endif %}">
+                    {{ region }}
+                </span>
+                <span class="status-dot" id="statusDot" title="Service status"></span>
+            </div>
+        </header>
+
+        <!-- Outage banner (hidden by default) -->
+        <div class="outage-banner hide" id="outageBanner">
+            <strong>⚠️ Service Unavailable</strong> — Unable to connect to backend services. Failover may be in progress.
+        </div>
+
+        <div class="twin">
+            <!-- Make Payment Card -->
+            <div class="card">
+                <h2>Make Payment</h2>
+                <p class="sub">Create a test transaction</p>
+                <div style="margin-top: 16px;">
+                    <button class="btn-primary" id="payBtn" onclick="makePayment()">
+                        💳 Make Payment
+                    </button>
+                </div>
+                <div id="paymentResult" class="payment-result hide"></div>
+            </div>
+
+            <!-- Status Card -->
+            <div class="card">
+                <h2>Service Status</h2>
+                <p class="sub">Current connection info</p>
+                <dl class="srcs" style="margin-top: 12px;">
+                    <dt>Region</dt>
+                    <dd id="infoRegion">{{ region }}</dd>
+                    <dt>DB Server</dt>
+                    <dd id="infoDbServer">—</dd>
+                    <dt>Last Check</dt>
+                    <dd id="infoLastCheck">—</dd>
+                </dl>
+            </div>
+        </div>
+
+        <!-- Recent Transactions -->
+        <div class="card">
+            <h2>Recent Transactions</h2>
+            <p class="sub">Last 10 payments</p>
+            <div class="scroll" style="margin-top: 12px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Amount</th>
+                            <th>Region</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="txnTable">
+                        <tr><td colspan="4" style="text-align:center;color:var(--ink-3);">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <footer>
+            <p>Contoso Payments — DR Agent Demo for Virtusa Azure Day 2026</p>
+        </footer>
+    </div>
+
+    <script>
+        let isHealthy = true;
+
+        function formatTime(isoString) {
+            if (!isoString) return '—';
+            const d = new Date(isoString);
+            return d.toLocaleTimeString();
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+        }
+
+        async function checkHealth() {
+            try {
+                const res = await fetch('/health', { timeout: 5000 });
+                const data = await res.json();
+                
+                isHealthy = data.db_ok;
+                document.getElementById('statusDot').className = 'status-dot ' + (isHealthy ? 'healthy' : 'unhealthy');
+                document.getElementById('outageBanner').classList.toggle('hide', isHealthy);
+                
+                document.getElementById('infoRegion').textContent = data.region || '—';
+                document.getElementById('infoDbServer').textContent = data.db_server || '—';
+                document.getElementById('infoLastCheck').textContent = formatTime(data.time);
+            } catch (e) {
+                isHealthy = false;
+                document.getElementById('statusDot').className = 'status-dot unhealthy';
+                document.getElementById('outageBanner').classList.remove('hide');
+                document.getElementById('infoLastCheck').textContent = 'Failed';
+            }
+        }
+
+        async function loadTransactions() {
+            try {
+                const res = await fetch('/api/recent');
+                const txns = await res.json();
+                
+                const tbody = document.getElementById('txnTable');
+                if (txns.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ink-3);">No transactions yet</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = txns.map((t, i) => `
+                    <tr class="fade-in" style="animation-delay: ${i * 50}ms">
+                        <td class="f">#${t.id}</td>
+                        <td class="f">${formatCurrency(t.amount)}</td>
+                        <td><span class="badge">${t.region}</span></td>
+                        <td>${formatTime(t.created_at)}</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                // Silent fail, health check will show status
+            }
+        }
+
+        async function makePayment() {
+            const btn = document.getElementById('payBtn');
+            const result = document.getElementById('paymentResult');
+            
+            btn.disabled = true;
+            btn.textContent = 'Processing...';
+            
+            try {
+                const res = await fetch('/api/txn', { method: 'POST' });
+                const txn = await res.json();
+                
+                result.className = 'payment-result success';
+                result.innerHTML = `✅ Payment #${txn.id} created: ${formatCurrency(txn.amount)}`;
+                result.classList.remove('hide');
+                
+                // Reload transactions
+                await loadTransactions();
+            } catch (e) {
+                result.className = 'payment-result error';
+                result.innerHTML = '❌ Payment failed: ' + (e.message || 'Service unavailable');
+                result.classList.remove('hide');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '💳 Make Payment';
+            }
+            
+            // Hide result after 5s
+            setTimeout(() => result.classList.add('hide'), 5000);
+        }
+
+        // Initial load
+        checkHealth();
+        loadTransactions();
+
+        // Poll every 3s
+        setInterval(checkHealth, 3000);
+        setInterval(loadTransactions, 3000);
+    </script>
+</body>
+</html>
