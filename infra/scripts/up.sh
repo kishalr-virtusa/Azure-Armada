@@ -22,6 +22,11 @@ if [[ ! -f "$SECRETS_FILE" ]]; then
 fi
 # shellcheck disable=SC1090
 source "$SECRETS_FILE"
+if [[ -z "${VM_ADMIN_PASSWORD:-}" ]]; then  # IaaS VM admin password (never used to log in; added once)
+  VM_ADMIN_PASSWORD="Dr$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 18)!7"
+  echo "export VM_ADMIN_PASSWORD='$VM_ADMIN_PASSWORD'" >> "$SECRETS_FILE"
+  export VM_ADMIN_PASSWORD
+fi
 if [[ -z "${APP_ACCESS_CODE:-}" ]]; then  # team access code for the private demo app (added once)
   APP_ACCESS_CODE=$(LC_ALL=C tr -dc 'A-HJ-NP-Z2-9' </dev/urandom | head -c 8)
   echo "export APP_ACCESS_CODE=$APP_ACCESS_CODE" >> "$SECRETS_FILE"

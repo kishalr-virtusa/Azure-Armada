@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from typing import Any, Optional
 
@@ -135,20 +136,25 @@ class AsrTestFailover:
         vm = self.test_vm()
         if not vm:
             raise RuntimeError(f"no test VM found in {self.recovery_rg}")
+        windows = (vm.get("properties", {}).get("storageProfile", {}).get("osDisk", {}).get("osType") == "Windows")
+        body = ({"commandId": "RunPowerShellScript", "script": [
+                    "for ($i=0; $i -lt 12; $i++) { try { (Invoke-RestMethod -TimeoutSec 3 http://localhost:8080/health) "
+                    "| ConvertTo-Json -Compress; exit 0 } catch { Start-Sleep 5 } }; exit 1"]}
+                if windows else
+                {"commandId": "RunShellScript", "script": [
+                    "for i in $(seq 1 12); do curl -s -m 3 localhost:8080/health && exit 0; sleep 5; done; exit 1"]})
         deadline = time.monotonic() + timeout_s
         last = ""
         while time.monotonic() < deadline:
             try:
-                r = self.arm.post(f"{vm['id']}/runCommand", COMPUTE_API, {
-                    "commandId": "RunShellScript",
-                    "script": ["for i in $(seq 1 12); do curl -s -m 3 localhost:8080/health && exit 0; sleep 5; done; exit 1"]})
+                r = self.arm.post(f"{vm['id']}/runCommand", COMPUTE_API, body)
                 out = self.arm.wait(r, 600, poll_s=10)
                 msg = " ".join(v.get("message", "") for v in (out.get("value") or out.get("properties", {}).get("output", {}).get("value", [])))
                 last = msg
-                if '"status": "ok"' in msg:
-                    region = "SoutheastAsia" if "SoutheastAsia" in msg or "southeastasia" in msg.lower() else "unknown"
+                if re.search(r'"status"\s*:\s*"ok"', msg):
+                    region = "SoutheastAsia" if "southeastasia" in msg.lower() else "unknown"
                     return {"test_vm": vm["name"], "location": vm["location"], "service": "ok", "reported_region": region,
-                            "output": msg[-300:]}
+                            "os": "Windows" if windows else "Linux", "output": msg[-300:]}
             except Exception as e:  # noqa: BLE001 - the VM agent may still be starting
                 last = f"{type(e).__name__}: {e}"
             time.sleep(15)
