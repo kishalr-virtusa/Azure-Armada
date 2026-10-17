@@ -204,9 +204,9 @@ az afd origin update \
 
 | Resource | Name | Region |
 |----------|------|--------|
-| Primary SQL Server | sql-payments-old | Central India |
+| Primary SQL Server | sql-payments-old | East Asia |
 | Secondary SQL Server | sql-payments-secondary | South India |
 | Failover Group | fog-payments | - |
 | Front Door | fd-payments | Global |
-| Primary App | app-payments-cin | Central India |
+| Primary App | app-payments-cin | East Asia |
 | Secondary App | app-payments-sin | South India |

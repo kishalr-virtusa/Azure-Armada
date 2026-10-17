@@ -62,6 +62,26 @@ az webapp restart --resource-group "$WORKLOAD_RG" --name "$WEBAPP_B" &
 az webapp restart --resource-group "$CONTROL_RG" --name "$CONSOLE_APP" &
 wait
 
+# Key Vault references: a brand-new app's identity can be denied for a few minutes (RBAC propagation) and
+# App Service caches that failure. Wait until each reference resolves, nudging a refresh, then restart.
+SUB_ID=$(az account show --query id -o tsv)
+wait_kv_refs() { # rg app
+  local url="https://management.azure.com/subscriptions/$SUB_ID/resourceGroups/$1/providers/Microsoft.Web/sites/$2/config/configreferences/appsettings?api-version=2024-04-01"
+  for i in $(seq 1 20); do
+    local bad
+    bad=$(az rest --method get --url "$url" --query "value[?properties.status!='Resolved'].name" -o tsv 2>/dev/null)
+    if [[ -z "$bad" ]]; then echo "  $2: Key Vault references resolved"; return 0; fi
+    echo "  $2: waiting for Key Vault references ($(echo $bad | tr '\n' ' '))"
+    az webapp config appsettings set -g "$1" -n "$2" --settings KV_REFRESH="$(date +%s)" -o none
+    sleep 30
+  done
+  echo "  WARNING: $2 Key Vault references still unresolved"
+}
+wait_kv_refs "$WORKLOAD_RG" "$WEBAPP_A"
+wait_kv_refs "$WORKLOAD_RG" "$WEBAPP_B"
+wait_kv_refs "$CONTROL_RG" "$CONSOLE_APP"
+az webapp restart -g "$WORKLOAD_RG" -n "$WEBAPP_A" -o none & az webapp restart -g "$WORKLOAD_RG" -n "$WEBAPP_B" -o none & wait
+
 # Cleanup
 rm -f "$DEMO_ZIP" "$CONSOLE_ZIP"
 
