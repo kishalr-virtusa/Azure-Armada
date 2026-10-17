@@ -182,3 +182,9 @@ The report template receives `iaas` = {tier, recovered_in, result{test_vm, locat
   *test* failover in an isolated network (non-disruptive).
 - Report (`reporting.py` TEMPLATE): add an "IaaS tier" row/card with the same data.
 - Team badge colour for `infra` (use `--mag` family).
+
+## L10 [Kiro] Clean "Not deployed yet" state in the console
+`/api/status` entries (`region_a`, `region_b`, `traffic_manager`, `routing`) can now be
+`{"state": "NotDeployed", "message": "Region A web app is not deployed yet", "detail": "<raw error>"}`.
+Show a neutral grey badge "Not deployed yet" with `message` (tooltip = `detail`) instead of a red error.
+Never print raw Azure exception text in the UI; put it in a tooltip or a collapsed "details" row.

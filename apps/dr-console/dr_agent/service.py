@@ -39,6 +39,15 @@ def _phase1() -> dict:
 
 
 # ------------------------------------------------------------------ overview
+def _not_deployed(v: Any, what: str) -> Any:
+    """Turn raw 'not found' errors into a clean state the UI can show as a badge (e.g. while a region is
+    still being created), keeping the original error for the tooltip."""
+    err = v.get("error", "") if isinstance(v, dict) else ""
+    if err and ("ResourceNotFound" in err or "does not exist" in err or "NXDOMAIN" in err):
+        return {"state": "NotDeployed", "message": f"{what} is not deployed yet", "detail": err[:200]}
+    return v
+
+
 def get_status(max_age_s: float = 5.0) -> dict:
     if _status_cache["v"] and time.monotonic() - _status_cache["t"] < max_age_s:
         return _status_cache["v"]
@@ -56,11 +65,11 @@ def get_status(max_age_s: float = 5.0) -> dict:
         routing["active_region"] = ("A (Central India)" if routing.get("points_to_region_a")
                                     else "B (Southeast Asia)" if routing.get("points_to_region_b") else "unknown")
     v = {
-        "region_a": _safe(get_webapp_state, config.webapp_a_name),
-        "region_b": _safe(get_webapp_state, config.webapp_b_name),
-        "traffic_manager": _safe(get_profile_status),
+        "region_a": _not_deployed(_safe(get_webapp_state, config.webapp_a_name), "Region A web app"),
+        "region_b": _not_deployed(_safe(get_webapp_state, config.webapp_b_name), "Region B web app"),
+        "traffic_manager": _not_deployed(_safe(get_profile_status), "Traffic Manager"),
         "failover_group": fg_view,
-        "routing": routing,
+        "routing": _not_deployed(routing, "Traffic Manager DNS"),
         "time": datetime.now(timezone.utc).isoformat(),
     }
     _status_cache.update(t=time.monotonic(), v=v)
