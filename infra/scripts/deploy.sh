@@ -16,7 +16,7 @@ fi
 
 if [[ -z "${SQL_ADMIN_PASSWORD:-}" || -z "${CONSOLE_PASSCODE:-}" ]]; then
     echo "Error: SQL_ADMIN_PASSWORD and CONSOLE_PASSCODE environment variables are required."
-    echo "Optional: NOTIFY_EMAIL_TO (email for DR notifications), PLANT_CONFIG_GAP=true|false, DEPLOY_EMAIL=true|false"
+    echo "Optional: NOTIFY_EMAIL_TO (email for DR notifications), PLANT_CONFIG_GAP=true|false, DEPLOY_EMAIL=true|false (default false: blocked on Free Trial)"
     exit 1
 fi
 
@@ -31,7 +31,7 @@ az deployment sub create \
     --template-file "$INFRA_DIR/main.bicep" \
     --parameters "$INFRA_DIR/parameters.json" \
     --parameters sqlAdminPassword="$SQL_ADMIN_PASSWORD" consolePasscode="$CONSOLE_PASSCODE" \
-    --parameters notifyEmailTo="${NOTIFY_EMAIL_TO:-}" plantConfigGap="${PLANT_CONFIG_GAP:-true}" deployEmail="${DEPLOY_EMAIL:-true}" \
+    --parameters notifyEmailTo="${NOTIFY_EMAIL_TO:-}" plantConfigGap="${PLANT_CONFIG_GAP:-true}" deployEmail="${DEPLOY_EMAIL:-false}" \
     --output table
 
 # Get deployment outputs
