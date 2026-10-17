@@ -30,6 +30,7 @@ class AgentResult(Generic[T]):
     source: str  # "llm" | "fallback"
     latency_ms: int
     error: Optional[str] = None
+    via: str = ""  # "foundry-agent" | "azure-openai" | "fallback"
 
 
 class LLM:
@@ -90,20 +91,35 @@ def run_agent(name: str, system_prompt: str, payload: dict | str, schema: Type[T
     validate: optional extra check on the model output; raise to reject it (the fallback is used instead).
     """
     started = time.monotonic()
+    errors: list[str] = []
+
+    def _accept(out: T, via: str) -> AgentResult[T]:
+        if validate:
+            validate(out)
+        ms = int((time.monotonic() - started) * 1000)
+        log.info("agent=%s source=llm via=%s latency_ms=%d", name, via, ms)
+        return AgentResult(out, "llm", ms, "; ".join(errors) or None, via)
+
+    # 1) Azure AI Foundry Agent Service (registered prompt agent). Skipped when an explicit llm is injected (tests).
+    if llm is None:
+        from dr_agent.foundry import get_agents
+        agents = get_agents()
+        if agents is not None:
+            try:
+                return _accept(agents.invoke(name, system_prompt, payload, schema), "foundry-agent")
+            except Exception as e:  # noqa: BLE001
+                errors.append(f"foundry-agent {type(e).__name__}: {e}"[:400])
+                log.warning("agent=%s foundry agent failed, trying direct model: %s", name, errors[-1])
+    # 2) Direct structured call to the model deployment.
     client = llm or get_llm()
-    error: Optional[str] = None
     if client is not None:
         try:
-            out = client.structured(system_prompt, payload, schema)
-            if validate:
-                validate(out)
-            ms = int((time.monotonic() - started) * 1000)
-            log.info("agent=%s source=llm latency_ms=%d", name, ms)
-            return AgentResult(out, "llm", ms)
+            return _accept(client.structured(system_prompt, payload, schema), "azure-openai")
         except Exception as e:  # noqa: BLE001
-            error = f"{type(e).__name__}: {e}"[:500]
-            log.warning("agent=%s llm failed, using fallback: %s", name, error)
+            errors.append(f"{type(e).__name__}: {e}"[:500])
+            log.warning("agent=%s llm failed, using fallback: %s", name, errors[-1])
     else:
-        error = "LLM not configured"
+        errors.append("LLM not configured")
+    # 3) Deterministic fallback.
     out = fallback()
-    return AgentResult(out, "fallback", int((time.monotonic() - started) * 1000), error)
+    return AgentResult(out, "fallback", int((time.monotonic() - started) * 1000), "; ".join(errors), "fallback")

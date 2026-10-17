@@ -93,7 +93,7 @@ def recommend_strategy() -> dict:
     from dr_agent.agents import architect
     res = architect.run(get_profile(), _inventory_summary())
     store.upsert_exercise(PHASE1, {"strategy_json": res.output.model_dump_json()})
-    return {**res.output.model_dump(), "source": res.source}
+    return {**res.output.model_dump(), "source": res.source, "via": res.via}
 
 
 def gather_readiness_facts() -> dict:
@@ -126,6 +126,7 @@ def check_readiness() -> dict:
     res = readiness.run(checks)
     store.upsert_exercise(PHASE1, {"readiness_json": res.output.model_dump_json()})
     out = res.output.model_dump(mode="json")
+    out["via"] = res.via
     parity = next((c for c in res.output.checks if c.name.startswith("App settings parity")), None)
     out["fixable"] = parity.evidence.get("missing_in_region_b", []) if parity and parity.status == "fail" else []
     return out
@@ -158,7 +159,7 @@ def review_runbook() -> dict:
     inv = _inventory_summary()
     res = runbook.run(md, inv)
     store.upsert_exercise(PHASE1, {"runbook_json": res.output.model_dump_json()[:60000]})
-    return {**res.output.model_dump(), "source": res.source}
+    return {**res.output.model_dump(), "source": res.source, "via": res.via}
 
 
 # ------------------------------------------------------------------ plan
@@ -168,8 +169,8 @@ def generate_plan() -> dict:
     strategy = StrategyRec.model_validate_json(p1["strategy_json"]) if p1.get("strategy_json") else None
     readiness = ReadinessReport.model_validate_json(p1["readiness_json"]) if p1.get("readiness_json") else None
     res = planner.run(get_profile(), strategy, readiness, _inventory_summary())
-    store.upsert_exercise(DRAFT, {"plan_json": res.output.model_dump_json(), "source": res.source})
-    return {**res.output.model_dump(), "source": res.source}
+    store.upsert_exercise(DRAFT, {"plan_json": res.output.model_dump_json(), "source": res.source, "via": res.via})
+    return {**res.output.model_dump(), "source": res.source, "via": res.via}
 
 
 def get_draft_plan() -> dict:

@@ -258,7 +258,7 @@ class ExerciseRunner(threading.Thread):
         diag = validator.run(step, err, recent, {"A": _safe(lambda: _probe("A")), "B": _safe(lambda: _probe("B")),
                                                  "tm": _safe(lambda: _probe("tm"))})
         self.update(status="paused_failed", failed_step=step.id, diagnosis_json=diag.output.model_dump_json(),
-                    diagnosis_source=diag.source)
+                    diagnosis_source=diag.source, diagnosis_via=diag.via)
         self.event("diagnosis", diag.output.likely_cause, step.id, diag.output.model_dump())
         self.notify("failure", f"Step failed: {step.title}",
                     f"{diag.output.likely_cause} Recommended: {diag.output.recommended_action}.")

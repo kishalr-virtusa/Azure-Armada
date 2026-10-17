@@ -49,5 +49,8 @@ def run(profile: AppProfile, inventory_summary: dict) -> AgentResult[StrategyRec
     def validate(rec: StrategyRec) -> None:
         if {o.name for o in rec.options} != {s[0] for s in STRATEGY_GUIDE}:
             raise ValueError("architect must evaluate all five strategies")
+        chosen = next((o for o in rec.options if o.name == rec.recommended), None)
+        if chosen is None or (not chosen.meets_targets and any(o.meets_targets for o in rec.options)):
+            raise ValueError("recommended strategy must meet RTO/RPO when another option does")
 
     return run_agent("architect", prompt("architect"), payload, StrategyRec, lambda: fallback(profile), validate=validate)

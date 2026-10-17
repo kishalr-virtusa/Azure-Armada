@@ -35,6 +35,21 @@ def _resume() -> None:
         log.exception("resume check failed")
 
 
+FOUNDRY_AGENTS: dict = {}
+
+
+@app.on_event("startup")
+def _register_foundry_agents() -> None:
+    """Register the six agents in Azure AI Foundry Agent Service (background; idempotent)."""
+    import threading
+
+    def _go():
+        from dr_agent.foundry import register_all
+        FOUNDRY_AGENTS.update(register_all())
+        log.info("foundry agents: %s", FOUNDRY_AGENTS)
+    threading.Thread(target=_go, name="foundry-register", daemon=True).start()
+
+
 @app.exception_handler(Exception)
 async def _errors(request: Request, exc: Exception):
     log.exception("unhandled error on %s", request.url.path)
@@ -126,6 +141,13 @@ async def api_status():
 @app.get("/api/probe/tm", dependencies=[api])
 async def api_probe_tm():
     return await run_in_threadpool(service.probe_tm)
+
+
+@app.get("/api/agents", dependencies=[api])
+def api_agents():
+    """Which Foundry agents are registered (name -> agent id or error)."""
+    import os
+    return {"project_endpoint": os.environ.get("FOUNDRY_PROJECT_ENDPOINT"), "agents": FOUNDRY_AGENTS}
 
 
 @app.get("/api/profile", dependencies=[api])

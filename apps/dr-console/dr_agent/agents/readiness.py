@@ -115,4 +115,4 @@ def run(checks: list[Check]) -> AgentResult[ReadinessReport]:
     has_fail = any(c.status == "fail" for c in checks)
     report = ReadinessReport(checks=checks, go=res.output.go and not has_fail, summary=res.output.summary,
                              risks=res.output.risks, source=res.source)
-    return AgentResult(report, res.source, res.latency_ms, res.error)
+    return AgentResult(report, res.source, res.latency_ms, res.error, res.via)
