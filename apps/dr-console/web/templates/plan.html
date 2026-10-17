@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block title %}Exercise Plan — DR Agent Console{% endblock %}
+
+{% block content %}
+<header>
+    <div>
+        <span class="eyebrow">Phase 2</span>
+        <h1>Exercise Plan</h1>
+    </div>
+</header>
+
+<!-- Generate Plan Section -->
+<div class="card" id="generateSection">
+    <h2>Generate Exercise Plan</h2>
+    <p class="sub">The AI planner will create an ordered execution plan</p>
+    
+    <div style="margin-top: 16px;">
+        <button id="generateBtn" class="btn btn-primary" onclick="generatePlan()">Generate Plan</button>
+    </div>
+    
+    <div id="generateLoading" class="hide" style="padding: 24px; text-align: center; color: var(--ink-3);">
+        <p>Generating exercise plan...</p>
+        <p style="font-size: 12px;">This may take a moment</p>
+    </div>
+</div>
+
+<!-- Plan Display Section -->
+<div id="planSection" class="hide">
+    <!-- Assumptions -->
+    <div class="card">
+        <h2>Assumptions</h2>
+        <ul id="assumptionsList" style="margin: 12px 0 0 20px; color: var(--ink-2);"></ul>
+    </div>
+    
+    <!-- Plan Steps by Phase -->
+    <div class="card">
+        <h2>Execution Steps</h2>
+        <p class="sub">Steps grouped by phase</p>
+        
+        <div id="planSteps" style="margin-top: 16px;"></div>
+    </div>
+    
+    <!-- Approval Section -->
+    <div class="card" id="approvalSection">
+        <h2>Approve & Start Exercise</h2>
+        <p class="sub">Review the plan and approve to begin execution</p>
+        
+        <form id="approvalForm" style="margin-top: 16px;">
+            <div class="form-group">
+                <label class="form-label">Your Name (for audit)</label>
+                <input type="text" name="approver_name" class="form-input" placeholder="e.g., John Smith" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">
+                    <input type="checkbox" name="confirm" required style="margin-right: 8px;">
+                    I have reviewed the plan and understand that this will inject a real outage
+                </label>
+            </div>
+            <button type="submit" class="btn btn-danger">
+                🚀 Approve & Start Exercise
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentPlan = null;
+    
+    async function generatePlan() {
+        const btn = document.getElementById('generateBtn');
+        const loading = document.getElementById('generateLoading');
+        
+        btn.disabled = true;
+        loading.classList.remove('hide');
+        
+        try {
+            const res = await fetch('/api/plan', { method: 'POST' });
+            const data = await res.json();
+            
+            if (data.error) {
+                alert('Failed to generate plan: ' + data.error);
+                return;
+            }
+            
+            currentPlan = data;
+            renderPlan(data);
+            
+            document.getElementById('generateSection').classList.add('hide');
+            document.getElementById('planSection').classList.remove('hide');
+            
+        } catch (e) {
+            alert('Failed to generate plan: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            loading.classList.add('hide');
+        }
+    }
+    
+    function renderPlan(plan) {
+        // Render assumptions
+        const assumptionsList = document.getElementById('assumptionsList');
+        assumptionsList.innerHTML = (plan.assumptions || []).map(a => `<li>${a}</li>`).join('');
+        
+        // Group steps by phase
+        const phases = {};
+        (plan.steps || []).forEach(step => {
+            if (!phases[step.phase]) {
+                phases[step.phase] = [];
+            }
+            phases[step.phase].push(step);
+        });
+        
+        // Render steps by phase
+        const planSteps = document.getElementById('planSteps');
+        planSteps.innerHTML = Object.entries(phases).map(([phase, steps]) => `
+            <div style="margin-bottom: 24px;">
+                <h3 style="margin-bottom: 12px; text-transform: capitalize;">${phase.replace('-', ' ')}</h3>
+                <div class="scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Title</th>
+                                <th>Owner</th>
+                                <th>Type</th>
+                                <th>Action</th>
+                                <th>Depends On</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${steps.map(step => `
+                                <tr>
+                                    <td class="f">${step.id}</td>
+                                    <td>${step.title}</td>
+                                    <td><span class="chip">${step.owner_team}</span></td>
+                                    <td>
+                                        <span class="st ${step.type === 'human' ? 'warn' : 'info'}">
+                                            ${step.type === 'human' ? '👤 Human' : '🤖 Auto'}
+                                        </span>
+                                    </td>
+                                    <td style="font-family: monospace; font-size: 11px;">${step.action || '—'}</td>
+                                    <td style="color: var(--ink-3);">${(step.depends_on || []).join(', ') || '—'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    document.getElementById('approvalForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const approverName = formData.get('approver_name');
+        
+        if (!confirm('Are you sure you want to start the DR exercise? This will inject a real outage.')) {
+            return;
+        }
+        
+        try {
+            const res = await fetch('/api/plan/approve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    approver_name: approverName,
+                    plan: currentPlan,
+                }),
+            });
+            
+            const result = await res.json();
+            
+            if (result.exercise_id) {
+                window.location.href = '/exercise/' + result.exercise_id;
+            } else {
+                alert('Failed to start exercise: ' + (result.error || 'Unknown error'));
+            }
+        } catch (e) {
+            alert('Failed to approve plan: ' + e.message);
+        }
+    });
+    
+    // Check if there's an existing plan
+    (async () => {
+        try {
+            const res = await fetch('/api/plan');
+            const data = await res.json();
+            
+            if (data && data.steps && data.steps.length > 0) {
+                currentPlan = data;
+                renderPlan(data);
+                document.getElementById('generateSection').classList.add('hide');
+                document.getElementById('planSection').classList.remove('hide');
+            }
+        } catch (e) {
+            // No existing plan, show generate button
+        }
+    })();
+</script>
+{% endblock %}
