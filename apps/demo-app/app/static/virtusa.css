@@ -49,6 +49,31 @@
     }
 }
 
+/* Explicit dark mode override */
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0C0E15;
+    --surface: #12151F;
+    --surface-2: #1A1E2B;
+    --ink: #F3F3F7;
+    --ink-2: #C2C5D0;
+    --ink-3: #8C90A0;
+    --line: #252A38;
+    --line-2: #323849;
+    --accent: #8A6CFF;
+    --mag: #E35BD6;
+    --have: #2BC47F;
+    --have-bg: #10301F;
+    --upd: #F0B040;
+    --upd-bg: #33260C;
+    --add: #F07266;
+    --add-bg: #3A1714;
+    --nr: #A4A8B6;
+    --nr-bg: #23273A;
+    --oth: #7FA6F0;
+    --oth-bg: #16223A;
+}
+
 * { box-sizing: border-box; }
 
 body {

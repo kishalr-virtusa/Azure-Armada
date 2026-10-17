@@ -98,18 +98,19 @@
 <!-- Paused/Failed Diagnosis Panel (hidden by default) -->
 <div id="pausedFailedBanner" class="card hide" style="background: var(--add-bg); border-color: var(--add);">
     <h2 style="color: var(--add);">⚠️ Exercise Paused — Failure Detected</h2>
+    <p id="failedStepInfo" class="sub" style="margin-bottom: 16px;"></p>
     <div style="margin: 16px 0;">
         <div style="margin-bottom: 12px;">
-            <strong>Likely Cause:</strong>
-            <p id="diagnosisLikelyCause" style="margin: 4px 0; padding: 8px; background: var(--surface); border-radius: 4px;">—</p>
+            <strong style="color: var(--add);">Likely Cause</strong>
+            <p id="diagnosisLikelyCause" style="margin: 4px 0; padding: 12px; background: var(--surface); border-radius: 6px; border-left: 3px solid var(--add);">—</p>
         </div>
+        <details style="margin-bottom: 12px;">
+            <summary style="color: var(--add);">Evidence</summary>
+            <pre id="diagnosisEvidence" style="margin-top: 8px; padding: 12px; background: var(--surface); border-radius: 6px; font-family: monospace; font-size: 11px; overflow-x: auto; white-space: pre-wrap;">—</pre>
+        </details>
         <div style="margin-bottom: 12px;">
-            <strong>Evidence:</strong>
-            <p id="diagnosisEvidence" style="margin: 4px 0; padding: 8px; background: var(--surface); border-radius: 4px; font-family: monospace; font-size: 12px;">—</p>
-        </div>
-        <div style="margin-bottom: 12px;">
-            <strong>Recommended Action:</strong>
-            <p id="diagnosisRecommendedAction" style="margin: 4px 0; padding: 8px; background: var(--surface); border-radius: 4px;">—</p>
+            <strong style="color: var(--add);">Recommended Action</strong>
+            <p id="diagnosisRecommendedAction" style="margin: 4px 0; padding: 12px; background: var(--surface); border-radius: 6px; border-left: 3px solid var(--accent);">—</p>
         </div>
     </div>
     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -196,6 +197,14 @@
                 document.getElementById('pausedFailedBanner').classList.remove('hide');
                 document.getElementById('killedBanner').classList.add('hide');
                 document.getElementById('completedBanner').classList.add('hide');
+                
+                // Show which step failed
+                const failedStepInfo = document.getElementById('failedStepInfo');
+                if (data.failed_step) {
+                    failedStepInfo.textContent = `Step "${data.failed_step.id}: ${data.failed_step.title}" failed`;
+                } else {
+                    failedStepInfo.textContent = 'A step in the exercise failed';
+                }
                 
                 // Populate diagnosis details
                 document.getElementById('diagnosisLikelyCause').textContent = data.diagnosis.likely_cause || 'Unknown';
