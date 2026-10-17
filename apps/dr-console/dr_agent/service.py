@@ -406,6 +406,8 @@ def public_live() -> dict:
                 out.update(state="rolled_back", headline="Drill rolled back. East Asia is serving again.")
             elif status == "completed":
                 out.update(state="completed", headline="DR drill complete. Back in East Asia.")
+            elif m.get("t_failback_done"):
+                out.update(state="completed", headline="DR drill complete. Back in East Asia.")
             elif m.get("t_failback_start") and not m.get("t_failback_done"):
                 out.update(state="failing_back", headline="Recovered. Now returning service to East Asia.")
             elif t_rec:

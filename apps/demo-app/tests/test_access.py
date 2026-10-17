@@ -41,3 +41,9 @@ def test_cookie_header_and_public_mode_grant_access():
         assert TestClient(main.app).get("/api/config", headers={"X-Access-Code": "s3cret"}).status_code == 200
         with mock.patch.object(access, "is_public", return_value=True):
             assert TestClient(main.app).get("/api/config").status_code == 200
+
+
+def test_reconnect_token_grants_access_on_other_region():
+    r = client.get("/?k=" + access._token(), follow_redirects=False)
+    assert r.status_code == 303 and "contoso_access=" in r.headers["set-cookie"]
+    assert client.get("/?k=wrong", follow_redirects=False).status_code == 401

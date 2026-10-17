@@ -105,7 +105,8 @@ async def gate_middleware(request: Request, call_next):
     if path.startswith(EXEMPT_PREFIXES):
         return await call_next(request)
     code = request.query_params.get("code")
-    if code and ACCESS_CODE and hmac.compare_digest(code, ACCESS_CODE):
+    token = request.query_params.get("k")  # device token handed over by a reconnect to the other region
+    if ACCESS_CODE and ((code and hmac.compare_digest(code, ACCESS_CODE)) or (token and hmac.compare_digest(token, _token()))):
         # one-time link: remember the device, then drop the code from the URL
         return _grant(RedirectResponse(path or "/", status_code=303), request)
     if await run_in_threadpool(has_access, request):

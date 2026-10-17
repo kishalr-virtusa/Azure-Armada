@@ -219,7 +219,8 @@
 
         .stopwatch {
             font-size: 48px;
-            font-weight: 300;
+            font-weight: 700;
+            letter-spacing: -0.02em;
             text-align: center;
             margin: 16px 0;
             font-variant-numeric: tabular-nums;
@@ -572,6 +573,8 @@
         let t0 = null;
         let healthFailCount = 0;
         let expectedRegion = null;
+        let accessToken = '';          // lets a reconnect keep private-mode access on the other region's hostname
+        let returnedHome = false;
         let balance = 12450.00;
 
         // Elements
@@ -598,6 +601,7 @@
                 liveUrl = cfg.live_url || '';
                 publicUrl = cfg.public_url || '';
                 altUrl = cfg.alt_url || '';
+                accessToken = cfg.access_token || '';
             } catch (e) {
                 console.warn('Config load failed, live features disabled');
             }
@@ -709,6 +713,12 @@
             const prevState = lastLiveState;
             lastLiveState = state;
 
+            // after failback, follow users back to the primary region once
+            if (state === 'completed' && !returnedHome && data.serving_region && data.serving_region !== serverRegion) {
+                returnedHome = true;
+                reconnect();
+            }
+
             // Update chaos banner
             chaosBanner.classList.toggle('hide', !data.chaos);
 
@@ -746,12 +756,8 @@
                 // ETA
                 const etaEl = document.getElementById('etaValue');
                 if (data.eta_s != null) {
-                    const elapsed = data.elapsed_s || 0;
-                    if (elapsed > data.eta_s) {
-                        etaEl.textContent = 'Taking longer than usual…';
-                    } else {
-                        etaEl.textContent = `~${Math.ceil(data.eta_s - elapsed)}s`;
-                    }
+                    // eta_s is the time still remaining (server side), not the total
+                    etaEl.textContent = data.eta_s <= 0 ? 'Taking longer than usual…' : `~${Math.ceil(data.eta_s)}s left`;
                 } else {
                     etaEl.textContent = 'Calculating...';
                 }
@@ -875,7 +881,7 @@
             reconnectingOverlay.classList.remove('hide');
             if (altUrl) {
                 setTimeout(() => {
-                    window.location.href = altUrl + window.location.pathname;
+                    window.location.href = altUrl + (accessToken ? '?k=' + encodeURIComponent(accessToken) : '');
                 }, 1500);
             } else {
                 setTimeout(() => {

@@ -73,6 +73,10 @@
     }
 
     /* L7: QR code section with larger size and better visibility */
+    body.drill-active .qr-section { padding: 14px 18px; }
+    body.drill-active .qr-section h2, body.drill-active .qr-code, body.drill-active .qr-section .sub,
+    body.drill-active .qr-section > p { display: none !important; }
+    body.drill-active .qr-url { font-size: 20px !important; margin: 0 0 8px !important; }
     .qr-section {
         text-align: center;
         padding: 28px;
@@ -668,8 +672,10 @@
 
         // State tag
         const stateTag = document.getElementById('stateTag');
-        stateTag.textContent = state;
+        stateTag.textContent = state.replace('_', ' ');
         stateTag.className = 'st ' + getStateClass(state);
+        // during a drill the stopwatch matters more than the QR: collapse the QR card to a slim link row
+        document.body.classList.toggle('drill-active', !['normal', 'armed'].includes(state));
 
         // State banner
         const banner = document.getElementById('stateBanner');
@@ -687,12 +693,9 @@
 
             // ETA
             if (data.eta_s != null) {
-                const elapsed = data.elapsed_s || 0;
-                if (elapsed > data.eta_s) {
-                    document.getElementById('etaDisplay').innerHTML = 'Taking longer than usual…';
-                } else {
-                    document.getElementById('etaDisplay').innerHTML = `<strong>ETA:</strong> ~${Math.ceil(data.eta_s - elapsed)}s`;
-                }
+                // eta_s is the time still remaining (server side), not the total
+                document.getElementById('etaDisplay').innerHTML = data.eta_s <= 0
+                    ? 'Taking longer than usual…' : `<strong>Estimated recovery:</strong> ~${Math.ceil(data.eta_s)}s left`;
             }
         } else if (state === 'recovered' || state === 'completed') {
             stopStopwatch();

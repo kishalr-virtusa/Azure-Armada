@@ -38,6 +38,8 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Private/public access gate (mode is switched in the DR console; see app/access.py)
 from app.access import access_post, gate_middleware  # noqa: E402
+from app.access import _token as _access_token, ACCESS_CODE as _ACCESS_CODE  # noqa: E402
+access_token = _access_token if _ACCESS_CODE else None
 app.middleware("http")(gate_middleware)
 app.add_api_route("/access", access_post, methods=["POST"], include_in_schema=False)
 templates = Jinja2Templates(directory="app/templates")
@@ -165,4 +167,6 @@ async def get_config():
         "live_url": DR_LIVE_URL,
         "public_url": PUBLIC_URL,
         "alt_url": ALT_PUBLIC_URL,
+        # device token (not the code): only reachable by visitors who already passed the gate
+        "access_token": access_token() if access_token else "",
     }

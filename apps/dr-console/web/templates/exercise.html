@@ -98,7 +98,7 @@
         <div style="margin-top: 24px;">
             <h3 style="margin-bottom: 12px;">Demo App Preview</h3>
             <div style="border: 1px solid var(--line); border-radius: 8px; overflow: hidden;">
-                <iframe id="appFrame" src="http://{{ tm_fqdn }}/" style="width: 100%; height: 300px; border: none;"></iframe>
+                <iframe id="appFrame" src="{{ app_url }}" style="width: 100%; height: 300px; border: none;"></iframe>
             </div>
             <div style="margin-top: 8px; font-size: 12px; color: var(--ink-3);">
                 <a href="http://{{ tm_fqdn }}/" target="_blank">Open in new tab →</a>
@@ -174,6 +174,7 @@
 <script>
     const exerciseId = '{{ exercise_id }}';
     let t0 = null;
+    let rtoFinal = null;  // measured RTO: the tile freezes on it once users are served from Region B
     let lastEventSeq = 0;
     let currentHumanStep = null;
     let timerInterval = null;
@@ -189,6 +190,7 @@
             updateStatus(data.status);
             
             // Set t0 for timer
+            rtoFinal = (data.rto_s !== undefined && data.rto_s !== null) ? data.rto_s : null;
             if (data.t0) {
                 t0 = new Date(data.t0);
                 if (!timerInterval) {
@@ -410,9 +412,7 @@
     
     function updateTimer() {
         if (!t0) return;
-        
-        const now = new Date();
-        const diffMs = now - t0;
+        const diffMs = rtoFinal !== null ? rtoFinal * 1000 : new Date() - t0;
         const diffS = Math.floor(diffMs / 1000);
         const mins = Math.floor(diffS / 60);
         const secs = diffS % 60;

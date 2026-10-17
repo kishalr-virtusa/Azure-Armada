@@ -95,8 +95,8 @@ async def go(request: Request):
     if not url:
         return HTMLResponse("<h3>Contoso Payments is recovering. Retry in a few seconds.</h3>", status_code=503,
                             headers={"Refresh": "3", "Cache-Control": "no-store"})
-    code = request.query_params.get("code")
-    target = url + "/" + (f"?code={quote(code)}" if code else "")  # team link: hand the code to the app once
+    code, token = request.query_params.get("code"), request.query_params.get("k")
+    target = url + "/" + (f"?code={quote(code)}" if code else f"?k={quote(token)}" if token else "")  # team link: hand the code to the app once
     return RedirectResponse(target, status_code=302, headers={"Cache-Control": "no-store"})
 
 
@@ -164,7 +164,12 @@ def exercise_latest(request: Request):
 
 @app.get("/exercise/{xid}", response_class=HTMLResponse)
 def exercise_page(request: Request, xid: str):
-    return _page(request, "exercise.html", "exercise", exercise_id=xid)
+    from dr_agent.models import AppProfile
+    from dr_agent.tools import store
+    m = store.get_exercise(xid) or {}
+    prof = AppProfile.model_validate_json(m["profile_json"]) if m.get("profile_json") else AppProfile()
+    return _page(request, "exercise.html", "exercise", exercise_id=xid, rto_target_min=prof.rto_min,
+                 app_url=service.live_config().get("app_url") or "/pay")
 
 
 @app.get("/results", response_class=HTMLResponse)
