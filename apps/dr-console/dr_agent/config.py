@@ -28,7 +28,7 @@ class Config:
     
     # Azure OpenAI
     azure_openai_endpoint: str = ""
-    azure_openai_deployment: str = "gpt-4o-mini"
+    azure_openai_deployment: str = "gpt-4.1-mini"
     
     # Storage
     storage_account_name: str = ""

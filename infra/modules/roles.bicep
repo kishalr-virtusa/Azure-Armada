@@ -28,6 +28,7 @@ var storageTableDataContributorRoleId = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
 var storageBlobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 var cognitiveServicesOpenAIUserRoleId = '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
+var azureAIUserRoleId = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
 
 // Console identity: Storage Table Data Contributor
 resource storageTableRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
@@ -91,6 +92,17 @@ resource webAppBKeyVaultRole 'Microsoft.Authorization/roleAssignments@2022-04-01
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', keyVaultSecretsUserRoleId)
     principalId: webAppBPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Console identity: Azure AI User (Foundry Agent Service: create/run agents in the project)
+resource azureAIUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(openAIId)) {
+  name: guid(openAIId, consolePrincipalId, azureAIUserRoleId)
+  scope: resourceGroup()
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', azureAIUserRoleId)
+    principalId: consolePrincipalId
     principalType: 'ServicePrincipal'
   }
 }

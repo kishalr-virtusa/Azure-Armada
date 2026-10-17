@@ -61,6 +61,9 @@ param workloadRgName string
 @description('ACS sender address')
 param acsSenderAddress string
 
+@description('Azure AI Foundry project endpoint (Agent Service)')
+param foundryProjectEndpoint string = ''
+
 @description('Email address for notifications (empty = console only)')
 param notifyEmailTo string = ''
 
@@ -202,6 +205,10 @@ resource consoleApp 'Microsoft.Web/sites@2023-01-01' = {
         {
           name: 'SQL_PASSWORD'
           value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=sql-admin-password)'
+        }
+        {
+          name: 'FOUNDRY_PROJECT_ENDPOINT'
+          value: foundryProjectEndpoint
         }
         {
           name: 'AZURE_SUBSCRIPTION_ID'

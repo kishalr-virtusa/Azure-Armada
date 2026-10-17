@@ -7,7 +7,7 @@ targetScope = 'subscription'
 param locationA string = 'centralindia'
 
 @description('Location for Region B (secondary)')
-param locationB string = 'southindia'
+param locationB string = 'southeastasia'
 
 @description('Location for control plane resources')
 param controlLocation string = 'centralindia'
@@ -27,7 +27,7 @@ param consolePasscode string
 param notifyEmailTo string = ''
 
 @description('Deploy Azure Communication Services email')
-param deployEmail bool = true
+param deployEmail bool = false
 
 @description('Plant the demo config gap: Region B app deployed WITHOUT PAYMENT_PROVIDER')
 param plantConfigGap bool = true
@@ -140,8 +140,8 @@ module webAppB 'modules/webapp.bicep' = {
   params: {
     location: locationB
     suffix: suffix
-    regionShort: 'sin'
-    regionName: 'South India'
+    regionShort: 'sea'
+    regionName: 'Southeast Asia'
     paymentProvider: plantConfigGap ? '' : paymentProvider
     keyVaultName: keyVault.outputs.keyVaultName
     sqlFogFqdn: sql.outputs.fogListenerFqdn
@@ -208,6 +208,7 @@ module console 'modules/console.bicep' = {
     storageBlobEndpoint: storage.outputs.blobEndpoint
     openAIEndpoint: useExistingOpenAI ? '' : openAI.outputs.openAIEndpoint
     openAIDeploymentName: openAI.outputs.openAIDeploymentName
+    foundryProjectEndpoint: useExistingOpenAI ? '' : openAI.outputs.projectEndpoint
     tmFqdn: trafficManager.outputs.tmFqdn
     tmProfileName: trafficManager.outputs.tmProfileName
     webAppAName: webAppA.outputs.webAppName
@@ -262,5 +263,6 @@ output consoleUrl string = console.outputs.consoleAppUrl
 
 output sqlFogListener string = sql.outputs.fogListenerFqdn
 
+output foundryProjectEndpoint string = useExistingOpenAI ? '' : openAI.outputs.projectEndpoint
 output keyVaultName string = keyVault.outputs.keyVaultName
 output storageAccountName string = storage.outputs.storageAccountName

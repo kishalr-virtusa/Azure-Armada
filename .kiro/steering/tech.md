@@ -18,7 +18,7 @@ inclusion: always
 | Email notifications | Azure Communication Services + Email Communication Service (**Azure-managed domain**, sender `DoNotReply@<id>.azurecomm.net`) | Pay-per-email (fractions of a cent) |
 | Outage injection (optional) | Chaos Studio App Service "stop" fault; otherwise `az`/SDK stop | - |
 
-Regions: Region A = `centralindia`, Region B = `southindia` (an Azure paired region). Traffic Manager is global. Azure OpenAI region = `eastus2`.
+Regions: Region A = `centralindia`, Region B = `southeastasia` (Singapore). Southeast Asia and West India are restricted for Azure SQL on this Free Trial subscription. Traffic Manager is global. Azure OpenAI region = `eastus2`.
 
 **Not allowed (cost):** VMs, Site Recovery, AKS, Firewall, App Gateway, VPN/ExpressRoute, Bastion, Premium SKUs, Defender paid plans.
 

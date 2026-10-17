@@ -20,7 +20,7 @@ def test_architect_fallback_picks_cheapest_fitting():
 
 def test_parity_detects_missing_setting():
     a = {"SQL_SERVER": "fog", "PAYMENT_GATEWAY_URL": "https://pg", "REGION_NAME": "Central India"}
-    b = {"SQL_SERVER": "fog", "REGION_NAME": "South India"}
+    b = {"SQL_SERVER": "fog", "REGION_NAME": "Southeast Asia"}
     c = readiness.parity_check(a, b)
     assert c.status == "fail" and c.evidence["missing_in_region_b"] == ["PAYMENT_GATEWAY_URL"]
     assert readiness.parity_check(a, dict(a, REGION_NAME="x")).status == "pass"

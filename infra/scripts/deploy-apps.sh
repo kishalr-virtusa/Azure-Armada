@@ -23,7 +23,7 @@ WORKLOAD_RG="rg-dra-workload"
 CONTROL_RG="rg-dra-control"
 
 WEBAPP_A="dra-app-cin-${SUFFIX}"
-WEBAPP_B="dra-app-sin-${SUFFIX}"
+WEBAPP_B="dra-app-sea-${SUFFIX}"
 CONSOLE_APP="dra-console-${SUFFIX}"
 
 echo "Deploying to:"

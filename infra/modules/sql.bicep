@@ -26,7 +26,7 @@ param projectTag string = 'dr-agent'
 param databaseName string = 'paymentsdb'
 
 var serverNameA = 'dra-sql-cin-${suffix}'
-var serverNameB = 'dra-sql-sin-${suffix}'
+var serverNameB = 'dra-sql-sea-${suffix}'
 var fogName = 'dra-fog-${suffix}'
 
 // Primary SQL Server (Region A - Central India)

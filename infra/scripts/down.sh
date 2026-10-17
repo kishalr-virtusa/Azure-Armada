@@ -28,7 +28,7 @@ echo "Purging soft-deleted Key Vaults / OpenAI accounts created by this project 
 for kv in $(az keyvault list-deleted --query "[?starts_with(name,'dra-kv-')].name" -o tsv); do
   echo "  purge Key Vault $kv"; az keyvault purge -n "$kv" -o none || true
 done
-for row in $(az cognitiveservices account list-deleted --query "[?starts_with(name,'dra-openai-')].[name,location]" -o tsv | tr '\t' '|'); do
+for row in $(az cognitiveservices account list-deleted --query "[?(starts_with(name,'dra-openai-') || starts_with(name,'dra-foundry-'))].[name,location]" -o tsv | tr '\t' '|'); do
   name="${row%%|*}"; loc="${row##*|}"
   echo "  purge OpenAI $name ($loc)"
   az cognitiveservices account purge -n "$name" -l "$loc" -g rg-dra-control -o none || true
