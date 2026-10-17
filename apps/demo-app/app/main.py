@@ -21,6 +21,10 @@ logger = logging.getLogger(__name__)
 
 # Environment
 REGION_NAME = os.getenv("REGION_NAME", "Unknown")
+PAYMENT_PROVIDER = os.getenv("PAYMENT_PROVIDER", "")
+
+# Required app settings (for config parity checks)
+REQUIRED_SETTINGS = ["PAYMENT_PROVIDER"]
 
 app = FastAPI(title="Contoso Payments", description="Demo payment app for DR Agent")
 
@@ -29,9 +33,21 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
 
+def check_required_config() -> list[str]:
+    """Check for missing required configuration. Returns list of missing keys."""
+    missing = []
+    if not PAYMENT_PROVIDER:
+        missing.append("PAYMENT_PROVIDER")
+    return missing
+
+
 @app.on_event("startup")
 async def startup():
     """Initialize database tables on startup."""
+    missing = check_required_config()
+    if missing:
+        logger.warning(f"Missing required configuration: {missing}")
+    
     try:
         db.init_tables()
         logger.info(f"Contoso Payments started in {REGION_NAME}")
@@ -42,11 +58,14 @@ async def startup():
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Render the main page."""
+    missing_config = check_required_config()
     return templates.TemplateResponse(
         "index.html",
         {
             "request": request,
             "region": REGION_NAME,
+            "config_error": len(missing_config) > 0,
+            "missing_config": missing_config,
         },
     )
 
@@ -54,6 +73,21 @@ async def index(request: Request):
 @app.get("/health")
 async def health():
     """Health check endpoint for Traffic Manager probes."""
+    # First check required configuration
+    missing_config = check_required_config()
+    if missing_config:
+        return JSONResponse(
+            content={
+                "status": "config_error",
+                "region": REGION_NAME,
+                "db_ok": False,
+                "missing": missing_config,
+                "time": datetime.now(timezone.utc).isoformat(),
+            },
+            status_code=503,
+        )
+    
+    # Then check database
     check = db.health_check()
     
     response = {

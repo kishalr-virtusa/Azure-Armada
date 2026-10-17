@@ -71,7 +71,10 @@
     </div>
     
     <div id="strategyResult" class="hide" style="margin-top: 16px;">
-        <h3 style="margin-bottom: 12px;">Strategy Comparison</h3>
+        <h3 style="margin-bottom: 12px;">
+            Strategy Comparison
+            <span id="strategySourceBadge" class="badge" style="margin-left: 8px; font-size: 9px;"></span>
+        </h3>
         <div class="scroll">
             <table>
                 <thead>
@@ -108,6 +111,22 @@
             <h4 id="readinessVerdict" style="margin-bottom: 8px;"></h4>
             <div id="readinessSummary"></div>
         </div>
+        
+        <!-- Fixable items section -->
+        <div id="fixableSection" class="hide" style="margin-top: 16px;">
+            <div class="box" style="border-color: var(--upd); background: var(--upd-bg);">
+                <h4 style="color: var(--upd); margin-bottom: 8px;">⚠️ Fixable Issues Found</h4>
+                <p id="fixableDescription" style="margin-bottom: 12px; font-size: 13px;"></p>
+                <div class="form-group">
+                    <label class="form-label">Your Name (for audit)</label>
+                    <input type="text" id="fixApproverName" class="form-input" placeholder="e.g., John Smith" style="max-width: 300px;">
+                </div>
+                <button id="applyFixBtn" class="btn btn-primary" onclick="applyFix()">Apply Fix</button>
+            </div>
+        </div>
+        
+        <!-- Fix result -->
+        <div id="fixResult" class="hide" style="margin-top: 12px;"></div>
     </div>
 </div>
 
@@ -121,7 +140,10 @@
     </div>
     
     <div id="runbookResult" class="hide" style="margin-top: 16px;">
-        <h3 style="margin-bottom: 12px;">Step Review</h3>
+        <h3 style="margin-bottom: 12px;">
+            Step Review
+            <span id="runbookSourceBadge" class="badge" style="margin-left: 8px; font-size: 9px;"></span>
+        </h3>
         <div class="scroll">
             <table>
                 <thead>
@@ -156,6 +178,14 @@
     let strategyDone = false;
     let readinessDone = false;
     let runbookDone = false;
+    let fixableKeys = [];
+    
+    function renderSourceBadge(source) {
+        const isAI = source === 'llm' || source === 'ai';
+        return isAI 
+            ? '<span class="badge" style="background: var(--accent); color: white; border-color: var(--accent);">🤖 AI</span>'
+            : '<span class="badge">📋 Rules</span>';
+    }
     
     document.getElementById('profileForm').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -196,6 +226,9 @@
         try {
             const res = await fetch('/api/strategy', { method: 'POST' });
             const data = await res.json();
+            
+            // Show source badge
+            document.getElementById('strategySourceBadge').innerHTML = renderSourceBadge(data.source);
             
             const table = document.getElementById('strategyTable');
             table.innerHTML = data.options.map(opt => `
@@ -255,6 +288,16 @@
                 : '<span class="st fail">NO-GO</span> Issues must be resolved';
             document.getElementById('readinessSummary').textContent = data.summary;
             
+            // Handle fixable items
+            fixableKeys = data.fixable || [];
+            if (fixableKeys.length > 0) {
+                document.getElementById('fixableSection').classList.remove('hide');
+                document.getElementById('fixableDescription').textContent = 
+                    `The following settings can be automatically fixed: ${fixableKeys.join(', ')}`;
+            } else {
+                document.getElementById('fixableSection').classList.add('hide');
+            }
+            
             document.getElementById('readinessResult').classList.remove('hide');
             readinessDone = true;
             checkProceed();
@@ -267,6 +310,56 @@
         }
     }
     
+    async function applyFix() {
+        const approverName = document.getElementById('fixApproverName').value.trim();
+        if (!approverName) {
+            alert('Please enter your name for the audit log.');
+            return;
+        }
+        
+        const btn = document.getElementById('applyFixBtn');
+        btn.disabled = true;
+        btn.textContent = 'Applying fix...';
+        
+        try {
+            const res = await fetch('/api/readiness/fix', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    keys: fixableKeys,
+                    approver_name: approverName,
+                }),
+            });
+            const result = await res.json();
+            
+            const fixResult = document.getElementById('fixResult');
+            fixResult.classList.remove('hide');
+            
+            if (result.success) {
+                fixResult.innerHTML = `
+                    <div class="box" style="border-color: var(--have); background: var(--have-bg);">
+                        <span class="st pass">Fix Applied</span>
+                        <span style="margin-left: 8px;">${result.message || 'Settings updated successfully'}</span>
+                        <button class="btn btn-secondary" onclick="checkReadiness()" style="margin-left: 12px;">Re-run Readiness</button>
+                    </div>
+                `;
+                document.getElementById('fixableSection').classList.add('hide');
+            } else {
+                fixResult.innerHTML = `
+                    <div class="box" style="border-color: var(--add); background: var(--add-bg);">
+                        <span class="st fail">Fix Failed</span>
+                        <span style="margin-left: 8px;">${result.error || 'Unknown error'}</span>
+                    </div>
+                `;
+            }
+        } catch (e) {
+            alert('Failed to apply fix: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Apply Fix';
+        }
+    }
+    
     async function reviewRunbook() {
         const btn = document.getElementById('reviewRunbookBtn');
         btn.disabled = true;
@@ -275,6 +368,9 @@
         try {
             const res = await fetch('/api/runbook', { method: 'POST' });
             const data = await res.json();
+            
+            // Show source badge
+            document.getElementById('runbookSourceBadge').innerHTML = renderSourceBadge(data.source);
             
             const table = document.getElementById('runbookTable');
             table.innerHTML = data.steps.map(step => `

@@ -24,6 +24,13 @@
             </div>
         </header>
 
+        <!-- Configuration error banner -->
+        {% if config_error %}
+        <div class="outage-banner" id="configBanner" style="background: var(--upd-bg); border-color: var(--upd); color: var(--upd);">
+            <strong>⚙️ Configuration Error</strong> — Missing required settings: {{ missing_config | join(', ') }}
+        </div>
+        {% endif %}
+
         <!-- Outage banner (hidden by default) -->
         <div class="outage-banner hide" id="outageBanner">
             <strong>⚠️ Service Unavailable</strong> — Unable to connect to backend services. Failover may be in progress.
@@ -100,6 +107,20 @@
             try {
                 const res = await fetch('/health', { timeout: 5000 });
                 const data = await res.json();
+                
+                // Handle config error
+                if (data.status === 'config_error') {
+                    isHealthy = false;
+                    document.getElementById('statusDot').className = 'status-dot unhealthy';
+                    // Show config banner if it exists (server-side rendered)
+                    const configBanner = document.getElementById('configBanner');
+                    if (configBanner) configBanner.classList.remove('hide');
+                    document.getElementById('outageBanner').classList.add('hide');
+                    document.getElementById('infoRegion').textContent = data.region || '—';
+                    document.getElementById('infoDbServer').textContent = 'Config error';
+                    document.getElementById('infoLastCheck').textContent = formatTime(data.time);
+                    return;
+                }
                 
                 isHealthy = data.db_ok;
                 document.getElementById('statusDot').className = 'status-dot ' + (isHealthy ? 'healthy' : 'unhealthy');

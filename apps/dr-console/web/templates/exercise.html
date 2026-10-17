@@ -95,11 +95,50 @@
     </div>
 </div>
 
+<!-- Paused/Failed Diagnosis Panel (hidden by default) -->
+<div id="pausedFailedBanner" class="card hide" style="background: var(--add-bg); border-color: var(--add);">
+    <h2 style="color: var(--add);">⚠️ Exercise Paused — Failure Detected</h2>
+    <div style="margin: 16px 0;">
+        <div style="margin-bottom: 12px;">
+            <strong>Likely Cause:</strong>
+            <p id="diagnosisLikelyCause" style="margin: 4px 0; padding: 8px; background: var(--surface); border-radius: 4px;">—</p>
+        </div>
+        <div style="margin-bottom: 12px;">
+            <strong>Evidence:</strong>
+            <p id="diagnosisEvidence" style="margin: 4px 0; padding: 8px; background: var(--surface); border-radius: 4px; font-family: monospace; font-size: 12px;">—</p>
+        </div>
+        <div style="margin-bottom: 12px;">
+            <strong>Recommended Action:</strong>
+            <p id="diagnosisRecommendedAction" style="margin: 4px 0; padding: 8px; background: var(--surface); border-radius: 4px;">—</p>
+        </div>
+    </div>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button class="btn btn-primary" onclick="retryStep()">🔄 Retry Step</button>
+        <button class="btn btn-secondary" onclick="continueExercise()">⏭️ Continue (Skip)</button>
+        <button class="btn btn-danger" onclick="rollback()">↩️ Rollback</button>
+    </div>
+</div>
+
+<!-- Killed Banner (hidden by default) -->
+<div id="killedBanner" class="card hide" style="background: var(--add-bg); border-color: var(--add); text-align: center;">
+    <h2 style="color: var(--add);">🛑 Exercise Killed</h2>
+    <p style="margin: 12px 0;">The exercise was stopped by an operator. Infrastructure may be in an inconsistent state.</p>
+    <div style="margin-top: 16px;">
+        <button class="btn btn-danger" style="font-size: 16px; padding: 12px 32px;" onclick="rollback()">
+            ↩️ Rollback to Original State
+        </button>
+    </div>
+    <p style="margin-top: 12px; font-size: 12px; color: var(--ink-3);">Rollback will restore Traffic Manager and SQL failover group to their pre-exercise configuration.</p>
+</div>
+
 <!-- Completed Banner (hidden by default) -->
 <div id="completedBanner" class="card hide" style="background: var(--have-bg); border-color: var(--have); text-align: center;">
     <h2 style="color: var(--have);">✅ Exercise Completed</h2>
     <p style="margin: 12px 0;">The DR exercise has finished successfully.</p>
-    <a href="/results/{{ exercise_id }}" class="btn btn-primary">View Results</a>
+    <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+        <a href="/results/{{ exercise_id }}" class="btn btn-primary">View Results</a>
+        <a id="reportUrlLink" href="#" class="btn btn-secondary hide" target="_blank">📄 Download Report</a>
+    </div>
 </div>
 {% endblock %}
 
@@ -152,11 +191,46 @@
                 }
             }
             
+            // Handle paused_failed status - show diagnosis panel
+            if (data.status === 'paused_failed' && data.diagnosis) {
+                document.getElementById('pausedFailedBanner').classList.remove('hide');
+                document.getElementById('killedBanner').classList.add('hide');
+                document.getElementById('completedBanner').classList.add('hide');
+                
+                // Populate diagnosis details
+                document.getElementById('diagnosisLikelyCause').textContent = data.diagnosis.likely_cause || 'Unknown';
+                document.getElementById('diagnosisEvidence').textContent = data.diagnosis.evidence || 'No evidence available';
+                document.getElementById('diagnosisRecommendedAction').textContent = data.diagnosis.recommended_action || 'Contact support';
+            } else {
+                document.getElementById('pausedFailedBanner').classList.add('hide');
+            }
+            
+            // Handle killed status - show prominent rollback
+            if (data.status === 'killed') {
+                document.getElementById('killedBanner').classList.remove('hide');
+                document.getElementById('pausedFailedBanner').classList.add('hide');
+                document.getElementById('completedBanner').classList.add('hide');
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                }
+            } else {
+                document.getElementById('killedBanner').classList.add('hide');
+            }
+            
             // Check if completed
             if (data.status === 'completed' || data.status === 'rolled_back') {
                 document.getElementById('completedBanner').classList.remove('hide');
+                document.getElementById('pausedFailedBanner').classList.add('hide');
+                document.getElementById('killedBanner').classList.add('hide');
                 if (timerInterval) {
                     clearInterval(timerInterval);
+                }
+                
+                // Show report URL link if available
+                if (data.report_url) {
+                    const reportLink = document.getElementById('reportUrlLink');
+                    reportLink.href = data.report_url;
+                    reportLink.classList.remove('hide');
                 }
             }
             
@@ -238,9 +312,9 @@
     function getStatusClass(status) {
         switch (status) {
             case 'running': return 'info';
-            case 'paused': return 'warn';
+            case 'paused': case 'paused_failed': return 'warn';
             case 'completed': case 'rolled_back': return 'pass';
-            case 'failed': return 'fail';
+            case 'failed': case 'killed': return 'fail';
             default: return 'neutral';
         }
     }
@@ -327,6 +401,32 @@
             alert('Rollback initiated.');
         } catch (e) {
             alert('Failed to rollback: ' + e.message);
+        }
+    }
+    
+    async function retryStep() {
+        if (!confirm('Retry the failed step? The exercise will resume from the current step.')) {
+            return;
+        }
+        
+        try {
+            await fetch(`/api/exercise/${exerciseId}/retry`, { method: 'POST' });
+            document.getElementById('pausedFailedBanner').classList.add('hide');
+        } catch (e) {
+            alert('Failed to retry step: ' + e.message);
+        }
+    }
+    
+    async function continueExercise() {
+        if (!confirm('Continue and skip the failed step? The exercise will proceed to the next step.')) {
+            return;
+        }
+        
+        try {
+            await fetch(`/api/exercise/${exerciseId}/continue`, { method: 'POST' });
+            document.getElementById('pausedFailedBanner').classList.add('hide');
+        } catch (e) {
+            alert('Failed to continue exercise: ' + e.message);
         }
     }
     

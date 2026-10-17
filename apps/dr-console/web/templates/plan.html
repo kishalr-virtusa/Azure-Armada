@@ -35,7 +35,10 @@
     
     <!-- Plan Steps by Phase -->
     <div class="card">
-        <h2>Execution Steps</h2>
+        <h2>
+            Execution Steps
+            <span id="planSourceBadge" class="badge" style="margin-left: 8px; font-size: 9px;"></span>
+        </h2>
         <p class="sub">Steps grouped by phase</p>
         
         <div id="planSteps" style="margin-top: 16px;"></div>
@@ -69,6 +72,13 @@
 <script>
     let currentPlan = null;
     
+    function renderSourceBadge(source) {
+        const isAI = source === 'llm' || source === 'ai';
+        return isAI 
+            ? '<span class="badge" style="background: var(--accent); color: white; border-color: var(--accent);">🤖 AI</span>'
+            : '<span class="badge">📋 Rules</span>';
+    }
+    
     async function generatePlan() {
         const btn = document.getElementById('generateBtn');
         const loading = document.getElementById('generateLoading');
@@ -100,6 +110,12 @@
     }
     
     function renderPlan(plan) {
+        // Show source badge
+        const sourceBadge = document.getElementById('planSourceBadge');
+        if (sourceBadge) {
+            sourceBadge.innerHTML = renderSourceBadge(plan.source);
+        }
+        
         // Render assumptions
         const assumptionsList = document.getElementById('assumptionsList');
         assumptionsList.innerHTML = (plan.assumptions || []).map(a => `<li>${a}</li>`).join('');
