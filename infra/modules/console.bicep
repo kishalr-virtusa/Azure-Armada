@@ -61,6 +61,9 @@ param workloadRgName string
 @description('ACS sender address')
 param acsSenderAddress string
 
+@description('Email address for notifications (empty = console only)')
+param notifyEmailTo string = ''
+
 var planName = 'dra-console-plan-${suffix}'
 var appName = 'dra-console-${suffix}'
 
@@ -99,6 +102,7 @@ resource consoleApp 'Microsoft.Web/sites@2023-01-01' = {
     httpsOnly: true
     siteConfig: {
       linuxFxVersion: 'PYTHON|3.11'
+      appCommandLine: 'bash startup.sh'
       alwaysOn: true
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
@@ -174,6 +178,34 @@ resource consoleApp 'Microsoft.Web/sites@2023-01-01' = {
         {
           name: 'ACS_SENDER'
           value: acsSenderAddress
+        }
+        {
+          name: 'NOTIFY_EMAIL_TO'
+          value: notifyEmailTo
+        }
+        {
+          name: 'TM_ENDPOINT_A'
+          value: 'endpoint-a'
+        }
+        {
+          name: 'TM_ENDPOINT_B'
+          value: 'endpoint-b'
+        }
+        {
+          name: 'SQL_DB'
+          value: 'paymentsdb'
+        }
+        {
+          name: 'SQL_USER'
+          value: 'sqladmin'
+        }
+        {
+          name: 'SQL_PASSWORD'
+          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=sql-admin-password)'
+        }
+        {
+          name: 'AZURE_SUBSCRIPTION_ID'
+          value: subscription().subscriptionId
         }
         // App Insights
         {

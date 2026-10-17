@@ -13,6 +13,12 @@ param projectTag string = 'dr-agent'
 @description('Tenant ID for RBAC')
 param tenantId string = subscription().tenantId
 
+@secure()
+param sqlAdminPassword string
+
+@secure()
+param consolePasscode string
+
 var keyVaultName = 'dra-kv-${suffix}'
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
@@ -37,6 +43,22 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
 }
 
 @description('Key Vault ID')
+resource sqlPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'sql-admin-password'
+  properties: {
+    value: sqlAdminPassword
+  }
+}
+
+resource consolePasscodeSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'console-passcode'
+  properties: {
+    value: consolePasscode
+  }
+}
+
 output keyVaultId string = keyVault.id
 
 @description('Key Vault Name')

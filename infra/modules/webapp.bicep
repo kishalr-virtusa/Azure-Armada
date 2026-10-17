@@ -37,6 +37,9 @@ param logWorkspaceId string
 @description('Allow HTTP traffic (true for Traffic Manager, false for console)')
 param allowHttp bool = true
 
+@description('PAYMENT_PROVIDER app setting; empty = omitted (planted config gap)')
+param paymentProvider string = ''
+
 var planName = 'dra-plan-${regionShort}-${suffix}'
 var appName = 'dra-app-${regionShort}-${suffix}'
 
@@ -75,11 +78,17 @@ resource webApp 'Microsoft.Web/sites@2023-01-01' = {
     httpsOnly: !allowHttp
     siteConfig: {
       linuxFxVersion: 'PYTHON|3.11'
+      appCommandLine: 'bash startup.sh'
       alwaysOn: true
       healthCheckPath: '/health'
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
-      appSettings: [
+      appSettings: concat(empty(paymentProvider) ? [] : [
+        {
+          name: 'PAYMENT_PROVIDER'
+          value: paymentProvider
+        }
+      ], [
         {
           name: 'REGION_NAME'
           value: regionName
@@ -108,7 +117,7 @@ resource webApp 'Microsoft.Web/sites@2023-01-01' = {
           name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
           value: 'true'
         }
-      ]
+      ])
     }
   }
 }

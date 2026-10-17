@@ -19,7 +19,7 @@ param keyVaultName string
 var acsName = 'dra-acs-${suffix}'
 var emailName = 'dra-email-${suffix}'
 
-// Azure Communication Services resource
+// Azure Communication Services resource (linked to the managed email domain)
 resource communicationService 'Microsoft.Communication/communicationServices@2023-04-01' = {
   name: acsName
   location: 'global'
@@ -28,6 +28,9 @@ resource communicationService 'Microsoft.Communication/communicationServices@202
   }
   properties: {
     dataLocation: dataLocation
+    linkedDomains: [
+      azureManagedDomain.id
+    ]
   }
 }
 
@@ -54,15 +57,6 @@ resource azureManagedDomain 'Microsoft.Communication/emailServices/domains@2023-
   }
 }
 
-// Link Email Service to Communication Service
-resource emailLink 'Microsoft.Communication/communicationServices/emailServices@2023-04-01' = {
-  name: '${acsName}/${emailName}'
-  dependsOn: [
-    communicationService
-    emailService
-    azureManagedDomain
-  ]
-}
 
 // Store connection string in Key Vault
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {

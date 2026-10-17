@@ -19,6 +19,21 @@ param openAILocation string = 'eastus2'
 @secure()
 param sqlAdminPassword string
 
+@description('Console passcode')
+@secure()
+param consolePasscode string
+
+@description('Email address for DR notifications (empty = console only)')
+param notifyEmailTo string = ''
+
+@description('Deploy Azure Communication Services email')
+param deployEmail bool = true
+
+@description('Plant the demo config gap: Region B app deployed WITHOUT PAYMENT_PROVIDER')
+param plantConfigGap bool = true
+
+var paymentProvider = 'virtusa-pay-sandbox'
+
 @description('Skip OpenAI creation if using existing')
 param useExistingOpenAI bool = false
 
@@ -68,6 +83,8 @@ module keyVault 'modules/keyvault.bicep' = {
     location: controlLocation
     suffix: suffix
     projectTag: projectTag
+    sqlAdminPassword: sqlAdminPassword
+    consolePasscode: consolePasscode
   }
 }
 
@@ -104,6 +121,7 @@ module webAppA 'modules/webapp.bicep' = {
     suffix: suffix
     regionShort: 'cin'
     regionName: 'Central India'
+    paymentProvider: paymentProvider
     keyVaultName: keyVault.outputs.keyVaultName
     sqlFogFqdn: sql.outputs.fogListenerFqdn
     sqlDatabaseName: sql.outputs.databaseName
@@ -124,6 +142,7 @@ module webAppB 'modules/webapp.bicep' = {
     suffix: suffix
     regionShort: 'sin'
     regionName: 'South India'
+    paymentProvider: plantConfigGap ? '' : paymentProvider
     keyVaultName: keyVault.outputs.keyVaultName
     sqlFogFqdn: sql.outputs.fogListenerFqdn
     sqlDatabaseName: sql.outputs.databaseName
@@ -163,7 +182,7 @@ module openAI 'modules/openai.bicep' = {
 }
 
 // Email / ACS (in control RG)
-module email 'modules/email.bicep' = {
+module email 'modules/email.bicep' = if (deployEmail) {
   name: 'email-deployment'
   scope: controlRg
   params: {
@@ -197,7 +216,8 @@ module console 'modules/console.bicep' = {
     sqlServerBName: sql.outputs.sqlServerBName
     sqlFogName: sql.outputs.fogName
     workloadRgName: workloadRgName
-    acsSenderAddress: email.outputs.senderAddress
+    acsSenderAddress: deployEmail ? email!.outputs.senderAddress : ''
+    notifyEmailTo: notifyEmailTo
     projectTag: projectTag
   }
 }
@@ -208,7 +228,6 @@ module roles 'modules/roles.bicep' = {
   scope: controlRg
   params: {
     consolePrincipalId: console.outputs.consoleAppPrincipalId
-    workloadRgName: workloadRgName
     storageAccountId: storage.outputs.storageAccountId
     keyVaultId: keyVault.outputs.keyVaultId
     openAIId: useExistingOpenAI ? '' : openAI.outputs.openAIId
@@ -218,6 +237,14 @@ module roles 'modules/roles.bicep' = {
   dependsOn: [
     workloadRg
   ]
+}
+
+module rolesWorkload 'modules/roles-workload.bicep' = {
+  name: 'roles-workload-deployment'
+  scope: workloadRg
+  params: {
+    consolePrincipalId: console.outputs.consoleAppPrincipalId
+  }
 }
 
 // Outputs

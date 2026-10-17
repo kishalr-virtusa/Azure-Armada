@@ -8,9 +8,6 @@
 @description('Console App Principal ID')
 param consolePrincipalId string
 
-@description('Workload Resource Group name')
-param workloadRgName string
-
 @description('Storage Account ID')
 param storageAccountId string
 
@@ -27,24 +24,10 @@ param webAppAPrincipalId string
 param webAppBPrincipalId string
 
 // Built-in role definition IDs
-var contributorRoleId = 'b24988ac-6180-42a0-ab88-20f7382dd24c'
 var storageTableDataContributorRoleId = '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
 var storageBlobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
 var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 var cognitiveServicesOpenAIUserRoleId = '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
-
-// Console identity: Contributor on workload RG
-// Note: This requires the workload RG to exist and be passed as a scope
-// We use subscriptionResourceId to reference the RG
-resource contributorOnWorkloadRg 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(subscription().id, workloadRgName, consolePrincipalId, contributorRoleId)
-  scope: resourceGroup(workloadRgName)
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', contributorRoleId)
-    principalId: consolePrincipalId
-    principalType: 'ServicePrincipal'
-  }
-}
 
 // Console identity: Storage Table Data Contributor
 resource storageTableRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {

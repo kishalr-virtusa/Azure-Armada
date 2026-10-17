@@ -14,8 +14,9 @@ if ! az account show &>/dev/null; then
     exit 1
 fi
 
-if [[ -z "${SQL_ADMIN_PASSWORD:-}" ]]; then
-    echo "Error: SQL_ADMIN_PASSWORD environment variable is required."
+if [[ -z "${SQL_ADMIN_PASSWORD:-}" || -z "${CONSOLE_PASSCODE:-}" ]]; then
+    echo "Error: SQL_ADMIN_PASSWORD and CONSOLE_PASSCODE environment variables are required."
+    echo "Optional: NOTIFY_EMAIL_TO (email for DR notifications), PLANT_CONFIG_GAP=true|false, DEPLOY_EMAIL=true|false"
     exit 1
 fi
 
@@ -25,18 +26,19 @@ echo "Deploying to subscription: $SUBSCRIPTION_ID"
 # Deploy Bicep at subscription scope
 echo "Starting infrastructure deployment..."
 az deployment sub create \
-    --name "dra-deployment-$(date +%Y%m%d-%H%M%S)" \
+    --name "dra-deployment" \
     --location centralindia \
     --template-file "$INFRA_DIR/main.bicep" \
     --parameters "$INFRA_DIR/parameters.json" \
-    --parameters sqlAdminPassword="$SQL_ADMIN_PASSWORD" \
+    --parameters sqlAdminPassword="$SQL_ADMIN_PASSWORD" consolePasscode="$CONSOLE_PASSCODE" \
+    --parameters notifyEmailTo="${NOTIFY_EMAIL_TO:-}" plantConfigGap="${PLANT_CONFIG_GAP:-true}" deployEmail="${DEPLOY_EMAIL:-true}" \
     --output table
 
 # Get deployment outputs
 echo ""
 echo "Fetching deployment outputs..."
 OUTPUTS=$(az deployment sub show \
-    --name "$(az deployment sub list --query '[0].name' -o tsv)" \
+    --name dra-deployment \
     --query properties.outputs -o json)
 
 TM_URL=$(echo "$OUTPUTS" | jq -r '.trafficManagerUrl.value')
@@ -52,6 +54,6 @@ echo "Console URL:         $CONSOLE_URL"
 echo "Suffix:              $SUFFIX"
 echo ""
 echo "Next steps:"
-echo "1. Run seed-secrets.sh to populate Key Vault"
-echo "2. Run deploy-apps.sh to deploy application code"
+echo "Secrets are written to Key Vault by the deployment itself."
+echo "Next: run deploy-apps.sh to deploy application code"
 echo "=========================================="

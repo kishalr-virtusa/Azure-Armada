@@ -10,7 +10,7 @@ REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 # Get resource names from deployment outputs
 echo "Fetching deployment information..."
 OUTPUTS=$(az deployment sub show \
-    --name "$(az deployment sub list --query '[0].name' -o tsv)" \
+    --name dra-deployment \
     --query properties.outputs -o json 2>/dev/null || echo "{}")
 
 if [[ "$OUTPUTS" == "{}" ]]; then
