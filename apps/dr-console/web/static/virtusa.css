@@ -694,3 +694,21 @@ footer { font-size: 12px; }
     .plan-table th:nth-child(n+5), .plan-table td:nth-child(n+5) { display: none; }
     .plan-table td:nth-child(2) { min-width: 150px; }
 }
+
+
+/* thin scrollbars in the Virtusa palette */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--accent) 35%, transparent) transparent; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--accent) 60%, transparent); }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* lists: markers aligned with the first line of text */
+.wrap ul, .wrap ol { padding-left: 1.25em; }
+.wrap li { margin: 2px 0; }
+.wrap li::marker { color: var(--accent); }
+
+/* exercise timeline: the dot sits on the event text, time underneath */
+.timeline-item::before { top: 5px; }
+.tl-msg { font-size: 14px; font-weight: 500; color: var(--ink); line-height: 1.5; }
+.tl-meta { font-size: 11px; color: var(--ink-3); margin-top: 1px; }

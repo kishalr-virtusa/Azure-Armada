@@ -17,7 +17,7 @@
 <div class="kpis">
     <!-- Live RTO Timer -->
     <div class="kpi" id="rtoCard">
-        <div class="l">RTO (Live)</div>
+        <div class="l">RTO</div>
         <div class="v big" id="rtoTimer">00:00</div>
         <div class="x">Target: {{ rto_target_min }}min</div>
     </div>
@@ -191,6 +191,7 @@
             
             // Set t0 for timer
             rtoFinal = (data.rto_s !== undefined && data.rto_s !== null) ? data.rto_s : null;
+            if (data.t0) { t0 = new Date(data.t0); updateTimer(); }  // also paint finished drills (no interval running)
             if (data.t0) {
                 t0 = new Date(data.t0);
                 if (!timerInterval) {
@@ -344,8 +345,8 @@
                 const item = document.createElement('div');
                 item.className = 'timeline-item ' + getEventClass(event.kind);
                 item.innerHTML = `
-                    <div style="font-size: 11px; color: var(--ink-3);">${formatTime(event.ts)} • ${event.step_id || 'system'}</div>
-                    <div style="font-weight: 500;">${event.message}</div>
+                    <div class="tl-msg">${event.message}</div>
+                    <div class="tl-meta">${formatTime(event.ts)} · ${event.step_id || 'system'}</div>
                     ${event.kind === 'measurement' ? `<div style="font-size: 12px; color: var(--ink-2);">${formatMeasurement(event.data)}</div>` : ''}
                 `;
                 timeline.appendChild(item);

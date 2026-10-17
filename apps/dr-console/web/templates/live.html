@@ -412,6 +412,18 @@
         background: var(--accent);
         transition: width 0.3s;
     }
+
+    /* sizing pass: readable in a 720p screen share without shouting */
+    .qr-url { font-size: 22px !important; }
+    .qr-section h2, .card > h2 { font-size: 18px !important; }
+    .state-banner { font-size: 17px; padding: 14px 20px; }
+    .stopwatch-value { font-size: 60px; }
+    .big-kpi .value { font-size: 44px; }
+    .big-kpi .label { font-size: 15px; }
+    .big-kpi .sub { font-size: 14px; }
+    .eta-display { font-size: 16px; }
+    /* nothing to time while idle: hide the empty stopwatch and RTO/RPO tiles until a drill starts */
+    body:not(.drill-active) .big-kpis { display: none; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 {% endblock %}

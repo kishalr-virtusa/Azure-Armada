@@ -22,6 +22,21 @@ BASE = Path(__file__).parent
 app = FastAPI(title="DR Agent Console")
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 templates = Jinja2Templates(directory=BASE / "templates")
+
+
+def _hhmmss(v) -> str:
+    """ISO timestamp -> '15:01:31.0 UTC' for evidence tables (keeps tenths: RTO/RPO evidence is about seconds)."""
+    if not v:
+        return "—"
+    from datetime import datetime
+    try:
+        d = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+        return d.strftime("%H:%M:%S.") + f"{d.microsecond // 100000} UTC"
+    except ValueError:
+        return str(v)
+
+
+templates.env.filters["hhmmss"] = _hhmmss
 api = Depends(auth.require_auth)
 
 

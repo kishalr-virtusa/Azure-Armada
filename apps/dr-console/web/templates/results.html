@@ -57,13 +57,13 @@
         <p class="sub">Raw timestamps from the exercise</p>
         <dl class="srcs" style="margin-top: 12px;">
             <dt>Outage Injected (t0)</dt>
-            <dd>{{ t0 or '—' }}</dd>
+            <dd>{{ t0 | hhmmss }}</dd>
             <dt>Failover Triggered</dt>
-            <dd>{{ t_failover or '—' }}</dd>
+            <dd>{{ t_failover | hhmmss }}</dd>
             <dt>Recovery Confirmed</dt>
-            <dd>{{ t_recovered or '—' }}</dd>
+            <dd>{{ t_recovered | hhmmss }}</dd>
             <dt>Failback Complete</dt>
-            <dd>{{ t_failback_done or '—' }}</dd>
+            <dd>{{ t_failback_done | hhmmss }}</dd>
         </dl>
     </div>
     
@@ -72,9 +72,9 @@
         <p class="sub">Data loss measurement</p>
         <dl class="srcs" style="margin-top: 12px;">
             <dt>Last Heartbeat Before Failover</dt>
-            <dd>Seq {{ last_hb_seq or '—' }} at {{ last_hb_ts or '—' }}</dd>
+            <dd>{{ last_hb_ts | hhmmss }}</dd>
             <dt>Newest Heartbeat in DR</dt>
-            <dd>Seq {{ dr_hb_seq or '—' }} at {{ dr_hb_ts or '—' }}</dd>
+            <dd>{{ dr_hb_ts | hhmmss }}</dd>
             <dt>Data Loss Window</dt>
             <dd>{{ rpo_s or 0 }} seconds</dd>
         </dl>

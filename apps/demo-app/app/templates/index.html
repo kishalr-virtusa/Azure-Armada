@@ -432,6 +432,23 @@
         .hide { display: none !important; }
 
         /* ---- presentation polish ---- */
+        * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--accent) 35%, transparent) transparent; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        .cust-lead { font-size: 14px; color: var(--ink); margin: 10px 0 12px; line-height: 1.45; }
+        .cust-steps { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+        .cust-steps li { display: grid; grid-template-columns: 20px 1fr; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-3); }
+        .cust-steps li::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line-2); justify-self: center; box-sizing: border-box; }
+        .cust-steps li.active { color: var(--ink); font-weight: 600; }
+        .cust-steps li.active::before { border-color: var(--accent); background: var(--accent); animation: pulse 1.2s infinite; }
+        .cust-steps li.done { color: var(--ink-2); }
+        .cust-steps li.done::before { content: "✓"; border: none; width: auto; height: auto; color: var(--have); font-weight: 700; font-size: 14px; }
+        .cust-wait { font-size: 13px; color: var(--ink-2); }
+        .cust-wait .stopwatch { font-size: inherit; margin: 0; display: inline; color: var(--ink); font-weight: 700; }
+        .cust-facts { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+        .cust-facts li { display: grid; grid-template-columns: 20px 1fr; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; color: var(--ink); }
+        .cust-facts li::before { content: "✓"; color: var(--have); font-weight: 700; justify-self: center; }
         .result-value { font-weight: 700 !important; font-variant-numeric: tabular-nums; }
         body { font-size: 15px; -webkit-font-smoothing: antialiased; }
         .brand { gap: 10px; min-width: 0; }
@@ -468,7 +485,7 @@
 
         <!-- Unlock alerts prompt -->
         <div class="unlock-prompt" id="unlockPrompt">
-            <div class="unlock-text"><strong>Live drill alerts</strong><span>Vibration and sound when the DR drill starts and ends</span></div>
+            <div class="unlock-text"><strong>Instant alerts</strong><span>Vibrate and chime if your service is interrupted</span></div>
             <button class="unlock-btn" id="unlockBtn">Turn on</button>
         </div>
 
@@ -496,39 +513,29 @@
                 <span id="liveBannerText">All systems normal</span>
             </div>
             
-            <!-- Outage view (hidden by default) -->
+            <!-- Outage view: customer language, no infrastructure terms -->
             <div id="outageView" class="hide">
-                <div class="stopwatch" id="stopwatch">00:00.0</div>
-                <div class="eta-row">
-                    <span>Estimated recovery:</span>
-                    <span class="eta-value" id="etaValue">—</span>
-                </div>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
-                </div>
-                <div class="current-step" id="currentStep"></div>
-                <div class="timeline-mini" id="timelineMini"></div>
+                <p class="cust-lead">Your money is safe. We are moving you to our backup data centre.</p>
+                <ol class="cust-steps" id="custSteps">
+                    <li data-k="detect">Problem detected</li>
+                    <li data-k="move">Moving you to our backup site</li>
+                    <li data-k="check">Checking your payments are safe</li>
+                    <li data-k="back">You're back online</li>
+                </ol>
+                <div class="cust-wait">Interrupted for <strong class="stopwatch" id="stopwatch">0:00</strong> · <span id="etaValue">usually under a minute</span></div>
             </div>
 
-            <!-- Recovered view (hidden by default) -->
+            <!-- Recovered view -->
             <div id="recoveredView" class="hide">
-                <div class="results-row">
-                    <div class="result-box" id="rtoBox">
-                        <div class="result-label">RTO</div>
-                        <div class="result-value" id="rtoValue">—</div>
-                        <div class="result-target" id="rtoTarget">target —</div>
-                    </div>
-                    <div class="result-box" id="rpoBox">
-                        <div class="result-label">RPO</div>
-                        <div class="result-value" id="rpoValue">—</div>
-                        <div class="result-target" id="rpoTarget">target —</div>
-                    </div>
-                </div>
+                <ul class="cust-facts">
+                    <li id="factRto">Service restored</li>
+                    <li id="factRpo">Your payments are safe</li>
+                </ul>
             </div>
 
             <!-- Chaos banner -->
             <div class="chaos-banner hide" id="chaosBanner">
-                🔥 A second fault was injected; Virtusa DR Agent is handling it
+                We hit a second hiccup and are fixing it automatically.
             </div>
         </div>
 
@@ -728,7 +735,7 @@
             if (state === 'normal' || state === 'armed') {
                 liveCard.className = 'card live-card normal';
                 liveBanner.className = 'live-banner normal';
-                liveBannerText.textContent = 'All systems normal · Verified by Virtusa DR Agent';
+                liveBannerText.textContent = 'All systems normal';
                 outageView.classList.add('hide');
                 recoveredView.classList.add('hide');
                 payBtn.disabled = false;
@@ -744,11 +751,11 @@
                 liveCard.className = 'card live-card outage';
                 liveBanner.className = 'live-banner outage';
                 liveBanner.querySelector('.live-status-dot').classList.add('pulse');
-                liveBannerText.textContent = data.headline || 'Service disruption detected';
+                liveBannerText.textContent = `We're having trouble at our ${data.primary_region || 'main'} data centre`;
                 outageView.classList.remove('hide');
                 recoveredView.classList.add('hide');
                 payBtn.disabled = true;
-                payBtn.textContent = 'Payments paused during failover';
+                payBtn.textContent = 'Paused for a moment';
 
                 // Start stopwatch
                 if (data.t0) {
@@ -756,32 +763,19 @@
                     startStopwatch();
                 }
 
-                // ETA
+                // friendly wait text: "back in about 15 s" (eta_s is the time still remaining, server side)
                 const etaEl = document.getElementById('etaValue');
-                if (data.eta_s != null) {
-                    // eta_s is the time still remaining (server side), not the total
-                    etaEl.textContent = data.eta_s <= 0 ? 'Taking longer than usual…' : `~${Math.ceil(data.eta_s)}s left`;
-                } else {
-                    etaEl.textContent = 'Calculating...';
-                }
+                etaEl.textContent = data.eta_s == null ? 'usually under a minute'
+                    : data.eta_s <= 0 ? 'almost there' : `back in about ${Math.max(5, Math.ceil(data.eta_s / 5) * 5)} s`;
 
-                // Progress
-                if (data.steps_total > 0) {
-                    const pct = (data.steps_done / data.steps_total) * 100;
-                    document.getElementById('progressFill').style.width = pct + '%';
-                }
-
-                // Current step
-                if (data.current_step) {
-                    document.getElementById('currentStep').innerHTML = `<strong>Now:</strong> ${data.current_step}`;
-                }
-
-                // Timeline
-                if (data.timeline && data.timeline.length > 0) {
-                    document.getElementById('timelineMini').innerHTML = data.timeline.slice(-3).map(e =>
-                        `<div>${formatTime(e.ts)} — ${e.message}</div>`
-                    ).join('');
-                }
+                // checklist driven by what the DR Agent is doing right now (no technical names shown)
+                const step = (data.current_step || '').toLowerCase();
+                const stage = /wait|health|payment|functional|rpo|heartbeat/.test(step) && data.steps_done > 4 ? 2
+                            : /failover|endpoint|traffic|sql/.test(step) ? 1 : (data.steps_done > 4 ? 1 : 0);
+                document.querySelectorAll('#custSteps li').forEach((li, i) => {
+                    li.className = i < stage + 1 ? (i === stage ? 'active' : 'done') : '';
+                    if (i === 0) li.className = stage > 0 ? 'done' : 'active';
+                });
 
                 expectedRegion = data.serving_region;
             }
@@ -794,32 +788,22 @@
                 liveCard.className = 'card live-card recovered';
                 liveBanner.className = 'live-banner recovered';
                 liveBanner.querySelector('.live-status-dot').classList.remove('pulse');
-                liveBannerText.textContent = state === 'recovered'
-                    ? `Recovered in ${data.serving_region || 'DR region'}`
-                    : state === 'failing_back' ? 'Returning to primary region...'
-                    : 'Drill complete';
+                liveBannerText.textContent = state === 'recovered' ? "You're back online"
+                    : state === 'failing_back' ? 'Moving you back to your usual data centre. You can keep paying.'
+                    : 'All done. Thanks for your patience.';
                 outageView.classList.add('hide');
                 recoveredView.classList.remove('hide');
                 payBtn.disabled = false;
                 payBtn.textContent = 'Make payment';
                 stopStopwatch();
 
-                // RTO/RPO display
+                // the measured RTO / RPO, said the way a customer would understand them
                 if (data.rto_s != null) {
-                    const rtoBox = document.getElementById('rtoBox');
-                    const rtoVal = document.getElementById('rtoValue');
-                    rtoVal.textContent = `${Math.floor(data.rto_s)}s`;
-                    document.getElementById('rtoTarget').textContent = `target ${Math.floor(data.rto_target_s / 60)}min`;
-                    rtoBox.className = 'result-box ' + (data.rto_met ? 'pass' : 'fail');
-                    rtoVal.innerHTML += data.rto_met ? ' ✅' : ' ❌';
+                    document.getElementById('factRto').textContent = `Service restored in ${Math.round(data.rto_s)} seconds`;
                 }
                 if (data.rpo_s != null) {
-                    const rpoBox = document.getElementById('rpoBox');
-                    const rpoVal = document.getElementById('rpoValue');
-                    rpoVal.textContent = `${data.rpo_s}s`;
-                    document.getElementById('rpoTarget').textContent = `target ${Math.floor(data.rpo_target_s / 60)}min`;
-                    rpoBox.className = 'result-box ' + (data.rpo_met ? 'pass' : 'fail');
-                    rpoVal.innerHTML += data.rpo_met ? ' ✅' : ' ❌';
+                    document.getElementById('factRpo').textContent = data.rpo_s === 0
+                        ? 'None of your payments were lost' : 'Your payments are safe';
                 }
 
                 expectedRegion = data.serving_region;
@@ -827,11 +811,16 @@
             else if (state === 'paused' || state === 'rolled_back') {
                 liveCard.className = 'card live-card';
                 liveBanner.className = 'live-banner';
-                liveBannerText.textContent = state === 'paused' ? 'Exercise paused' : 'Rolled back to original state';
+                liveBannerText.textContent = state === 'paused' ? 'Still working on it. Your money is safe.' : 'All systems normal';
                 outageView.classList.add('hide');
                 recoveredView.classList.add('hide');
                 stopStopwatch();
             }
+        }
+
+        function formatCustomerClock(sec) {
+            const m = Math.floor(sec / 60), s2 = Math.floor(sec % 60);
+            return `${m}:${String(s2).padStart(2, '0')}`;
         }
 
         // Stopwatch
@@ -840,7 +829,7 @@
             stopwatchInterval = setInterval(() => {
                 if (!t0) return;
                 const elapsed = (Date.now() - clockSkew - t0) / 1000;
-                stopwatchEl.textContent = formatStopwatch(Math.max(0, elapsed));
+                stopwatchEl.textContent = formatCustomerClock(Math.max(0, elapsed));
             }, 100);
         }
 
