@@ -8,7 +8,7 @@ Owner tags:
 Execute in order within each track. Tracks A and B can run in parallel. Reference the requirements with (R#).
 
 ## Track 0: Setup (Sat morning)
-- [ ] 0.1 [Team] Pick the demo subscription (Kumar). `az login`, `az account set`. Register providers: Microsoft.Web, Microsoft.Sql, Microsoft.Cdn, Microsoft.Storage, Microsoft.KeyVault, Microsoft.CognitiveServices, Microsoft.OperationalInsights, Microsoft.Insights.
+- [ ] 0.1 [Team] Use kishalr's own subscription (team is off Sat/Sun). `az login`, `az account set`. Register providers: Microsoft.Web, Microsoft.Sql, Microsoft.Cdn, Microsoft.Storage, Microsoft.KeyVault, Microsoft.CognitiveServices, Microsoft.OperationalInsights, Microsoft.Insights.
 - [ ] 0.2 [Team] Create a Google Chat space "DR Agent Demo" → Apps & integrations → Webhooks → copy the URL (goes into Key Vault, never into git).
 - [ ] 0.3 [Kiro] Repo hygiene: `.gitignore` (Python, .env, .venv, __pycache__, *.zip), `.env.example` for both apps, root `README.md` with quickstart. (R2)
 
@@ -19,7 +19,7 @@ Execute in order within each track. Tracks A and B can run in parallel. Referenc
 - [ ] A4 [Kiro] `infra/modules/frontdoor.bicep`: Standard profile, endpoint, origin group with probe `/health`, origins A (prio 1) and B (prio 2), route with caching disabled. (R2.3)
 - [ ] A5 [Kiro] `infra/modules/openai.bicep` (optional via `useExistingOpenAI`), `console.bicep`, `roles.bicep` (console MI: Contributor on the workload RG only + data roles + OpenAI User). (R2.4)
 - [ ] A6 [Kiro] `infra/main.bicep` + `parameters.json`. Scripts: `deploy.sh`, `deploy-apps.sh`, `seed-secrets.sh`, `budget.sh`, `teardown.sh`, `smoke.sh`. (R2)
-- [ ] A7 [Team+Claude] Run `budget.sh`, `seed-secrets.sh`, `deploy.sh`. Fix deployment errors. Confirm the Front Door URL serves Region A.
+- [ ] A7 [Team+Claude] Run `budget.sh` FIRST (hard rule), then `seed-secrets.sh`, `deploy.sh`. Fix deployment errors. Confirm the Front Door URL serves Region A.
 - [ ] A8 [Team+Claude] **Manual failover rehearsal** with `az` (stop A → forced FOG failover to B → disable origin A → app works via Front Door → failback). Note the real timings. This de-risks Sunday.
 
 ## Track B: Demo workload app
