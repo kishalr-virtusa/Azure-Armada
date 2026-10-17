@@ -5,7 +5,7 @@ free-form objects, so LLM-facing models use lists of key/value pairs instead of 
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -50,7 +50,7 @@ class Check(BaseModel):
     status: CheckStatus
     detail: str
     evidence: dict[str, Any] = {}
-    checked_at: datetime = Field(default_factory=datetime.utcnow)
+    checked_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 class ReadinessSummary(BaseModel):  # (LLM)
