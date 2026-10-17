@@ -1,0 +1,8 @@
+{"properties":{"category":"Cost","amount":150,"timeGrain":"Monthly",
+ "timePeriod":{"startDate":"2026-10-01T00:00:00Z","endDate":"2027-10-01T00:00:00Z"},
+ "notifications":{
+  "a25":{"enabled":true,"operator":"GreaterThan","threshold":16.67,"thresholdType":"Actual","contactRoles":["Owner"],"contactEmails":[]},
+  "a50":{"enabled":true,"operator":"GreaterThan","threshold":33.33,"thresholdType":"Actual","contactRoles":["Owner"],"contactEmails":[]},
+  "a100":{"enabled":true,"operator":"GreaterThan","threshold":66.67,"thresholdType":"Actual","contactRoles":["Owner"],"contactEmails":[]},
+  "a150":{"enabled":true,"operator":"GreaterThan","threshold":100,"thresholdType":"Actual","contactRoles":["Owner"],"contactEmails":[]},
+  "f150":{"enabled":true,"operator":"GreaterThan","threshold":100,"thresholdType":"Forecasted","contactRoles":["Owner"],"contactEmails":[]}}}}

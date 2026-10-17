@@ -18,7 +18,7 @@ Execute in order within each track. Tracks A and B can run in parallel. Referenc
 - [ ] A3 [Kiro] `infra/modules/webapp.bicep` (reusable per region; settings per design §3, Key Vault references). (R2.1)
 - [ ] A4 [Kiro] `infra/modules/trafficmanager.bicep`: Priority profile, TTL 10, HTTPS monitor `/health` every 10s, Azure endpoints A (prio 1) / B (prio 2), plus the `<tm>.trafficmanager.net` hostname binding on both web apps (after the endpoints exist; see design §3). (R2.3)
 - [ ] A5 [Kiro] `infra/modules/openai.bicep` (optional via `useExistingOpenAI`), `console.bicep`, `roles.bicep` (console MI: Contributor on the workload RG only + data roles + OpenAI User). (R2.4)
-- [ ] A6 [Kiro] `infra/main.bicep` + `parameters.json`. Scripts: `deploy.sh`, `deploy-apps.sh`, `seed-secrets.sh`, `budget.sh`, `teardown.sh`, `smoke.sh`. (R2)
+- [ ] A6 [Kiro] (budget.sh already done by Claude; do not change it) `infra/main.bicep` + `parameters.json`. Scripts: `deploy.sh`, `deploy-apps.sh`, `seed-secrets.sh`, `budget.sh`, `teardown.sh`, `smoke.sh`. (R2)
 - [ ] A7 [Team+Claude] Run `budget.sh` FIRST (hard rule), then `seed-secrets.sh`, `deploy.sh`. Fix deployment errors. Confirm the Traffic Manager URL serves Region A.
 - [ ] A8 [Team+Claude] **Manual failover rehearsal** with `az` (stop A → forced FOG failover to B → disable TM endpoint A → app works via Traffic Manager → failback). Note the real timings. This de-risks Sunday.
 
