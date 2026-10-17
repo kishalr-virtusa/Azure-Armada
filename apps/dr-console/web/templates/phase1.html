@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+
+{% block title %}Phase 1 — DR Agent Console{% endblock %}
+
+{% block content %}
+<header>
+    <div>
+        <span class="eyebrow">Phase 1</span>
+        <h1>DR Design & Preparation</h1>
+    </div>
+</header>
+
+<!-- Profile Section -->
+<div class="card" id="profileSection">
+    <h2>1. Application Profile</h2>
+    <p class="sub">Define the application's criticality and recovery targets</p>
+    
+    <form id="profileForm" style="margin-top: 16px;">
+        <div class="twin">
+            <div>
+                <div class="form-group">
+                    <label class="form-label">Application Name</label>
+                    <input type="text" name="name" class="form-input" value="Contoso Payments" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Criticality Tier</label>
+                    <select name="tier" class="form-input" required>
+                        <option value="0">Tier 0 - Mission Critical (99.99%)</option>
+                        <option value="1" selected>Tier 1 - Business Critical (99.9%)</option>
+                        <option value="2">Tier 2 - Important (99.5%)</option>
+                        <option value="3">Tier 3 - Standard (99%)</option>
+                    </select>
+                </div>
+            </div>
+            <div>
+                <div class="form-group">
+                    <label class="form-label">RTO Target (minutes)</label>
+                    <input type="number" name="rto_min" class="form-input" value="30" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">RPO Target (minutes)</label>
+                    <input type="number" name="rpo_min" class="form-input" value="15" min="0" required>
+                </div>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Monthly Budget (USD)</label>
+            <input type="number" name="monthly_budget_usd" class="form-input" value="200" min="0">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Notes</label>
+            <textarea name="notes" class="form-input" rows="2" placeholder="Any additional context..."></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Save Profile</button>
+    </form>
+    
+    <div id="profileResult" class="box hide" style="margin-top: 16px;"></div>
+</div>
+
+<!-- Strategy Section -->
+<div class="card" id="strategySection">
+    <h2>2. DR Strategy Recommendation</h2>
+    <p class="sub">AI-recommended strategy based on your profile</p>
+    
+    <div id="strategyLoading" class="hide" style="padding: 24px; text-align: center; color: var(--ink-3);">
+        Analyzing requirements...
+    </div>
+    
+    <div id="strategyContent" style="margin-top: 16px;">
+        <button id="getStrategyBtn" class="btn btn-secondary" onclick="getStrategy()">Get Recommendation</button>
+    </div>
+    
+    <div id="strategyResult" class="hide" style="margin-top: 16px;">
+        <h3 style="margin-bottom: 12px;">Strategy Comparison</h3>
+        <div class="scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Strategy</th>
+                        <th>Expected RTO</th>
+                        <th>Expected RPO</th>
+                        <th>Relative Cost</th>
+                        <th>Meets Targets</th>
+                    </tr>
+                </thead>
+                <tbody id="strategyTable"></tbody>
+            </table>
+        </div>
+        <div class="box" style="margin-top: 16px;">
+            <h4 style="margin-bottom: 8px;">Recommendation</h4>
+            <div id="strategyRationale"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Readiness Section -->
+<div class="card" id="readinessSection">
+    <h2>3. Readiness Checks</h2>
+    <p class="sub">Verify the DR environment is prepared</p>
+    
+    <div id="readinessContent" style="margin-top: 16px;">
+        <button id="checkReadinessBtn" class="btn btn-secondary" onclick="checkReadiness()">Run Checks</button>
+    </div>
+    
+    <div id="readinessResult" class="hide" style="margin-top: 16px;">
+        <div id="readinessChecks"></div>
+        <div class="box" style="margin-top: 16px;">
+            <h4 id="readinessVerdict" style="margin-bottom: 8px;"></h4>
+            <div id="readinessSummary"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Runbook Review Section -->
+<div class="card" id="runbookSection">
+    <h2>4. Runbook Review</h2>
+    <p class="sub">Validate the DR runbook against current infrastructure</p>
+    
+    <div id="runbookContent" style="margin-top: 16px;">
+        <button id="reviewRunbookBtn" class="btn btn-secondary" onclick="reviewRunbook()">Review Runbook</button>
+    </div>
+    
+    <div id="runbookResult" class="hide" style="margin-top: 16px;">
+        <h3 style="margin-bottom: 12px;">Step Review</h3>
+        <div class="scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Step</th>
+                        <th>Description</th>
+                        <th>Verdict</th>
+                        <th>Issue</th>
+                    </tr>
+                </thead>
+                <tbody id="runbookTable"></tbody>
+            </table>
+        </div>
+        <details style="margin-top: 16px;">
+            <summary>View Updated Runbook</summary>
+            <pre id="updatedRunbook" style="margin-top: 8px; padding: 12px; background: var(--surface-2); border-radius: 8px; overflow-x: auto; font-size: 12px;"></pre>
+        </details>
+    </div>
+</div>
+
+<!-- Proceed Button -->
+<div style="text-align: center; margin-top: 24px;">
+    <a href="/plan" class="btn btn-primary" id="proceedBtn" style="display: none;">
+        Proceed to Plan Generation →
+    </a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let profile = null;
+    let strategyDone = false;
+    let readinessDone = false;
+    let runbookDone = false;
+    
+    document.getElementById('profileForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        profile = Object.fromEntries(formData.entries());
+        profile.tier = parseInt(profile.tier);
+        profile.rto_min = parseInt(profile.rto_min);
+        profile.rpo_min = parseInt(profile.rpo_min);
+        profile.monthly_budget_usd = parseInt(profile.monthly_budget_usd);
+        
+        try {
+            const res = await fetch('/api/profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(profile),
+            });
+            const result = await res.json();
+            
+            document.getElementById('profileResult').classList.remove('hide');
+            document.getElementById('profileResult').innerHTML = `
+                <span class="st pass">Profile Saved</span>
+                <span style="margin-left: 8px;">Tier ${profile.tier}, RTO ${profile.rto_min}min, RPO ${profile.rpo_min}min</span>
+            `;
+            
+            checkProceed();
+        } catch (e) {
+            alert('Failed to save profile: ' + e.message);
+        }
+    });
+    
+    async function getStrategy() {
+        const btn = document.getElementById('getStrategyBtn');
+        const loading = document.getElementById('strategyLoading');
+        
+        btn.disabled = true;
+        loading.classList.remove('hide');
+        
+        try {
+            const res = await fetch('/api/strategy', { method: 'POST' });
+            const data = await res.json();
+            
+            const table = document.getElementById('strategyTable');
+            table.innerHTML = data.options.map(opt => `
+                <tr>
+                    <td class="f">
+                        ${opt.name}
+                        ${opt.name === data.recommended ? '<span class="badge recommended" style="margin-left: 8px;">Recommended</span>' : ''}
+                    </td>
+                    <td>${opt.expected_rto_min}min</td>
+                    <td>${opt.expected_rpo_min}min</td>
+                    <td>${(opt.relative_cost * 100).toFixed(0)}%</td>
+                    <td><span class="st ${opt.meets_targets ? 'pass' : 'fail'}">${opt.meets_targets ? 'Yes' : 'No'}</span></td>
+                </tr>
+            `).join('');
+            
+            document.getElementById('strategyRationale').innerHTML = `
+                <p><strong>${data.recommended}</strong></p>
+                <p style="color: var(--ink-2);">${data.rationale}</p>
+            `;
+            
+            document.getElementById('strategyResult').classList.remove('hide');
+            strategyDone = true;
+            checkProceed();
+            
+        } catch (e) {
+            alert('Failed to get strategy: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            loading.classList.add('hide');
+        }
+    }
+    
+    async function checkReadiness() {
+        const btn = document.getElementById('checkReadinessBtn');
+        btn.disabled = true;
+        btn.textContent = 'Running checks...';
+        
+        try {
+            const res = await fetch('/api/readiness', { method: 'POST' });
+            const data = await res.json();
+            
+            const checksDiv = document.getElementById('readinessChecks');
+            checksDiv.innerHTML = data.checks.map(check => `
+                <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line);">
+                    <span class="st ${check.status}">${check.status.toUpperCase()}</span>
+                    <span class="f">${check.name}</span>
+                    <span style="color: var(--ink-3); flex: 1;">${check.detail}</span>
+                    <details style="font-size: 12px;">
+                        <summary>Evidence</summary>
+                        <pre style="margin-top: 4px; font-size: 11px;">${JSON.stringify(check.evidence, null, 2)}</pre>
+                    </details>
+                </div>
+            `).join('');
+            
+            document.getElementById('readinessVerdict').innerHTML = data.go 
+                ? '<span class="st pass">GO</span> Ready for exercise'
+                : '<span class="st fail">NO-GO</span> Issues must be resolved';
+            document.getElementById('readinessSummary').textContent = data.summary;
+            
+            document.getElementById('readinessResult').classList.remove('hide');
+            readinessDone = true;
+            checkProceed();
+            
+        } catch (e) {
+            alert('Failed to check readiness: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Run Checks';
+        }
+    }
+    
+    async function reviewRunbook() {
+        const btn = document.getElementById('reviewRunbookBtn');
+        btn.disabled = true;
+        btn.textContent = 'Reviewing...';
+        
+        try {
+            const res = await fetch('/api/runbook', { method: 'POST' });
+            const data = await res.json();
+            
+            const table = document.getElementById('runbookTable');
+            table.innerHTML = data.steps.map(step => `
+                <tr>
+                    <td class="f">${step.step_no}</td>
+                    <td>${step.text}</td>
+                    <td><span class="st ${step.verdict === 'valid' ? 'pass' : step.verdict === 'stale' ? 'warn' : 'fail'}">${step.verdict}</span></td>
+                    <td style="color: var(--ink-2);">${step.reason || '—'}</td>
+                </tr>
+            `).join('');
+            
+            document.getElementById('updatedRunbook').textContent = data.updated_runbook_md || 'No updates needed';
+            
+            document.getElementById('runbookResult').classList.remove('hide');
+            runbookDone = true;
+            checkProceed();
+            
+        } catch (e) {
+            alert('Failed to review runbook: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Review Runbook';
+        }
+    }
+    
+    function checkProceed() {
+        const btn = document.getElementById('proceedBtn');
+        if (profile && strategyDone && readinessDone) {
+            btn.style.display = 'inline-block';
+        }
+    }
+</script>
+{% endblock %}
