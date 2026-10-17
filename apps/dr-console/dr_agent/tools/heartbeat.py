@@ -56,12 +56,12 @@ class HeartbeatWriter(threading.Thread):
         self._on_result = on_result
         self._interval = interval
         self._label = label
-        self._stop = threading.Event()
+        self._stop_event = threading.Event()
         # time-based seq: unique across runs without reading the table first
         self._seq = int(time.time() * 1000)
 
     def stop(self, timeout: float = 10) -> None:
-        self._stop.set()
+        self._stop_event.set()
         self.join(timeout)
 
     def write_once(self) -> tuple[int, datetime, bool, Optional[str]]:
@@ -79,14 +79,14 @@ class HeartbeatWriter(threading.Thread):
 
     def run(self) -> None:
         log.info("heartbeat writer started (interval=%ss)", self._interval)
-        while not self._stop.is_set():
+        while not self._stop_event.is_set():
             started = time.monotonic()
             result = self.write_once()
             try:
                 self._on_result(*result)
             except Exception:  # noqa: BLE001 - never kill the writer because of the sink
                 log.exception("heartbeat on_result failed")
-            self._stop.wait(max(0.0, self._interval - (time.monotonic() - started)))
+            self._stop_event.wait(max(0.0, self._interval - (time.monotonic() - started)))
         log.info("heartbeat writer stopped")
 
 

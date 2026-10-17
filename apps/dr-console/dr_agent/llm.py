@@ -34,7 +34,7 @@ class AgentResult(Generic[T]):
 
 class LLM:
     def __init__(self, endpoint: Optional[str] = None, deployment: Optional[str] = None,
-                 api_version: Optional[str] = None, timeout_s: float = 20.0, temperature: float = 0.2):
+                 api_version: Optional[str] = None, timeout_s: float = 60.0, temperature: float = 0.2):
         from azure.identity import DefaultAzureCredential, get_bearer_token_provider
         from openai import AzureOpenAI
 
