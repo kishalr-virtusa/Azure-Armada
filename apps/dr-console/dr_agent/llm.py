@@ -52,7 +52,9 @@ class LLM:
     def structured(self, system_prompt: str, payload: dict | str, schema: Type[T]) -> T:
         """One chat call whose reply is parsed into `schema` (strict JSON schema). Raises on failure."""
         user = payload if isinstance(payload, str) else json.dumps(payload, default=str, ensure_ascii=False)
-        resp = self.client.chat.completions.parse(
+        completions = self.client.chat.completions
+        parse = getattr(completions, "parse", None) or self.client.beta.chat.completions.parse  # SDK-version safe
+        resp = parse(
             model=self.deployment,
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": user}],
             response_format=schema,

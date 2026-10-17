@@ -39,7 +39,8 @@ echo "Creating deployment packages..."
 DEMO_ZIP="/tmp/demo-app.zip"
 (cd "$REPO_ROOT/apps/demo-app" && zip -r "$DEMO_ZIP" . -x "*.pyc" -x "__pycache__/*" -x ".env" -x "*.zip")
 
-# Console app
+# Console app (bundle the DR runbook reviewed by the Runbook agent)
+mkdir -p "$REPO_ROOT/apps/dr-console/runbooks" && cp "$REPO_ROOT/docs/runbooks/"*.md "$REPO_ROOT/apps/dr-console/runbooks/"
 CONSOLE_ZIP="/tmp/dr-console.zip"
 (cd "$REPO_ROOT/apps/dr-console" && zip -r "$CONSOLE_ZIP" . -x "*.pyc" -x "__pycache__/*" -x ".env" -x "*.zip" -x ".pytest_cache/*" -x "tests/*")
 
