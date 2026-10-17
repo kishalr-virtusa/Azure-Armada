@@ -11,8 +11,8 @@ from dr_agent.agents import prompt
 from dr_agent.llm import AgentResult, run_agent
 from dr_agent.models import Check, ReadinessReport, ReadinessSummary
 
-PARITY_IGNORE = {"REGION_NAME", "WEBSITE_HOSTNAME", "WEBSITE_SITE_NAME", "WEBSITE_RESOURCE_GROUP",
-                 "APPLICATIONINSIGHTS_CONNECTION_STRING", "WEBSITE_INSTANCE_ID"}
+PARITY_IGNORE = {"REGION_NAME", "APPLICATIONINSIGHTS_CONNECTION_STRING", "KV_REFRESH"}
+PARITY_IGNORE_PREFIXES = ("WEBSITE_", "WEBSITES_", "SCM_", "DIAGNOSTICS_", "APPSETTING_")
 SECRET_HINTS = ("PASSWORD", "SECRET", "KEY", "CONNECTION", "TOKEN")
 
 
@@ -24,7 +24,7 @@ def _mask(k: str, v: Optional[str]) -> Optional[str]:
 
 def parity_check(settings_a: dict[str, str], settings_b: dict[str, str], ignore: set[str] = PARITY_IGNORE) -> Check:
     """Compare app settings between regions. Missing keys = fail; differing non-secret values = warn."""
-    keys = (set(settings_a) | set(settings_b)) - ignore
+    keys = {k for k in (set(settings_a) | set(settings_b)) - ignore if not k.upper().startswith(PARITY_IGNORE_PREFIXES)}
     missing_in_b = sorted(k for k in keys if k in settings_a and k not in settings_b)
     missing_in_a = sorted(k for k in keys if k in settings_b and k not in settings_a)
     differs = sorted(k for k in keys if k in settings_a and k in settings_b and settings_a[k] != settings_b[k]
@@ -61,7 +61,8 @@ def fog_check(fog_status: dict, lag_s: Optional[int]) -> Check:
 
 
 def probe_check(name: str, probe: dict, expect_region: str) -> Check:
-    ok = bool(probe.get("ok")) and probe.get("db_ok") is not False and probe.get("region") in (expect_region, None)
+    region_ok = probe.get("region_key", expect_region) == expect_region
+    ok = bool(probe.get("ok")) and probe.get("db_ok") is not False and region_ok
     return Check(name=name, status="pass" if ok else "fail",
                  detail="healthy" if ok else f"unhealthy: {probe.get('error') or probe}", evidence=probe)
 

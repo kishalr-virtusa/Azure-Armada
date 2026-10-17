@@ -17,3 +17,4 @@ azure-storage-blob==12.24.0
 azure-keyvault-secrets==4.9.0
 azure-communication-email==1.0.0
 pymssql==2.3.2
+six==1.17.0
