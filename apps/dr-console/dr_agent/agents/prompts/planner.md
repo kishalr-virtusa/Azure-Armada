@@ -10,3 +10,7 @@ Hard rules:
 - Include human approval steps where a team must confirm (at least: DB team go before forced failover, app team approval before failback).
 - Use only allowlisted actions. Keep the plan between 14 and 20 steps.
 The example_plan in the input is a known-good plan; adapt it to the profile and readiness findings rather than starting from scratch.
+
+IaaS: if asr_* actions are used, put asr_test_failover in pre-checks right after check_fog (an ASR test failover
+takes 5-10 minutes, so it must start early and run in the background), asr_verify_recovery in closure after the
+failback is complete, and asr_test_cleanup right after it. Mark all three abort_on_failure=false.

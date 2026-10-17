@@ -46,11 +46,16 @@ def run(profile: AppProfile, inventory_summary: dict) -> AgentResult[StrategyRec
     payload = {"profile": profile.model_dump(), "inventory": inventory_summary,
                "cost_guide": [dict(zip(("name", "rto_min", "rpo_min", "relative_cost", "note"), s)) for s in STRATEGY_GUIDE]}
 
+    facts = {o.name: o for o in options_for(profile)}
+    expected = fallback(profile).recommended  # cheapest strategy whose numbers really meet RTO and RPO
+
     def validate(rec: StrategyRec) -> None:
-        if {o.name for o in rec.options} != {s[0] for s in STRATEGY_GUIDE}:
+        if {o.name for o in rec.options} != set(facts):
             raise ValueError("architect must evaluate all five strategies")
-        chosen = next((o for o in rec.options if o.name == rec.recommended), None)
-        if chosen is None or (not chosen.meets_targets and any(o.meets_targets for o in rec.options)):
-            raise ValueError("recommended strategy must meet RTO/RPO when another option does")
+        if rec.recommended != expected:
+            raise ValueError(f"recommended {rec.recommended!r} but the cheapest strategy meeting RTO {profile.rto_min} min / "
+                             f"RPO {profile.rpo_min} min is {expected!r}")
+        # numbers and target checks are facts from the guide, never the model's estimate; keep the model's notes
+        rec.options = [facts[o.name].model_copy(update={"note": o.note or facts[o.name].note}) for o in rec.options]
 
     return run_agent("architect", prompt("architect"), payload, StrategyRec, lambda: fallback(profile), validate=validate)

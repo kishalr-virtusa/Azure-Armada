@@ -64,3 +64,41 @@ def test_planner_fallback_returns_default():
     from dr_agent.agents import planner
     res = planner.run(AppProfile(), None, None, {})
     assert res.source == "fallback" and len(res.output.steps) == len(default_plan().steps)
+
+
+def test_architect_rejects_option_that_misses_targets_and_fixes_numbers():
+    from dr_agent.agents import architect
+    from dr_agent.models import AppProfile, StrategyOption, StrategyRec
+    prof = AppProfile(rto_min=30, rpo_min=15)
+    wrong = StrategyRec(recommended="pilot-light", rationale="cheapest", design_mapping=[], options=[
+        StrategyOption(name=n, expected_rto_min=1, expected_rpo_min=1, relative_cost=1.0, meets_targets=True, note="llm")
+        for n, *_ in architect.STRATEGY_GUIDE])
+    right = wrong.model_copy(update={"recommended": "warm-standby"})
+
+    class FakeLLM:
+        def __init__(self, out): self.out = out
+        def structured(self, *a): return self.out.model_copy(deep=True)
+
+    r = architect.run_agent  # noqa: F841 - keep import path
+    from dr_agent import llm as llm_mod
+    res = llm_mod.run_agent("architect", "p", {}, StrategyRec, lambda: architect.fallback(prof), llm=FakeLLM(wrong),
+                            validate=None)
+    assert res.output.recommended == "pilot-light"  # sanity: without validation the wrong answer would pass
+
+    import pytest  # noqa: F401
+    # through architect.run the wrong pick is rejected -> fallback picks warm-standby
+    import dr_agent.agents.architect as A
+    orig = A.run_agent
+    A.run_agent = lambda name, sp, payload, schema, fb, validate=None: llm_mod.run_agent(
+        name, sp, payload, schema, fb, llm=FakeLLM(wrong), validate=validate)
+    try:
+        out = A.run(prof, {}).output
+        assert out.recommended == "warm-standby"
+        A.run_agent = lambda name, sp, payload, schema, fb, validate=None: llm_mod.run_agent(
+            name, sp, payload, schema, fb, llm=FakeLLM(right), validate=validate)
+        out = A.run(prof, {}).output
+        pl = next(o for o in out.options if o.name == "pilot-light")
+        assert out.recommended == "warm-standby" and pl.expected_rto_min == 120 and pl.meets_targets is False
+        assert pl.note == "llm"
+    finally:
+        A.run_agent = orig
