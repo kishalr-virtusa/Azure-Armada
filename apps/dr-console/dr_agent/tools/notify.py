@@ -1,6 +1,8 @@
 """Notification operations (console + email)."""
 
 import logging
+import threading
+import time
 from typing import Literal
 
 from azure.communication.email import EmailClient
@@ -51,55 +53,76 @@ def notify(
         logger.error(f"Failed to add notification: {e}")
         result["notification_error"] = str(e)
     
-    # Send email for important notifications
+    # Email for important notifications: delivered in the background so the DR engine never waits on email
     email_kinds = {"action", "success", "failure"}
-    if send_email and kind in email_kinds and config.notify_email_to and config.acs_connection_string:
-        try:
-            _send_email(kind, title, body, link)
-            result["email_sent"] = True
-            logger.info(f"Email sent to {config.notify_email_to}")
-        except Exception as e:
-            logger.error(f"Failed to send email: {e}")
-            result["email_sent"] = False
-            result["email_error"] = str(e)
-    elif send_email and kind in email_kinds and config.notify_email_to and _resend_key():
-        try:
-            _send_via_resend(kind, title, body, link)
-            result["email_sent"] = True
-            result["email_channel"] = "resend"
-        except Exception as e:
-            logger.error(f"Resend email failed, falling back to Azure Monitor: {e}")
-            result["email_error"] = str(e)
-            result["email_sent"] = _try_azure_monitor(kind, title, body, link, exercise_id)
-    elif send_email and kind in email_kinds and config.notify_email_to and config.appinsights_connection_string:
-        try:
-            _send_via_azure_monitor(kind, title, body, link, exercise_id)
-            result["email_sent"] = True
-            result["email_channel"] = "azure-monitor"
-        except Exception as e:
-            logger.error(f"Failed to queue Azure Monitor email: {e}")
-            result["email_sent"] = False
-            result["email_error"] = str(e)
+    if send_email and kind in email_kinds and config.notify_email_to and email_channels():
+        threading.Thread(target=deliver_email, name="email",
+                         args=(kind, title, body, link, exercise_id, result.get("notification_id")), daemon=True).start()
+        result["email_queued"] = True
     else:
-        result["email_sent"] = False
-    
+        result["email_queued"] = False
+
     return result
+
+
+def email_channels() -> list[str]:
+    """Configured channels in priority order: ACS (if allowed) -> Resend (seconds) -> Azure Monitor (1-3 min)."""
+    ch = []
+    if config.acs_connection_string:
+        ch.append("acs")
+    if _resend_key():
+        ch.append("resend")
+    if config.appinsights_connection_string:
+        ch.append("azure-monitor")
+    return ch
+
+
+RETRY_DELAYS_S = (0, 2, 5)  # per channel: 3 attempts
+
+
+def deliver_email(kind: str, title: str, body: str, link: str | None = None,
+                  exercise_id: str | None = None, notification_id: str | None = None) -> dict:
+    """Try each channel (with retries) until one accepts the email. Records the outcome. Never raises."""
+    senders = {
+        "acs": lambda: _send_email(kind, title, body, link),
+        "resend": lambda: _send_via_resend(kind, title, body, link),
+        "azure-monitor": lambda: _send_via_azure_monitor(kind, title, body, link, exercise_id),
+    }
+    errors: list[str] = []
+    started = time.monotonic()
+    for ch in email_channels():
+        for delay in RETRY_DELAYS_S:
+            time.sleep(delay)
+            try:
+                senders[ch]()
+                out = {"email_sent": True, "email_channel": ch, "email_ms": int((time.monotonic() - started) * 1000),
+                       "email_errors": "; ".join(errors)[:500]}
+                logger.info(f"Email '{title}' delivered via {ch} in {out['email_ms']} ms")
+                _record(notification_id, out)
+                return out
+            except Exception as e:  # noqa: BLE001
+                errors.append(f"{ch}: {type(e).__name__}: {e}"[:200])
+                logger.warning(f"Email via {ch} failed: {errors[-1]}")
+    out = {"email_sent": False, "email_channel": "", "email_errors": "; ".join(errors)[:500]}
+    logger.error(f"Email '{title}' NOT delivered: {out['email_errors']}")
+    _record(notification_id, out)
+    return out
+
+
+def _record(notification_id: str | None, fields: dict) -> None:
+    if not notification_id:
+        return
+    try:
+        from azure.data.tables import UpdateMode
+        store.get_table_client("notifications").upsert_entity(
+            {"PartitionKey": "global", "RowKey": notification_id, **fields}, mode=UpdateMode.MERGE)
+    except Exception:  # noqa: BLE001
+        logger.exception("could not record email status")
 
 
 def _resend_key() -> str:
     import os
     return os.getenv("RESEND_API_KEY", "").strip()
-
-
-def _try_azure_monitor(kind, title, body, link, exercise_id) -> bool:
-    if not config.appinsights_connection_string:
-        return False
-    try:
-        _send_via_azure_monitor(kind, title, body, link, exercise_id)
-        return True
-    except Exception as e:  # noqa: BLE001
-        logger.error(f"Azure Monitor email failed: {e}")
-        return False
 
 
 def _send_via_resend(kind: str, title: str, body: str, link: str | None) -> None:

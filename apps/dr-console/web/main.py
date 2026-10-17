@@ -258,6 +258,18 @@ def api_command(xid: str, cmd: str):
     return service.send_command(xid, cmd)
 
 
+@app.post("/api/notifications/test-email", dependencies=[api])
+async def api_test_email():
+    """Pre-demo check: synchronously deliver a test email and report which channel delivered it and how fast."""
+    from dr_agent.config import config
+    from dr_agent.tools.notify import deliver_email, email_channels
+    if not config.notify_email_to:
+        return {"email_sent": False, "email_errors": "NOTIFY_EMAIL_TO is not set"}
+    out = await run_in_threadpool(deliver_email, "info", "Test email from DR Agent",
+                                  "If you can read this, DR Agent email notifications are working.", "/")
+    return {**out, "to": config.notify_email_to, "channels": email_channels()}
+
+
 @app.get("/api/notifications", dependencies=[api])
 async def api_notifications(after: Optional[str] = None):
     from dr_agent.tools import store
