@@ -62,7 +62,7 @@ def get_status(max_age_s: float = 5.0) -> dict:
     }
     routing = _safe(resolve_tm_dns)
     if isinstance(routing, dict) and "error" not in routing:
-        routing["active_region"] = ("A (Central India)" if routing.get("points_to_region_a")
+        routing["active_region"] = ("A (East Asia)" if routing.get("points_to_region_a")
                                     else "B (Southeast Asia)" if routing.get("points_to_region_b") else "unknown")
     v = {
         "region_a": _not_deployed(_safe(get_webapp_state, config.webapp_a_name), "Region A web app"),
@@ -371,7 +371,7 @@ def public_live() -> dict:
     now = datetime.now(timezone.utc)
     out: dict[str, Any] = {
         "state": "normal", "exercise_id": None, "headline": "All systems normal. DR drills verified by DR Agent.",
-        "primary_region": "Central India", "serving_region": _serving_region(), "server_time": now.isoformat(),
+        "primary_region": "East Asia", "serving_region": _serving_region(), "server_time": now.isoformat(),
         "t0": None, "elapsed_s": None, "eta_s": None, "eta_basis": "", "rto_target_s": None, "rpo_target_s": None,
         "rto_s": None, "rpo_s": None, "rto_met": None, "rpo_met": None, "current_step": "", "steps_done": 0,
         "steps_total": 0, "chaos": False, "timeline": [],
@@ -402,18 +402,18 @@ def public_live() -> dict:
             out["iaas"] = {"state": "recovered" if iaas_s is not None else ("recovering" if m.get("iaas_started") else "idle"),
                            "recovered_s": iaas_s}
             if status in ("rolled_back",):
-                out.update(state="rolled_back", headline="Drill rolled back. Central India is serving again.")
+                out.update(state="rolled_back", headline="Drill rolled back. East Asia is serving again.")
             elif status == "completed":
-                out.update(state="completed", headline="DR drill complete. Back in Central India.")
+                out.update(state="completed", headline="DR drill complete. Back in East Asia.")
             elif m.get("t_failback_start") and not m.get("t_failback_done"):
-                out.update(state="failing_back", headline="Recovered. Now returning service to Central India.")
+                out.update(state="failing_back", headline="Recovered. Now returning service to East Asia.")
             elif t_rec:
                 out.update(state="recovered", headline=f"Recovered in Southeast Asia in {fmt_duration(out['rto_s'])}.")
             elif t0:
                 eta, basis = _eta_basis(xid)
                 out.update(state="paused" if status == "paused_failed" else "outage",
                            eta_s=round(max(0.0, eta - out["elapsed_s"]), 1), eta_basis=basis,
-                           headline="Central India is down. DR Agent is failing over to Southeast Asia.")
+                           headline="East Asia is down. DR Agent is failing over to Southeast Asia.")
             elif status in ("approved", "running", "waiting_human"):
                 out.update(state="armed", headline="A DR drill is about to start. Keep paying!")
             evs = [e for e in store.get_events(xid) if e.get("kind") in PUBLIC_EVENT_KINDS][-8:]

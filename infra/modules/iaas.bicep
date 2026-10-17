@@ -19,7 +19,7 @@ param projectTag string = 'dr-agent'
 param sshPublicKey string
 
 @description('VM size (Free Trial: B-series, 4 cores per region; ~$0.01/h)')
-param vmSize string = 'Standard_B2ts_v2' // B1s often has no capacity in centralindia
+param vmSize string = 'Standard_B2ts_v2' // B1s capacity is often short in Asian regions
 
 var tags = { project: projectTag, tier: 'iaas' }
 var vmName = 'dra-vm-reports'
@@ -61,7 +61,7 @@ runcmd:
 
 // ---------------------------------------------------------------- Region A: source VM
 resource vnetA 'Microsoft.Network/virtualNetworks@2024-05-01' = {
-  name: 'dra-vnet-cin-${suffix}'
+  name: 'dra-vnet-eas-${suffix}'
   location: locationA
   tags: tags
   properties: {

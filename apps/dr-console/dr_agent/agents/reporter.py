@@ -11,7 +11,7 @@ def fallback(facts: dict) -> ReportNarrative:
     rto_ok, rpo_ok = r.get("rto_met"), r.get("rpo_met")
     verdict = "PASSED" if rto_ok and rpo_ok else "FAILED"
     summary = (f"A DR exercise was executed for {facts.get('profile', {}).get('name', 'the application')}: "
-               f"outage injected in Central India, failover to Southeast Asia, validation and failback. "
+               f"outage injected in East Asia, failover to Southeast Asia, validation and failback. "
                f"Measured RTO {r.get('rto')} (target {r.get('rto_target')}) and RPO {r.get('rpo')} "
                f"(target {r.get('rpo_target')}). Overall result: {verdict}.")
     remediation = [RemediationItem(item=x, owner="app", priority="medium") for x in facts.get("open_findings", [])[:6]]

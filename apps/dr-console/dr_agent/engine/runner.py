@@ -24,7 +24,7 @@ from dr_agent.tools import store
 
 log = logging.getLogger(__name__)
 
-REGION_NAMES = {"A": "Central India", "B": "Southeast Asia"}
+REGION_NAMES = {"A": "East Asia", "B": "Southeast Asia"}
 FINAL = {"completed", "rolled_back", "aborted"}
 _RUNNERS: dict[str, "ExerciseRunner"] = {}
 _LOCK = threading.Lock()
@@ -511,7 +511,7 @@ class ExerciseRunner(threading.Thread):
             self.stop_heartbeat()
             self.update(status="rolled_back", current_step="", finished_at=iso(utcnow()))
             self.event("info", "Rollback complete: Region A is primary again")
-            self.notify("success", "Rollback complete", "Region A (Central India) is serving again.")
+            self.notify("success", "Rollback complete", "Region A (East Asia) is serving again.")
         except Exception as e:  # noqa: BLE001
             self.update(status="failed", error=f"rollback failed: {e}"[:1000])
             self.event("error", f"Rollback failed: {e}")

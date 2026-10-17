@@ -12,7 +12,7 @@ RG="${WORKLOAD_RG:-rg-dra-workload}"
 SFX=$(az deployment sub show -n dra-deployment --query properties.outputs.suffix.value -o tsv 2>/dev/null || true)
 [[ -n "$SFX" ]] || SFX=$(az resource list -g "$RG" --resource-type Microsoft.RecoveryServices/vaults --query "[0].name" -o tsv | sed 's/^dra-rsv-//')
 API="api-version=2024-04-01"
-LOC_A="${LOCATION_A:-centralindia}"
+LOC_A="${LOCATION_A:-eastasia}"
 LOC_B="${LOCATION_B:-southeastasia}"
 
 VAULT="/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.RecoveryServices/vaults/dra-rsv-$SFX"
@@ -52,7 +52,7 @@ enable() {
   local vm_id="$RGID/providers/Microsoft.Compute/virtualMachines/$VM"
   local disk_id; disk_id=$(az vm show -g "$RG" -n "$VM" --query storageProfile.osDisk.managedDisk.id -o tsv)
   local cache_id="$RGID/providers/Microsoft.Storage/storageAccounts/draasrcache$SFX"
-  local vnet_a="$RGID/providers/Microsoft.Network/virtualNetworks/dra-vnet-cin-$SFX"
+  local vnet_a="$RGID/providers/Microsoft.Network/virtualNetworks/dra-vnet-eas-$SFX"
   local vnet_b="$RGID/providers/Microsoft.Network/virtualNetworks/dra-vnet-sea-$SFX"
 
   ensure "$VAULT/replicationFabrics/$FAB_A" \

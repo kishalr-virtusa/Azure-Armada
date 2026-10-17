@@ -27,7 +27,7 @@ FOG_LISTENER=$(echo "$OUTPUTS" | jq -r '.sqlFogListener.value')
 SUFFIX=$(echo "$OUTPUTS" | jq -r '.suffix.value')
 
 FOG_NAME="dra-fog-${SUFFIX}"
-SQL_SERVER_A="dra-sql-cin-${SUFFIX}"
+SQL_SERVER_A="dra-sql-eas-${SUFFIX}"
 
 echo "Testing endpoints..."
 echo ""

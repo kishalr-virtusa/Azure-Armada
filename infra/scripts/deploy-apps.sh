@@ -22,7 +22,7 @@ SUFFIX=$(echo "$OUTPUTS" | jq -r '.suffix.value')
 WORKLOAD_RG="rg-dra-workload"
 CONTROL_RG="rg-dra-control"
 
-WEBAPP_A="dra-app-cin-${SUFFIX}"
+WEBAPP_A="dra-app-eas-${SUFFIX}"
 WEBAPP_B="dra-app-sea-${SUFFIX}"
 CONSOLE_APP=$(echo "$OUTPUTS" | jq -r ".consoleAppName.value // \"dra-console-${SUFFIX}\"")
 

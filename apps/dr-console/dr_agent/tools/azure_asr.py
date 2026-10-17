@@ -65,7 +65,7 @@ class Arm:
 
 class AsrTestFailover:
     def __init__(self, sub: str, rg: str, suffix: str, recovery_rg: str = "rg-dra-recovery",
-                 vm: str = "dra-vm-reports", loc_a: str = "centralindia", loc_b: str = "southeastasia"):
+                 vm: str = "dra-vm-reports", loc_a: str = "eastasia", loc_b: str = "southeastasia"):
         self.arm = Arm()
         self.sub, self.recovery_rg, self.vm = sub, recovery_rg, vm
         vault = f"/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.RecoveryServices/vaults/dra-rsv-{suffix}"

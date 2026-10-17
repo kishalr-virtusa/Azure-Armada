@@ -32,12 +32,12 @@ td{padding:6px;border-bottom:1px solid var(--line);vertical-align:top;color:var(
 </style></head><body><div class="wrap">
 <header><div class="eyebrow">Disaster Recovery (DR) Agent · Autonomous Disaster Recovery Validation</div>
 <h1>DR Exercise Report: {{ profile.name }}</h1>
-<div class="sub">Exercise {{ xid }} · generated {{ generated }} · Region A Central India → Region B Southeast Asia ·
+<div class="sub">Exercise {{ xid }} · generated {{ generated }} · Region A East Asia → Region B Southeast Asia ·
 <span class="st {{ 'pass' if overall else 'fail' }}">{{ 'PASSED' if overall else 'FAILED' }}</span></div></header>
 <div class="kpis">
  <div class="kpi {{ 'ok' if rto_met else 'bad' }}"><div class="l">RTO (measured)</div><div class="v">{{ rto }}</div><div class="x">target {{ profile.rto_min }} min · {{ '✅ met' if rto_met else '❌ missed' }}</div></div>
  <div class="kpi {{ 'ok' if rpo_met else 'bad' }}"><div class="l">RPO (measured)</div><div class="v">{{ rpo }}</div><div class="x">target {{ profile.rpo_min }} min · {{ '✅ met' if rpo_met else '❌ missed' }}</div></div>
- <div class="kpi"><div class="l">Failback</div><div class="v">{{ failback }}</div><div class="x">back to Central India</div></div>
+ <div class="kpi"><div class="l">Failback</div><div class="v">{{ failback }}</div><div class="x">back to East Asia</div></div>
  <div class="kpi"><div class="l">Strategy</div><div class="v" style="font-size:22px">{{ strategy }}</div><div class="x">tier {{ profile.tier }}</div></div>
 </div>
 <div class="card"><h2>Executive summary</h2><p style="margin:0">{{ n.executive_summary }}</p></div>

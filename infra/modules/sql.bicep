@@ -25,11 +25,11 @@ param projectTag string = 'dr-agent'
 @description('Database name')
 param databaseName string = 'paymentsdb'
 
-var serverNameA = 'dra-sql-cin-${suffix}'
+var serverNameA = 'dra-sql-eas-${suffix}'
 var serverNameB = 'dra-sql-sea-${suffix}'
 var fogName = 'dra-fog-${suffix}'
 
-// Primary SQL Server (Region A - Central India)
+// Primary SQL Server (Region A - East Asia)
 resource sqlServerA 'Microsoft.Sql/servers@2023-05-01-preview' = {
   name: serverNameA
   location: locationA

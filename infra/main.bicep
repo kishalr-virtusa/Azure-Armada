@@ -4,7 +4,7 @@
 targetScope = 'subscription'
 
 @description('Location for Region A (primary)')
-param locationA string = 'centralindia'
+param locationA string = 'eastasia'
 
 @description('Location for Region B (secondary)')
 param locationB string = 'southeastasia'
@@ -82,7 +82,8 @@ var controlRgName = 'rg-dra-control'
 // Resource Group for workload (demo app, SQL, Traffic Manager)
 resource workloadRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   name: workloadRgName
-  location: locationA
+  // RG location is only metadata and cannot change once created; it holds resources of both regions
+  location: controlLocation
   tags: {
     project: projectTag
   }
@@ -156,15 +157,15 @@ module sql 'modules/sql.bicep' = {
   }
 }
 
-// Web App A (Region A - Central India)
+// Web App A (Region A - East Asia)
 module webAppA 'modules/webapp.bicep' = {
   name: 'webapp-a-deployment'
   scope: workloadRg
   params: {
     location: locationA
     suffix: suffix
-    regionShort: 'cin'
-    regionName: 'Central India'
+    regionShort: 'eas'
+    regionName: 'East Asia'
     drLiveUrl: '${consoleBaseUrl}/public/live'
     publicUrl: effectivePublicUrl
     altPublicUrl: effectiveAltUrl
@@ -291,7 +292,7 @@ module console 'modules/console.bicep' = {
     foundryProjectEndpoint: useExistingOpenAI ? '' : openAI.outputs.projectEndpoint
     tmFqdn: 'dra-tm-${suffix}.trafficmanager.net'
     tmProfileName: 'dra-tm-${suffix}'
-    webAppAName: 'dra-app-cin-${suffix}'
+    webAppAName: 'dra-app-eas-${suffix}'
     webAppBName: 'dra-app-sea-${suffix}'
     sqlServerAName: sql.outputs.sqlServerAName
     sqlServerBName: sql.outputs.sqlServerBName

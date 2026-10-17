@@ -7,7 +7,7 @@ param location string
 @description('Suffix for unique naming')
 param suffix string
 
-@description('Region short name (cin for centralindia, sin for southindia)')
+@description('Region short name (eas for eastasia, sea for southeastasia)')
 param regionShort string
 
 @description('Full region name for app settings')

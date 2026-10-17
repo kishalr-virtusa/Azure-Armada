@@ -18,7 +18,7 @@ STRATEGY_GUIDE = [
 DESIGN_MAPPING = {
     "warm-standby": [
         "Region B App Service (B1) kept running as a warm standby behind Traffic Manager priority routing.",
-        "Azure SQL failover group replicates paymentsdb from Central India to Southeast Asia continuously.",
+        "Azure SQL failover group replicates paymentsdb from East Asia to Southeast Asia continuously.",
         "Failover = SQL failover group switch + Traffic Manager endpoint switch, orchestrated by the DR Agent.",
         "Failback = planned (no data loss) SQL failover back to Region A + endpoint re-enable.",
     ],
@@ -39,7 +39,7 @@ def fallback(profile: AppProfile) -> StrategyRec:
            f"(expected RTO ~{best.expected_rto_min} min, RPO ~{best.expected_rpo_min} min, ~{best.relative_cost}x single-region cost)."
            if fitting else f"No strategy meets RTO {profile.rto_min} / RPO {profile.rpo_min} min; {best.name} is the closest.")
     return StrategyRec(recommended=best.name, options=opts, rationale=why,
-                       design_mapping=DESIGN_MAPPING.get(best.name, [f"Implement {best.name} across Central India and Southeast Asia."]))
+                       design_mapping=DESIGN_MAPPING.get(best.name, [f"Implement {best.name} across East Asia and Southeast Asia."]))
 
 
 def run(profile: AppProfile, inventory_summary: dict) -> AgentResult[StrategyRec]:

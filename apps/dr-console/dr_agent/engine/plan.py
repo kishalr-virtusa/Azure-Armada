@@ -129,7 +129,7 @@ def default_plan() -> ExercisePlan:
         _step("cl-2", "closure", "Generate report & notify stakeholders", "dr-agent", "automated", "generate_report", deps=["cl-1"], criteria="Report published", abort=False),
     ]
     return ExercisePlan(steps=s, assumptions=[
-        "Region A (Central India) is primary and Region B (Southeast Asia) is a warm standby.",
+        "Region A (East Asia) is primary and Region B (Southeast Asia) is a warm standby.",
         "The IaaS reports VM is replicated by Azure Site Recovery; it is validated with a non-disruptive TEST failover.",
         "The outage is simulated by stopping the Region A web app; the database is failed over as if Region A were lost.",
         "No production systems are affected; this runs on the demo environment.",

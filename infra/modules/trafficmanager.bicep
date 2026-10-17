@@ -52,7 +52,7 @@ resource tmProfile 'Microsoft.Network/trafficmanagerprofiles@2022-04-01' = {
   }
 }
 
-// Endpoint A (Region A - Central India) - Priority 1
+// Endpoint A (Region A - East Asia) - Priority 1
 resource endpointA 'Microsoft.Network/trafficmanagerprofiles/azureEndpoints@2022-04-01' = {
   parent: tmProfile
   name: 'endpoint-a'
