@@ -19,7 +19,7 @@ Discovery/inventory only supports the agents. It is NOT a headline feature.
 1. "Contoso Payments" (a small, nicely styled web app) runs in Region A (Central India). It writes a heartbeat transaction every 2s.
 2. The console shows Phase 1: profile (Tier 1, RTO 30 min, RPO 15 min) → recommended strategy *warm standby* with costs → readiness checks → runbook review flags a stale step.
 3. Phase 2: the agent generates the exercise plan. A human step ("DB team confirms go") is approved in the console, with a notification in **Google Chat**.
-4. Outage injected: the Region A app is stopped. The agent fails over the SQL failover group, switches Front Door to Region B and validates.
+4. Outage injected: the Region A app is stopped. The agent fails over the SQL failover group, switches Traffic Manager to Region B and validates.
 5. The console shows **RTO 4m 12s ✅ (target 30m)** and **RPO 6s ✅ (target 15m)**. The agent fails back to Region A and publishes the report.
 
 ## Principles

@@ -20,7 +20,7 @@ Acceptance criteria:
 
 1. `infra/scripts/deploy.sh` SHALL deploy everything in `tech.md` idempotently into two resource groups: `rg-dra-workload` and `rg-dra-control`.
 2. THE SQL setup SHALL include servers in Region A and Region B, database `paymentsdb` (Basic), and a failover group with a manual failover policy.
-3. Front Door SHALL have one endpoint and an origin group with Region A at priority 1 and Region B at priority 2, health-probing `/health` every 30s.
+3. Traffic Manager SHALL have one endpoint and an origin group with Region A at priority 1 and Region B at priority 2, health-probing `/health` every 30s.
 4. THE console App Service SHALL have a system-assigned managed identity with **Contributor on `rg-dra-workload` only**, and Storage Table/Blob Data Contributor on the control storage account.
 5. `infra/scripts/budget.sh` SHALL create a subscription budget with alerts at $50, $100 and $150.
 6. `infra/scripts/teardown.sh` SHALL delete both resource groups after confirmation.
@@ -35,7 +35,7 @@ Acceptance criteria:
    - failover group replication state + lag
    - Region B app `/health` reachable directly
    - **app-settings parity** between Region A and Region B (keys and non-secret values; ignore `REGION_NAME`)
-   - Front Door origins healthy/enabled
+   - Traffic Manager origins healthy/enabled
    - Key Vault reachable
 4. WHEN "Review runbook" is clicked THE **Runbook agent** SHALL compare `docs/runbooks/payments-dr-runbook.md` with the live inventory and return each step as valid / stale / missing, with a suggested correction and an updated runbook.
 5. EACH check result SHALL be stored and shown with a timestamp and evidence (raw values).
@@ -66,9 +66,9 @@ Acceptance criteria:
    - `stop_webapp(region)` / `start_webapp(region)`
    - `inject_outage(region)` = stop the app in that region and record t0
    - `sql_failover(target_region, allow_data_loss)`
-   - `frontdoor_set_origin(region, enabled)`
+   - `tm_set_endpoint(region, enabled)`
    - `wait_healthy(url, timeout_s)`
-   - `probe_frontdoor(expect_region)`
+   - `probe_tm(expect_region)`
    - `measure_rpo()`
    - `snapshot_inventory()`
    - `notify(text)`
@@ -77,12 +77,12 @@ Acceptance criteria:
 **User story:** As an auditor, I want measured, evidence-backed RTO and RPO compared with the targets.
 
 1. A **heartbeat writer** in the engine SHALL insert a row every 2s through the failover group listener while an exercise runs, recording each acknowledged write (seq, client timestamp) in the timeline store.
-2. **RTO** = time from the outage injection (t0) to the first successful `probe_frontdoor` that returns 200 from the DR region with `db_ok=true`.
+2. **RTO** = time from the outage injection (t0) to the first successful `probe_tm` that returns 200 from the DR region with `db_ok=true`.
 3. **RPO** = timestamp of the last heartbeat acknowledged before the DB failover was triggered (t_fo), minus the timestamp of the newest heartbeat present in the new primary DB after failover. It is 0 if nothing was lost, and never negative.
    - The disaster failover uses a **forced failover (`allow_data_loss=true`)**, as in a real regional loss, so the measured RPO reflects real replication lag.
    - Failback uses a planned failover.
 4. THE console SHALL show both values against the targets with ✅/❌, plus the raw evidence (t0, recovery time, seq numbers).
-5. Validation SHALL include a functional check: `POST /api/txn` via Front Door succeeds after failover.
+5. Validation SHALL include a functional check: `POST /api/txn` via Traffic Manager succeeds after failover.
 
 ## Requirement 7: Failback & closure
 1. After validation, the plan SHALL perform failback:
@@ -90,7 +90,7 @@ Acceptance criteria:
    - wait until healthy
    - SQL failover back to Region A (planned, no data loss)
    - enable the Region A origin
-   - verify Front Door serves Region A
+   - verify Traffic Manager serves Region A
    - stop the heartbeat
 2. Failback time SHALL be measured and reported separately.
 3. THE exercise SHALL end with the environment in its original state, verified by an inventory snapshot diff.
@@ -107,7 +107,7 @@ Acceptance criteria:
 3. (Stretch) For a parity gap, the agent SHALL propose the exact fix (app setting / Bicep diff) and can apply it after approval.
 
 ## Requirement 9: Console UX
-1. Pages: **Overview** (live status of both regions + Front Door), **Phase 1**, **Plan**, **Live exercise** (timeline that updates every 2s, current step, approvals, kill switch, live RTO timer), **Results & report**.
+1. Pages: **Overview** (live status of both regions + Traffic Manager), **Phase 1**, **Plan**, **Live exercise** (timeline that updates every 2s, current step, approvals, kill switch, live RTO timer), **Results & report**.
 2. Clean, modern styling. It must look good on a projector (large type, high contrast).
 3. Simple auth: a shared passcode from Key Vault. Good enough for a hackathon. (Stretch: Entra ID sign-in via App Service Authentication.)
 

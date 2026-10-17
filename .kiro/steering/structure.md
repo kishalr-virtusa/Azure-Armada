@@ -9,7 +9,7 @@ inclusion: always
 infra/
   main.bicep               subscription-scope entry: creates RGs, calls modules
   modules/                 log.bicep, keyvault.bicep, storage.bicep, sql.bicep, webapp.bicep,
-                           frontdoor.bicep, console.bicep, roles.bicep
+                           trafficmanager.bicep, console.bicep, roles.bicep
   parameters.json          names, regions, SKUs (no secrets)
   scripts/                 deploy.sh, teardown.sh, budget.sh, seed-secrets.sh, deploy-apps.sh
 apps/
@@ -24,7 +24,7 @@ apps/
                            ExercisePlan, PlanStep, Measurement, ExerciseReport
       agents/              architect.py, readiness.py, runbook.py, planner.py, validator.py, reporter.py
                            (+ prompts/*.md for each agent's system prompt)
-      tools/               azure_webapp.py, azure_sql.py, azure_frontdoor.py, inventory.py,
+      tools/               azure_webapp.py, azure_sql.py, azure_trafficmanager.py, inventory.py,
                            probes.py, heartbeat.py, gchat.py, store.py (Tables/Blob)
       engine/              orchestrator.py (phase state machine), executor.py (runs plan steps),
                            measurements.py (RTO/RPO math)

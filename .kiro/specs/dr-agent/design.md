@@ -9,11 +9,11 @@
                ├─ web/ (FastAPI + Jinja, polling every 2s)
                ├─ engine/orchestrator  ── phase state machine, one exercise at a time
                ├─ engine/executor      ── runs plan steps via tools (allowlist)
-               ├─ agents/*             ── Azure OpenAI gpt-4.1-mini (AI Foundry), structured outputs
+               ├─ agents/*             ── Azure OpenAI gpt-4o-mini (AI Foundry), structured outputs
                └─ tools/*              ── Azure SDK (web, sql, cdn/afd, resource graph), probes, heartbeat
                      │ Contributor on rg-dra-workload only
                      ▼
- Front Door Standard (endpoint /, /health, /api/*, caching OFF)
+ Traffic Manager Standard (endpoint /, /health, /api/*, caching OFF)
    origin group: A (prio 1) ── App Service B1 centralindia  ─┐
                  B (prio 2) ── App Service B1 southindia    ─┤─ SQL failover group listener
    SQL server A (primary) ═══ geo-replication ═══► SQL server B (secondary)   paymentsdb Basic
@@ -49,7 +49,7 @@
 - `webapp.bicep` (called twice): Linux plan B1 + web app Python 3.11.
   - App settings: `REGION_NAME`, `SQL_SERVER=<fog>.database.windows.net`, `SQL_DB`, `SQL_USER`, `SQL_PASSWORD=@Microsoft.KeyVault(...)`, `SCM_DO_BUILD_DURING_DEPLOYMENT=true`
   - `alwaysOn=true`, healthCheckPath `/health`, system identity + Key Vault Secrets User role.
-- `frontdoor.bicep`:
+- `trafficmanager.bicep`:
   - profile Standard_AzureFrontDoor, endpoint, origin group with health probe (GET /health, HTTPS, 30s), load-balancing sample size 2, successful samples 1
   - origins A (priority 1) and B (priority 2)
   - route `/*` with **no caching**, HTTPS only, forwarding protocol HttpsOnly.
@@ -57,12 +57,12 @@
 - `console.bicep`: plan B1 + web app (control RG), app settings for every endpoint/name the console needs (see `config.py`), system identity.
 - `roles.bicep`: console identity → Contributor on `rg-dra-workload`, Storage Table Data Contributor + Storage Blob Data Contributor on the control storage, Key Vault Secrets User, and **Cognitive Services OpenAI User** on the OpenAI resource.
 
-**Azure OpenAI:** `openai.bicep` creates an AI Foundry/AI Services account in `OPENAI_LOCATION` (parameter, default `eastus2`) with deployment `gpt-4.1-mini`, sku GlobalStandard, capacity 30. If it already exists, the parameter `useExistingOpenAI` skips it.
+**Azure OpenAI:** `openai.bicep` creates an AI Foundry/AI Services account in `OPENAI_LOCATION` (parameter, default `eastus2`) with deployment `gpt-4o-mini`, sku GlobalStandard, capacity 30. If it already exists, the parameter `useExistingOpenAI` skips it.
 
 Scripts:
 - `deploy.sh`: `az deployment sub create`, then `deploy-apps.sh`, which zip-deploys both apps via `az webapp deploy --type zip`.
 - `budget.sh`, `teardown.sh`, `seed-secrets.sh`.
-- Everything prints the outputs (Front Door URL, console URL).
+- Everything prints the outputs (Traffic Manager URL, console URL).
 
 ## 4. DR Console (apps/dr-console)
 
@@ -111,14 +111,14 @@ Prompt rules (all agents):
 4. pre-4 (automated, dr-agent): `start_heartbeat`
 5. out-1 (automated, dr-agent): `inject_outage(region=A)` → records t0
 6. fo-1 (automated, db): `sql_failover(target=B, allow_data_loss=true)` → records t_failover
-7. fo-2 (automated, network): `frontdoor_set_origin(region=A, enabled=false)`
+7. fo-2 (automated, network): `tm_set_endpoint(region=A, enabled=false)`
 8. val-1 (automated, app): `wait_healthy(frontdoor, expect_region=B, timeout=900)` → records t_recovered
 9. val-2 (automated, app): `functional_txn_check`
 10. val-3 (automated, dr-agent): `measure_rpo`
 11. fb-1 (human, app): "App team approves failback"
 12. fb-2 (automated, app): `start_webapp(A)` + `wait_healthy(direct A)`
 13. fb-3 (automated, db): `sql_failover(target=A, allow_data_loss=false)`
-14. fb-4 (automated, network): `frontdoor_set_origin(region=A, enabled=true)` + `wait_healthy(frontdoor, expect_region=A)`
+14. fb-4 (automated, network): `tm_set_endpoint(region=A, enabled=true)` + `wait_healthy(frontdoor, expect_region=A)`
 15. close-1 (automated, dr-agent): `stop_heartbeat`, `snapshot_inventory` diff, generate report, notify
 
 ### 4.5 Tools (dr_agent/tools)
@@ -128,10 +128,10 @@ Prompt rules (all agents):
   - **forced:** `failover_groups.begin_force_failover_allow_data_loss(rg, <target server>, fog).result()`
   - **planned:** `begin_failover(rg, <target server>, fog).result()`
   - Both are called against the **server that becomes primary**.
-- `azure_frontdoor.py`:
+- `azure_trafficmanager.py`:
   - `CdnManagementClient.afd_origins.get(rg, profile, origin_group, origin)`
   - set `enabled_state = "Disabled"/"Enabled"`, then `begin_create_or_update(...)`
-- `inventory.py`: Resource Graph query over `rg-dra-workload` (type, name, location, sku) + app settings of both apps (secret values masked) + FOG status + Front Door origin states.
+- `inventory.py`: Resource Graph query over `rg-dra-workload` (type, name, location, sku) + app settings of both apps (secret values masked) + FOG status + Traffic Manager origin states.
 - `probes.py`: `httpx` GET with a 5s timeout. `probe(url)` returns (ok, region, db_ok, latency). `wait_healthy(url, expect_region, timeout)` polls every 5s.
 - `heartbeat.py`:
   - Background thread, every 2s: connect via the FOG listener and `INSERT heartbeat(seq, client_ts)`.
@@ -150,7 +150,7 @@ Prompt rules (all agents):
 
 ### 4.7 Web (web/)
 Routes:
-- `GET /` overview: polls `/api/status`, which reads Front Door + direct A/B probes + FOG role.
+- `GET /` overview: polls `/api/status`, which reads Traffic Manager + direct A/B probes + FOG role.
 - `GET /phase1`, `POST /api/profile`, `POST /api/strategy`, `POST /api/readiness`, `POST /api/runbook`
 - `GET /plan`, `POST /api/plan`, `POST /api/plan/approve`
 - `GET /exercise/{id}` live view, `GET /api/exercise/{id}/events?after=n`, `POST /api/exercise/{id}/confirm/{step}`, `/kill`, `/rollback`, `/retry`
@@ -164,7 +164,7 @@ UI:
 ## 5. Failure modes & mitigations
 | Risk | Mitigation |
 |---|---|
-| Front Door keeps routing to A while A is down | The agent explicitly disables origin A. Probe interval is 30s, and `wait_healthy` also checks the `region` field. |
+| Traffic Manager keeps routing to A while A is down | The agent explicitly disables origin A. Probe interval is 30s, and `wait_healthy` also checks the `region` field. |
 | Forced failover leaves the old primary as secondary | Failback uses a planned failover after A is healthy. The FOG re-syncs automatically. |
 | LLM slow or unavailable | Deterministic fallbacks (4.3). Plans are validated before use. |
 | App Service restart mid-exercise | State persisted in Tables. The orchestrator resumes. |
@@ -177,5 +177,5 @@ UI:
   - plan validator (cycle, bad action, wrong order)
   - parity diff
   - agent fallbacks
-- Integration (manual, scripted): `scripts/smoke.sh` runs probes against Front Door and both regions, and checks FOG status.
+- Integration (manual, scripted): `scripts/smoke.sh` runs probes against Traffic Manager and both regions, and checks FOG status.
 - End-to-end: a full exercise from the console, twice, before the demo.
