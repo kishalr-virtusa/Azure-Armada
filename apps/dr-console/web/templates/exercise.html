@@ -1,0 +1,343 @@
+{% extends "base.html" %}
+
+{% block title %}Exercise {{ exercise_id }} — DR Agent Console{% endblock %}
+
+{% block content %}
+<header>
+    <div>
+        <span class="eyebrow">Live Exercise</span>
+        <h1>{{ exercise_id }}</h1>
+    </div>
+    <div>
+        <span class="st" id="exerciseStatus">{{ status }}</span>
+    </div>
+</header>
+
+<!-- KPI Row -->
+<div class="kpis">
+    <!-- Live RTO Timer -->
+    <div class="kpi" id="rtoCard">
+        <div class="l">RTO (Live)</div>
+        <div class="v big" id="rtoTimer">00:00</div>
+        <div class="x">Target: {{ rto_target_min }}min</div>
+    </div>
+    
+    <!-- Current Step -->
+    <div class="kpi">
+        <div class="l">Current Step</div>
+        <div class="v" id="currentStep">—</div>
+        <div class="x" id="currentStepTitle">Waiting...</div>
+    </div>
+    
+    <!-- Progress -->
+    <div class="kpi">
+        <div class="l">Progress</div>
+        <div class="v" id="progressCount">0/0</div>
+        <div class="x" id="progressPhase">—</div>
+    </div>
+    
+    <!-- Demo App Status -->
+    <div class="kpi" id="appStatusCard">
+        <div class="l">Demo App Status</div>
+        <div class="v" id="appStatus">—</div>
+        <div class="x" id="appRegion">—</div>
+    </div>
+</div>
+
+<div class="twin">
+    <!-- Timeline -->
+    <div class="card">
+        <h2>Execution Timeline</h2>
+        <p class="sub">Live event stream</p>
+        
+        <div class="timeline" id="timeline" style="margin-top: 16px; max-height: 400px; overflow-y: auto;">
+            <div style="color: var(--ink-3); padding: 12px;">Loading events...</div>
+        </div>
+    </div>
+    
+    <!-- Controls & Actions -->
+    <div class="card">
+        <h2>Controls</h2>
+        
+        <!-- Human Step Confirmation -->
+        <div id="humanStepBox" class="box hide" style="margin-top: 16px; border-color: var(--upd);">
+            <h4 style="color: var(--upd);">⏳ Waiting for Human Action</h4>
+            <p id="humanStepTitle" style="margin: 8px 0;"></p>
+            <p id="humanStepOwner" style="font-size: 12px; color: var(--ink-3); margin-bottom: 12px;"></p>
+            <button id="confirmStepBtn" class="btn btn-primary" onclick="confirmStep()">
+                ✓ Confirm Done
+            </button>
+        </div>
+        
+        <!-- Emergency Controls -->
+        <div style="margin-top: 16px;">
+            <h3 style="margin-bottom: 12px;">Emergency Controls</h3>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn btn-danger" onclick="killSwitch()" id="killBtn">
+                    🛑 Kill Switch
+                </button>
+                <button class="btn btn-secondary" onclick="rollback()" id="rollbackBtn">
+                    ↩️ Rollback
+                </button>
+            </div>
+        </div>
+        
+        <!-- Demo App Embed -->
+        <div style="margin-top: 24px;">
+            <h3 style="margin-bottom: 12px;">Demo App Preview</h3>
+            <div style="border: 1px solid var(--line); border-radius: 8px; overflow: hidden;">
+                <iframe id="appFrame" src="http://{{ tm_fqdn }}/" style="width: 100%; height: 300px; border: none;"></iframe>
+            </div>
+            <div style="margin-top: 8px; font-size: 12px; color: var(--ink-3);">
+                <a href="http://{{ tm_fqdn }}/" target="_blank">Open in new tab →</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Completed Banner (hidden by default) -->
+<div id="completedBanner" class="card hide" style="background: var(--have-bg); border-color: var(--have); text-align: center;">
+    <h2 style="color: var(--have);">✅ Exercise Completed</h2>
+    <p style="margin: 12px 0;">The DR exercise has finished successfully.</p>
+    <a href="/results/{{ exercise_id }}" class="btn btn-primary">View Results</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const exerciseId = '{{ exercise_id }}';
+    let t0 = null;
+    let lastEventSeq = 0;
+    let currentHumanStep = null;
+    let timerInterval = null;
+    
+    async function loadExercise() {
+        try {
+            const res = await fetch(`/api/exercise/${exerciseId}`);
+            const data = await res.json();
+            
+            // Update status
+            updateStatus(data.status);
+            
+            // Set t0 for timer
+            if (data.t0) {
+                t0 = new Date(data.t0);
+                if (!timerInterval) {
+                    timerInterval = setInterval(updateTimer, 1000);
+                }
+            }
+            
+            // Update progress
+            if (data.plan && data.plan.steps) {
+                const completed = data.completed_steps || 0;
+                const total = data.plan.steps.length;
+                document.getElementById('progressCount').textContent = `${completed}/${total}`;
+                
+                const currentIdx = data.current_step_index || 0;
+                if (currentIdx < data.plan.steps.length) {
+                    const step = data.plan.steps[currentIdx];
+                    document.getElementById('currentStep').textContent = step.id;
+                    document.getElementById('currentStepTitle').textContent = step.title;
+                    document.getElementById('progressPhase').textContent = step.phase;
+                    
+                    // Show human step box if waiting
+                    if (step.type === 'human' && data.status === 'running' && data.waiting_for_human) {
+                        currentHumanStep = step;
+                        document.getElementById('humanStepBox').classList.remove('hide');
+                        document.getElementById('humanStepTitle').textContent = step.title;
+                        document.getElementById('humanStepOwner').textContent = `Owner: ${step.owner_team}`;
+                    } else {
+                        document.getElementById('humanStepBox').classList.add('hide');
+                    }
+                }
+            }
+            
+            // Check if completed
+            if (data.status === 'completed' || data.status === 'rolled_back') {
+                document.getElementById('completedBanner').classList.remove('hide');
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                }
+            }
+            
+        } catch (e) {
+            console.error('Failed to load exercise:', e);
+        }
+    }
+    
+    async function loadEvents() {
+        try {
+            const res = await fetch(`/api/exercise/${exerciseId}/events?after=${lastEventSeq}`);
+            const events = await res.json();
+            
+            if (events.length === 0) return;
+            
+            const timeline = document.getElementById('timeline');
+            
+            // Clear loading message on first load
+            if (lastEventSeq === 0 && events.length > 0) {
+                timeline.innerHTML = '';
+            }
+            
+            events.forEach(event => {
+                const seq = parseInt(event.RowKey);
+                if (seq > lastEventSeq) {
+                    lastEventSeq = seq;
+                }
+                
+                const item = document.createElement('div');
+                item.className = 'timeline-item ' + getEventClass(event.kind);
+                item.innerHTML = `
+                    <div style="font-size: 11px; color: var(--ink-3);">${formatTime(event.ts)} • ${event.step_id || 'system'}</div>
+                    <div style="font-weight: 500;">${event.message}</div>
+                    ${event.kind === 'measurement' ? `<div style="font-size: 12px; color: var(--ink-2);">${formatMeasurement(event.data)}</div>` : ''}
+                `;
+                timeline.appendChild(item);
+            });
+            
+            // Auto-scroll to bottom
+            timeline.scrollTop = timeline.scrollHeight;
+            
+        } catch (e) {
+            console.error('Failed to load events:', e);
+        }
+    }
+    
+    async function loadAppStatus() {
+        try {
+            const res = await fetch(`/api/probe/tm`);
+            const data = await res.json();
+            
+            const card = document.getElementById('appStatusCard');
+            const status = document.getElementById('appStatus');
+            const region = document.getElementById('appRegion');
+            
+            if (data.ok) {
+                status.textContent = '✓';
+                region.textContent = data.region || 'Unknown';
+                card.classList.remove('fail');
+                card.classList.add('pass');
+            } else {
+                status.textContent = '✗';
+                region.textContent = data.error || 'Unreachable';
+                card.classList.remove('pass');
+                card.classList.add('fail');
+            }
+        } catch (e) {
+            document.getElementById('appStatus').textContent = '?';
+            document.getElementById('appRegion').textContent = 'Error';
+        }
+    }
+    
+    function updateStatus(status) {
+        const el = document.getElementById('exerciseStatus');
+        el.textContent = status;
+        el.className = 'st ' + getStatusClass(status);
+    }
+    
+    function getStatusClass(status) {
+        switch (status) {
+            case 'running': return 'info';
+            case 'paused': return 'warn';
+            case 'completed': case 'rolled_back': return 'pass';
+            case 'failed': return 'fail';
+            default: return 'neutral';
+        }
+    }
+    
+    function getEventClass(kind) {
+        switch (kind) {
+            case 'step_end': return 'completed';
+            case 'step_start': return 'running';
+            case 'error': return 'failed';
+            default: return '';
+        }
+    }
+    
+    function updateTimer() {
+        if (!t0) return;
+        
+        const now = new Date();
+        const diffMs = now - t0;
+        const diffS = Math.floor(diffMs / 1000);
+        const mins = Math.floor(diffS / 60);
+        const secs = diffS % 60;
+        
+        document.getElementById('rtoTimer').textContent = 
+            `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    
+    function formatTime(isoString) {
+        if (!isoString) return '';
+        return new Date(isoString).toLocaleTimeString();
+    }
+    
+    function formatMeasurement(data) {
+        if (!data) return '';
+        if (data.rto_s !== undefined) {
+            return `RTO: ${Math.floor(data.rto_s / 60)}m ${Math.floor(data.rto_s % 60)}s`;
+        }
+        if (data.rpo_s !== undefined) {
+            return `RPO: ${data.rpo_s}s`;
+        }
+        return JSON.stringify(data);
+    }
+    
+    async function confirmStep() {
+        if (!currentHumanStep) return;
+        
+        const btn = document.getElementById('confirmStepBtn');
+        btn.disabled = true;
+        btn.textContent = 'Confirming...';
+        
+        try {
+            await fetch(`/api/exercise/${exerciseId}/confirm/${currentHumanStep.id}`, {
+                method: 'POST',
+            });
+            document.getElementById('humanStepBox').classList.add('hide');
+            currentHumanStep = null;
+        } catch (e) {
+            alert('Failed to confirm step: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '✓ Confirm Done';
+        }
+    }
+    
+    async function killSwitch() {
+        if (!confirm('⚠️ Are you sure you want to KILL the exercise? This will stop execution immediately.')) {
+            return;
+        }
+        
+        try {
+            await fetch(`/api/exercise/${exerciseId}/kill`, { method: 'POST' });
+            alert('Exercise killed. Offering rollback...');
+        } catch (e) {
+            alert('Failed to kill exercise: ' + e.message);
+        }
+    }
+    
+    async function rollback() {
+        if (!confirm('Are you sure you want to ROLLBACK? This will restore the original state.')) {
+            return;
+        }
+        
+        try {
+            await fetch(`/api/exercise/${exerciseId}/rollback`, { method: 'POST' });
+            alert('Rollback initiated.');
+        } catch (e) {
+            alert('Failed to rollback: ' + e.message);
+        }
+    }
+    
+    // Initial load
+    loadExercise();
+    loadEvents();
+    loadAppStatus();
+    
+    // Poll
+    setInterval(loadExercise, 2000);
+    setInterval(loadEvents, 2000);
+    setInterval(loadAppStatus, 3000);
+</script>
+{% endblock %}
