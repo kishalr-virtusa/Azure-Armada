@@ -17,6 +17,8 @@ LOC_B="${LOCATION_B:-southeastasia}"
 
 VAULT="/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.RecoveryServices/vaults/dra-rsv-$SFX"
 RGID="/subscriptions/$SUB/resourceGroups/$RG"
+REC_RG="${RECOVERY_RG:-rg-dra-recovery}"   # target RG: must be outside the source region
+REC_RGID="/subscriptions/$SUB/resourceGroups/$REC_RG"
 VM="dra-vm-reports"
 FAB_A="asr-a2a-$LOC_A";            FAB_B="asr-a2a-$LOC_B"
 PC_A="$FAB_A-container";           PC_B="$FAB_B-container"
@@ -70,8 +72,15 @@ enable() {
   ensure "$VAULT/replicationFabrics/$FAB_A/replicationNetworks/azureNetwork/replicationNetworkMappings/$NETMAP" \
     "{\"properties\":{\"recoveryFabricName\":\"$FAB_B\",\"recoveryNetworkId\":\"$vnet_b\",\"fabricSpecificDetails\":{\"instanceType\":\"AzureToAzure\",\"primaryNetworkId\":\"$vnet_a\"}}}" \
     "network mapping A->B"
+  if exists "$PI_PATH" && [[ "$(get "$PI_PATH" | jq -r '.properties.protectionState')" =~ ^(UnprotectedStatesBegin|None|null)$ ]] \
+     && [[ "$(get "$PI_PATH" | jq -r '.properties.replicationHealth')" != "Normal" ]]; then
+    echo "  purging failed protected item from an earlier attempt"
+    az rest --method delete --url "$MGMT$PI_PATH?$API" -o none || true
+    local t=0; while exists "$PI_PATH" && (( t < 600 )); do sleep 15; t=$((t + 15)); done
+  fi
+  az group show -n "$REC_RG" -o none 2>/dev/null || az group create -n "$REC_RG" -l "$LOC_B" --tags project=dr-agent -o none
   ensure "$PI_PATH" \
-    "{\"properties\":{\"policyId\":\"$VAULT/replicationPolicies/$POLICY\",\"providerSpecificDetails\":{\"instanceType\":\"A2A\",\"fabricObjectId\":\"$vm_id\",\"recoveryContainerId\":\"$VAULT/replicationFabrics/$FAB_B/replicationProtectionContainers/$PC_B\",\"recoveryResourceGroupId\":\"$RGID\",\"recoveryAzureNetworkId\":\"$vnet_b\",\"recoverySubnetName\":\"default\",\"vmManagedDisks\":[{\"diskId\":\"$disk_id\",\"primaryStagingAzureStorageAccountId\":\"$cache_id\",\"recoveryResourceGroupId\":\"$RGID\",\"recoveryReplicaDiskAccountType\":\"Standard_LRS\",\"recoveryTargetDiskAccountType\":\"StandardSSD_LRS\"}]}}}" \
+    "{\"properties\":{\"policyId\":\"$VAULT/replicationPolicies/$POLICY\",\"providerSpecificDetails\":{\"instanceType\":\"A2A\",\"fabricObjectId\":\"$vm_id\",\"recoveryContainerId\":\"$VAULT/replicationFabrics/$FAB_B/replicationProtectionContainers/$PC_B\",\"recoveryResourceGroupId\":\"$REC_RGID\",\"recoveryAzureNetworkId\":\"$vnet_b\",\"recoverySubnetName\":\"default\",\"vmManagedDisks\":[{\"diskId\":\"$disk_id\",\"primaryStagingAzureStorageAccountId\":\"$cache_id\",\"recoveryResourceGroupId\":\"$REC_RGID\",\"recoveryReplicaDiskAccountType\":\"Standard_LRS\",\"recoveryTargetDiskAccountType\":\"StandardSSD_LRS\"}]}}}" \
     "protected item $VM (initial replication continues in the background)" '.properties.protectionState != null'
   status
 }

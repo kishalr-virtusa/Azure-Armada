@@ -5,7 +5,7 @@
 # Deletes both resource groups, then purges the soft-deleted Key Vault and Azure OpenAI account
 # so the next up.sh can reuse the same names. The subscription budget alert is kept.
 set -euo pipefail
-RGS=(rg-dra-workload rg-dra-control)
+RGS=(rg-dra-workload rg-dra-control rg-dra-recovery)
 [[ -n "${SUB_ID:-}" ]] && az account set --subscription "$SUB_ID"
 echo "Subscription: $(az account show --query '[name, id]' -o tsv | paste -sd' ')"
 if [[ "${1:-}" != "--yes" ]]; then

@@ -86,6 +86,15 @@ resource workloadRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
 }
 
 // Resource Group for control plane (console, storage, Key Vault, OpenAI)
+// ASR recovery resource group: must NOT be in the source region (it has to be reachable during a Region A outage)
+resource recoveryRg 'Microsoft.Resources/resourceGroups@2023-07-01' = if (deployIaas) {
+  name: 'rg-dra-recovery'
+  location: locationB
+  tags: {
+    project: projectTag
+  }
+}
+
 resource controlRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   name: controlRgName
   location: controlLocation
@@ -310,6 +319,14 @@ module roles 'modules/roles.bicep' = {
 module rolesWorkload 'modules/roles-workload.bicep' = {
   name: 'roles-workload-deployment'
   scope: workloadRg
+  params: {
+    consolePrincipalId: console.outputs.consoleAppPrincipalId
+  }
+}
+
+module rolesRecovery 'modules/roles-workload.bicep' = if (deployIaas) {
+  name: 'roles-recovery-deployment'
+  scope: recoveryRg
   params: {
     consolePrincipalId: console.outputs.consoleAppPrincipalId
   }
