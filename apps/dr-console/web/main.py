@@ -70,6 +70,7 @@ async def public_live():
     return JSONResponse(data, headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
 
 
+@app.get("/pay")
 @app.get("/go")
 async def go():
     """Send a phone to the region Traffic Manager currently routes to (fresh DNS lookup on every call)."""

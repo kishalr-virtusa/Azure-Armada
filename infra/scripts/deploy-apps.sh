@@ -24,7 +24,7 @@ CONTROL_RG="rg-dra-control"
 
 WEBAPP_A="dra-app-cin-${SUFFIX}"
 WEBAPP_B="dra-app-sea-${SUFFIX}"
-CONSOLE_APP="dra-console-${SUFFIX}"
+CONSOLE_APP=$(echo "$OUTPUTS" | jq -r ".consoleAppName.value // \"dra-console-${SUFFIX}\"")
 
 echo "Deploying to:"
 echo "  Web App A: $WEBAPP_A"

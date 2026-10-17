@@ -48,7 +48,7 @@ This creates:
 ### 4. Access the Demo
 
 - **Traffic Manager URL**: `http://dra-tm-<suffix>.trafficmanager.net` — Contoso Payments app
-- **DR Console**: `https://dra-console-<suffix>.azurewebsites.net` — Exercise control
+- **DR Console**: `https://azure-armada.azurewebsites.net` (phones: `/pay`) — Exercise control
 
 ## Architecture
 

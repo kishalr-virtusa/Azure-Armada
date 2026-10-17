@@ -49,8 +49,11 @@ param publicUrl string = ''
 @description('Second hostname for the same app (forces a fresh DNS lookup on phones after failover). Empty = same as publicUrl.')
 param altPublicUrl string = ''
 
-var consoleBaseUrl = 'https://dra-console-${suffix}.azurewebsites.net'
-var effectivePublicUrl = empty(publicUrl) ? '${consoleBaseUrl}/go' : publicUrl
+@description('Console app name = public hostname <name>.azurewebsites.net (global). Phones open https://<name>.azurewebsites.net/pay')
+param consoleAppName string = 'azure-armada'
+
+var consoleBaseUrl = 'https://${consoleAppName}.azurewebsites.net'
+var effectivePublicUrl = empty(publicUrl) ? '${consoleBaseUrl}/pay' : publicUrl
 var effectiveAltUrl = empty(altPublicUrl) ? effectivePublicUrl : altPublicUrl
 
 var workloadRgName = 'rg-dra-workload'
@@ -214,6 +217,7 @@ module console 'modules/console.bicep' = {
   name: 'console-deployment'
   scope: controlRg
   params: {
+    appName: consoleAppName
     publicUrl: effectivePublicUrl
     location: controlLocation
     suffix: suffix
@@ -277,6 +281,8 @@ output webAppAUrl string = webAppA.outputs.webAppUrl
 output webAppBUrl string = webAppB.outputs.webAppUrl
 
 output consoleUrl string = console.outputs.consoleAppUrl
+output consoleAppName string = console.outputs.consoleAppName
+output publicUrl string = effectivePublicUrl
 
 output sqlFogListener string = sql.outputs.fogListenerFqdn
 

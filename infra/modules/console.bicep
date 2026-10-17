@@ -71,7 +71,8 @@ param notifyEmailTo string = ''
 param publicUrl string = ''
 
 var planName = 'dra-console-plan-${suffix}'
-var appName = 'dra-console-${suffix}'
+@description('Console web app name (global hostname)')
+param appName string = 'dra-console-${suffix}'
 
 // App Service Plan (B1)
 resource appServicePlan 'Microsoft.Web/serverfarms@2023-01-01' = {

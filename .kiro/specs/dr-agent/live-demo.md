@@ -40,8 +40,8 @@ stopwatch then ticks smoothly every 100 ms between polls: `elapsed = (Date.now()
 
 ### C2. Demo app config: `GET /api/config` (demo app, same origin)
 ```json
-{"region": "Central India", "live_url": "https://dra-console-xxxx.azurewebsites.net/public/live",
- "public_url": "https://pay.example.com", "alt_url": "https://pay2.example.com"}
+{"region": "Central India", "live_url": "https://azure-armada.azurewebsites.net/public/live",
+ "public_url": "https://azure-armada.azurewebsites.net/pay", "alt_url": "https://azure-armada.azurewebsites.net/pay"}
 ```
 `public_url`/`alt_url` may be empty strings (no custom domain yet).
 
