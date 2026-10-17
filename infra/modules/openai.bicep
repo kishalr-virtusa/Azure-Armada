@@ -31,6 +31,12 @@ param capacity int = 30
 @description('Foundry project name')
 param projectName string = 'dr-agent'
 
+@description('Reasoning model deployment used by the Planner and Validator agents')
+param reasoningDeploymentName string = 'gpt-5-mini'
+
+@description('Reasoning model capacity (thousands of tokens per minute)')
+param reasoningCapacity int = 50
+
 var foundryName = 'dra-foundry-${suffix}'
 
 resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' = if (!useExistingOpenAI) {
@@ -89,6 +95,26 @@ resource deployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01
   }
 }
 
+resource reasoningDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = if (!useExistingOpenAI) {
+  parent: foundry
+  name: reasoningDeploymentName
+  dependsOn: [
+    deployment // serialize child operations on the account
+  ]
+  sku: {
+    name: 'GlobalStandard'
+    capacity: reasoningCapacity
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'gpt-5-mini'
+      version: '2025-08-07'
+    }
+  }
+}
+
+output reasoningDeploymentName string = reasoningDeploymentName
 output openAIId string = useExistingOpenAI ? '' : foundry.id
 output openAIName string = useExistingOpenAI ? '' : foundry.name
 output openAIEndpoint string = useExistingOpenAI ? '' : 'https://${foundryName}.openai.azure.com/'

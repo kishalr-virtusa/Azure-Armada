@@ -25,7 +25,8 @@ source "$SECRETS_FILE"
 
 for p in Microsoft.Web Microsoft.Sql Microsoft.Network Microsoft.Storage Microsoft.KeyVault \
          Microsoft.CognitiveServices Microsoft.OperationalInsights Microsoft.Insights \
-         Microsoft.Communication Microsoft.Consumption; do
+         Microsoft.Communication Microsoft.Consumption Microsoft.Compute Microsoft.RecoveryServices \
+         Microsoft.Chaos Microsoft.LoadTestService Microsoft.Search; do
   az provider register -n "$p" -o none
 done
 

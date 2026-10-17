@@ -166,6 +166,10 @@ resource consoleApp 'Microsoft.Web/sites@2023-01-01' = {
           name: 'AZURE_OPENAI_DEPLOYMENT'
           value: openAIDeploymentName
         }
+        {
+          name: 'REASONING_DEPLOYMENT'
+          value: 'gpt-5-mini'
+        }
         // Storage
         {
           name: 'STORAGE_ACCOUNT_NAME'

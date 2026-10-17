@@ -39,6 +39,10 @@ AGENTS: dict[str, tuple[str, str]] = {
 }
 
 
+# agents that need multi-step reasoning run on the reasoning model (REASONING_DEPLOYMENT, e.g. gpt-5-mini)
+REASONING_AGENTS = {"planner", "validator"}
+
+
 def agent_id(name: str) -> str:
     """'planner-retry' -> 'dra-planner' (retries reuse the base agent)."""
     base = name.split("-")[0]
@@ -51,10 +55,11 @@ def strict_schema(schema: Type[BaseModel]) -> dict:
 
 
 class FoundryAgents:
-    def __init__(self, project_endpoint: str, model: str, timeout_s: float = 60.0):
+    def __init__(self, project_endpoint: str, model: str, timeout_s: float = 90.0, reasoning_model: str = ""):
         from azure.identity import DefaultAzureCredential
         self.endpoint = project_endpoint.rstrip("/")
         self.model = model
+        self.reasoning_model = reasoning_model
         self._cred = DefaultAzureCredential()
         self._http = httpx.Client(timeout=timeout_s)
         self._ready: dict[str, str] = {}  # agent id -> spec hash registered in this process
@@ -78,6 +83,10 @@ class FoundryAgents:
             "text": {"format": {"type": "json_schema", "name": schema.__name__,
                                 "schema": strict_schema(schema), "strict": True}},
         }
+        if aid.removeprefix(PREFIX) in REASONING_AGENTS and self.reasoning_model:
+            definition["model"] = self.reasoning_model
+            definition.pop("temperature")  # reasoning models only accept the default
+            definition["reasoning"] = {"effort": "low"}
         spec_hash = hashlib.sha256(json.dumps(definition, sort_keys=True).encode()).hexdigest()[:16]
         if self._ready.get(aid) == spec_hash:
             return aid
@@ -123,7 +132,8 @@ def get_agents() -> Optional[FoundryAgents]:
     ep = os.environ.get("FOUNDRY_PROJECT_ENDPOINT")
     if _client is None and ep and os.environ.get("USE_AGENT_SERVICE", "true").lower() != "false":
         try:
-            _client = FoundryAgents(ep, os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1-mini"))
+            _client = FoundryAgents(ep, os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1-mini"),
+                                    reasoning_model=os.environ.get("REASONING_DEPLOYMENT", ""))
         except Exception:  # noqa: BLE001
             log.exception("could not initialise Foundry Agent Service client")
     return _client
