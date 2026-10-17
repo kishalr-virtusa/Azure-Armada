@@ -46,7 +46,10 @@ echo "== 2/4 Infrastructure (Bicep, ~15-25 min)"
 "$DIR/deploy.sh"
 
 echo "== 3/4 Application code + sign-in + Site Recovery"
-"$DIR/entra-auth.sh" || echo "WARNING: Entra sign-in not configured (console uses the passcode); re-run entra-auth.sh"
+# Entra sign-in needs tenant admin consent in the Virtusa tenant; opt in with ENTRA_SIGNIN=true once consent is granted
+if [[ "${ENTRA_SIGNIN:-false}" == "true" ]]; then
+  "$DIR/entra-auth.sh" || echo "WARNING: Entra sign-in not configured (console uses the passcode); re-run entra-auth.sh"
+fi
 "$DIR/deploy-apps.sh"
 if [[ "${DEPLOY_IAAS:-true}" == "true" ]]; then
   "$DIR/asr.sh" enable || echo "WARNING: ASR replication not enabled yet; re-run asr.sh enable"

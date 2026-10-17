@@ -46,7 +46,9 @@ def create_session(response: Response) -> str:
 
 
 def entra_enabled() -> bool:
-    return os.getenv("ENTRA_AUTH_ENABLED", "").lower() == "true"
+    """Both our flag AND App Service's own auth flag must be on before the identity header is trusted."""
+    return (os.getenv("ENTRA_AUTH_ENABLED", "").lower() == "true"
+            and os.getenv("WEBSITE_AUTH_ENABLED", "").lower() == "true")
 
 
 def current_user(request: Request) -> str | None:

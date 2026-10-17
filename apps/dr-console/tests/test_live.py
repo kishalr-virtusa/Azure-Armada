@@ -86,6 +86,8 @@ def test_entra_identity_only_trusted_when_enabled(monkeypatch):
     monkeypatch.delenv("ENTRA_AUTH_ENABLED", raising=False)
     assert c.get("/api/me", headers=spoof).status_code == 401          # header ignored without Entra
     monkeypatch.setenv("ENTRA_AUTH_ENABLED", "true")
+    assert c.get("/api/me", headers=spoof).status_code == 401          # still ignored: platform auth is off
+    monkeypatch.setenv("WEBSITE_AUTH_ENABLED", "True")
     r = c.get("/api/me", headers={"X-MS-CLIENT-PRINCIPAL-NAME": "kishalr@virtusacsp.onmicrosoft.com"})
     assert r.status_code == 200 and r.json() == {"user": "kishalr@virtusacsp.onmicrosoft.com", "auth": "entra"}
 
