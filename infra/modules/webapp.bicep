@@ -40,6 +40,15 @@ param allowHttp bool = true
 @description('PAYMENT_PROVIDER app setting; empty = omitted (planted config gap)')
 param paymentProvider string = ''
 
+@description('Console public live feed polled by the app (drill status, RTO/ETA)')
+param drLiveUrl string = ''
+
+@description('Public URL of the app (QR code / phones)')
+param publicUrl string = ''
+
+@description('Alternate hostname used to reconnect phones after failover')
+param altPublicUrl string = ''
+
 var planName = 'dra-plan-${regionShort}-${suffix}'
 var appName = 'dra-app-${regionShort}-${suffix}'
 
@@ -92,6 +101,18 @@ resource webApp 'Microsoft.Web/sites@2023-01-01' = {
         {
           name: 'REGION_NAME'
           value: regionName
+        }
+        {
+          name: 'DR_LIVE_URL'
+          value: drLiveUrl
+        }
+        {
+          name: 'PUBLIC_URL'
+          value: publicUrl
+        }
+        {
+          name: 'ALT_PUBLIC_URL'
+          value: altPublicUrl
         }
         {
           name: 'SQL_SERVER'

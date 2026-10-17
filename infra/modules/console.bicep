@@ -67,6 +67,9 @@ param foundryProjectEndpoint string = ''
 @description('Email address for notifications (empty = console only)')
 param notifyEmailTo string = ''
 
+@description('Public URL of Contoso Payments shown as a QR code in the presenter view')
+param publicUrl string = ''
+
 var planName = 'dra-console-plan-${suffix}'
 var appName = 'dra-console-${suffix}'
 
@@ -110,6 +113,10 @@ resource consoleApp 'Microsoft.Web/sites@2023-01-01' = {
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
       appSettings: [
+        {
+          name: 'PUBLIC_URL'
+          value: publicUrl
+        }
         // Azure subscription context
         {
           name: 'WORKLOAD_RG'

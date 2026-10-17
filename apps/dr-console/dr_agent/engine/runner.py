@@ -19,7 +19,7 @@ from typing import Any, Callable, Optional
 from dr_agent.config import config
 from dr_agent.engine import measurements as M
 from dr_agent.engine.plan import validate_plan
-from dr_agent.models import AppProfile, ExercisePlan, PlanStep
+from dr_agent.models import AppProfile, Diagnosis, ExercisePlan, PlanStep
 from dr_agent.tools import store
 
 log = logging.getLogger(__name__)
@@ -211,6 +211,7 @@ class ExerciseRunner(threading.Thread):
     def run_step(self, step: PlanStep) -> None:
         while True:
             self.check_kill()
+            self.maybe_chaos(step.phase)
             self.update(current_step=step.id)
             self.event("step_start", step.title, step.id, {"type": step.type, "owner": step.owner_team,
                                                           "action": step.action, "params": step.param_dict()})
@@ -234,6 +235,7 @@ class ExerciseRunner(threading.Thread):
                     return
                 decision = self.handle_failure(step, err)
                 if decision == "retry":
+                    self.apply_fix(step)
                     continue
                 if decision == "continue":
                     return
@@ -331,7 +333,10 @@ class ExerciseRunner(threading.Thread):
         attempts, last = 0, {}
         while time.monotonic() < deadline:
             self.check_kill()
+            self.maybe_chaos(phase)
             attempts += 1
+            if target == "tm":
+                self.assert_endpoint_enabled(expect)
             last = _probe(target)
             if last.get("ok") and last.get("db_ok") and last.get("region_key") == expect:
                 t = utcnow()
@@ -345,6 +350,50 @@ class ExerciseRunner(threading.Thread):
                                    f"(now: {last.get('region') or last.get('error') or last.get('status_code')})")
             self.sleep(5)
         raise StepFailed(f"{target} not healthy from Region {expect} within {timeout_s}s; last probe: {last}")
+
+    def assert_endpoint_enabled(self, region: str) -> None:
+        """Fail fast (instead of waiting for the timeout) if Traffic Manager cannot route to `region` at all."""
+        from dr_agent.tools.azure_trafficmanager import get_endpoint
+        ep = _safe(lambda: get_endpoint(ENDPOINTS[region]))
+        if isinstance(ep, dict) and ep.get("endpoint_status") == "Disabled":
+            raise StepFailed(f"Traffic Manager endpoint {ENDPOINTS[region]} (Region {region}) is Disabled, so Traffic "
+                             f"Manager has no endpoint to route users to Region {region}.")
+
+    # ------------------------------------------------------------ chaos + remediation
+    def maybe_chaos(self, phase: str) -> None:
+        """Inject the armed surprise fault: disable the Region B endpoint (a bad change made during the incident)."""
+        m = self.meta()
+        if str(m.get("chaos_armed")).lower() != "true" or m.get("chaos_injected") or m.get("t_recovered"):
+            return
+        if phase not in ("failover", "validation") or self.rolling_back:
+            return
+        from dr_agent.tools.azure_trafficmanager import set_endpoint_region
+        set_endpoint_region("B", False)
+        self.update(chaos_injected=iso(utcnow()))
+        self.event("chaos", "Surprise fault injected: Region B Traffic Manager endpoint disabled")
+        self.notify("info", "Surprise fault injected", "The Region B Traffic Manager endpoint was disabled mid-failover.")
+
+    def apply_fix(self, step: PlanStep) -> None:
+        """Run the Validator's remediation (already approved by the human who clicked retry)."""
+        raw = self.meta().get("diagnosis_json")
+        if not raw:
+            return
+        diag = Diagnosis.model_validate_json(raw)
+        if diag.fix_action == "none":
+            return
+        params = {p.key: p.value.strip().lower() for p in diag.fix_params}
+        problem = check_fix(diag.fix_action, params, step.phase)
+        if problem:
+            self.event("error", f"Proposed fix rejected by the engine: {problem}", step.id)
+            return
+        from dr_agent.tools.azure_trafficmanager import set_endpoint_region
+        from dr_agent.tools.azure_webapp import start_webapp_region
+        if diag.fix_action == "tm_set_endpoint":
+            res = set_endpoint_region(params["region"].upper(), params["enabled"] == "true")
+        else:
+            res = start_webapp_region(params["region"].upper())
+        self.update(diagnosis_json="")
+        self.event("remediation", f"Approved fix applied: {diag.fix_action} {params}", step.id, _jsonable(res))
 
     def record_recovery(self, t: datetime) -> None:
         m = self.meta()
@@ -436,7 +485,7 @@ class ExerciseRunner(threading.Thread):
                 _fog().failover("A", False)
             set_endpoint_region("A", True)
             self.stop_heartbeat()
-            self.update(status="rolled_back", current_step="")
+            self.update(status="rolled_back", current_step="", finished_at=iso(utcnow()))
             self.event("info", "Rollback complete: Region A is primary again")
             self.notify("success", "Rollback complete", "Region A (Central India) is serving again.")
         except Exception as e:  # noqa: BLE001
@@ -452,6 +501,25 @@ class ExerciseRunner(threading.Thread):
                 return
             time.sleep(5)
         raise StepFailed(f"Region {region} not healthy after {timeout_s}s")
+
+
+ENDPOINTS = {"A": "endpoint-a", "B": "endpoint-b"}
+FIX_PARAMS = {"tm_set_endpoint": {"region", "enabled"}, "start_webapp": {"region"}}
+
+
+def check_fix(action: str, params: dict, phase: str) -> Optional[str]:
+    """Allowlist for Validator remediations. During the drill Region A must stay down (no cheating the outage)."""
+    if action not in FIX_PARAMS:
+        return f"action {action!r} not allowed"
+    if set(params) != FIX_PARAMS[action]:
+        return f"params must be {sorted(FIX_PARAMS[action])}"
+    if params.get("region", "").upper() not in ("A", "B"):
+        return "region must be A or B"
+    if params.get("enabled", "true") not in ("true", "false"):
+        return "enabled must be true/false"
+    if phase in ("outage", "failover", "validation") and params["region"].upper() == "A":
+        return "Region A must stay down during the outage"
+    return None
 
 
 def _safe(fn: Callable[[], Any]) -> Any:

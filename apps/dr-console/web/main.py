@@ -62,6 +62,26 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+# ------------------------------------------------------------------ public (no auth): judges' phones
+@app.get("/public/live")
+async def public_live():
+    """Read-only drill status polled by Contoso Payments on phones (CORS open, cached 1 s, no secrets)."""
+    data = await run_in_threadpool(service.public_live)
+    return JSONResponse(data, headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
+
+
+@app.get("/go")
+async def go():
+    """Send a phone to the region Traffic Manager currently routes to (fresh DNS lookup on every call)."""
+    from dr_agent.engine.runner import tm_resolve
+    r = await run_in_threadpool(tm_resolve)
+    url = r.get("url") if isinstance(r, dict) else None
+    if not url:
+        return HTMLResponse("<h3>Contoso Payments is recovering. Retry in a few seconds.</h3>", status_code=503,
+                            headers={"Refresh": "3", "Cache-Control": "no-store"})
+    return RedirectResponse(url + "/", status_code=302, headers={"Cache-Control": "no-store"})
+
+
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request, error: Optional[str] = None):
     return templates.TemplateResponse(request, "login.html", {"error": error})
@@ -192,7 +212,13 @@ async def api_generate_plan():
 
 @app.post("/api/plan/approve", dependencies=[api])
 async def api_approve(data: dict = Body(...)):
-    return await run_in_threadpool(service.approve_and_start, data.get("approver_name", ""), data.get("plan"))
+    return await run_in_threadpool(service.approve_and_start, data.get("approver_name", ""), data.get("plan"),
+                                   bool(data.get("chaos")))
+
+
+@app.get("/api/live-config", dependencies=[api])
+async def api_live_config():
+    return await run_in_threadpool(service.live_config)
 
 
 @app.get("/api/exercises", dependencies=[api])
@@ -214,6 +240,11 @@ async def api_events(xid: str, after: int = 0):
 @app.post("/api/exercise/{xid}/confirm/{step_id}", dependencies=[api])
 def api_confirm(xid: str, step_id: str, data: Optional[dict] = Body(None)):
     return service.confirm_step(xid, step_id, (data or {}).get("by", "console user"))
+
+
+@app.post("/api/exercise/{xid}/chaos", dependencies=[api])
+def api_chaos(xid: str):
+    return service.arm_chaos(xid)
 
 
 @app.post("/api/exercise/{xid}/{cmd}", dependencies=[api])

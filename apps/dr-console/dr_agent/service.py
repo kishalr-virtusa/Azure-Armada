@@ -178,7 +178,7 @@ def get_draft_plan() -> dict:
     return json.loads(raw) if raw else {}
 
 
-def approve_and_start(approver: str, plan_data: Optional[dict] = None) -> dict:
+def approve_and_start(approver: str, plan_data: Optional[dict] = None, chaos: bool = False) -> dict:
     if not approver.strip():
         return {"error": "approver name is required"}
     plan = ExercisePlan.model_validate(plan_data) if plan_data else ExercisePlan.model_validate(get_draft_plan())
@@ -196,6 +196,7 @@ def approve_and_start(approver: str, plan_data: Optional[dict] = None) -> dict:
         "runbook_json": (p1.get("runbook_json") or "")[:30000],
         "approvals_json": json.dumps({"plan": {"by": approver, "at": now}}),
         "confirmations_json": "{}", "completed_steps_json": "[]", "command": "", "t0": "",
+        "chaos_armed": "true" if chaos else "", "chaos_injected": "",
     })
     store.add_event(xid, "approval", f"Plan approved by {approver}", None, {"by": approver, "at": now})
     try:
@@ -231,7 +232,21 @@ def get_exercise_view(xid: str) -> dict:
         "failed_step": m.get("failed_step") or None,
         "diagnosis": json.loads(m["diagnosis_json"]) if m.get("diagnosis_json") and raw_status == "paused_failed" else None,
         "report_url": m.get("report_url"), "error": m.get("error"), "running": runner.is_running(xid),
+        "diagnosis_source": m.get("diagnosis_source"), "diagnosis_via": m.get("diagnosis_via"),
+        "chaos_armed": str(m.get("chaos_armed")).lower() == "true", "chaos_injected": m.get("chaos_injected") or None,
     }
+
+
+def arm_chaos(xid: str) -> dict:
+    """Arm the surprise fault; the engine injects it at the next failover/validation checkpoint."""
+    m = store.get_exercise(xid) or {}
+    if m.get("status") not in ("approved", "running", "waiting_human"):
+        return {"error": f"exercise is {m.get('status')}; chaos only while it runs"}
+    if m.get("t_recovered"):
+        return {"error": "already recovered; inject the fault before recovery"}
+    store.upsert_exercise(xid, {"chaos_armed": "true"})
+    store.add_event(xid, "info", "Surprise fault armed by the presenter")
+    return {"ok": True}
 
 
 def confirm_step(xid: str, step_id: str, by: str) -> dict:
@@ -257,8 +272,9 @@ def send_command(xid: str, cmd: str) -> dict:
 
 
 def list_exercises() -> list[dict]:
-    rows = [e for e in store.list_exercises(50) if e.get("PartitionKey", "").startswith("ex-")]
-    return rows
+    """Newest first (ids are ex-YYYYMMDD-HHMMSS, so the id order is the start order)."""
+    rows = [e for e in store.list_exercises(1000) if e.get("PartitionKey", "").startswith("ex-")]
+    return sorted(rows, key=lambda e: e["PartitionKey"], reverse=True)[:50]
 
 
 def results_context(xid: Optional[str]) -> dict:
@@ -303,3 +319,109 @@ def _num(v: Any) -> Optional[float]:
 
 def _bool(v: Any) -> bool:
     return v is True or str(v).lower() == "true"
+
+
+# ------------------------------------------------------------------ public live feed (judges' phones)
+_live_cache: dict[str, Any] = {"t": 0.0, "v": None}
+_serving_cache: dict[str, Any] = {"t": 0.0, "v": None}
+PUBLIC_EVENT_KINDS = {"info", "measurement", "approval", "diagnosis", "chaos", "remediation", "error"}
+FINISHED = ("completed", "rolled_back", "aborted", "failed", "killed")
+DEFAULT_ETA_S = 45.0
+
+
+def _serving_region() -> Optional[str]:
+    if time.monotonic() - _serving_cache["t"] < 3:
+        return _serving_cache["v"]
+    r = _safe(lambda: runner._probe("tm"))
+    v = r.get("region") if isinstance(r, dict) and r.get("ok") else None
+    _serving_cache.update(t=time.monotonic(), v=v)
+    return v
+
+
+def _eta_basis(exclude: str) -> tuple[float, str]:
+    """Median RTO of the last 3 clean drills (no chaos) = expected time to recover."""
+    rtos = []
+    for e in list_exercises():
+        if e["PartitionKey"] == exclude or len(rtos) >= 3:
+            continue
+        full = store.get_exercise(e["PartitionKey"]) or {}
+        if _num(full.get("rto_s")) and not full.get("chaos_injected"):
+            rtos.append(_num(full.get("rto_s")))
+    if not rtos:
+        return DEFAULT_ETA_S, "typical for this setup"
+    rtos.sort()
+    return rtos[len(rtos) // 2], f"median of last {len(rtos)} drill{'s' if len(rtos) > 1 else ''}"
+
+
+def public_live() -> dict:
+    """Read-only, unauthenticated drill status for the Contoso app and the presenter view (cached 1 s)."""
+    if _live_cache["v"] and time.monotonic() - _live_cache["t"] < 1.0:
+        return _live_cache["v"]
+    now = datetime.now(timezone.utc)
+    out: dict[str, Any] = {
+        "state": "normal", "exercise_id": None, "headline": "All systems normal. DR drills verified by DR Agent.",
+        "primary_region": "Central India", "serving_region": _serving_region(), "server_time": now.isoformat(),
+        "t0": None, "elapsed_s": None, "eta_s": None, "eta_basis": "", "rto_target_s": None, "rpo_target_s": None,
+        "rto_s": None, "rpo_s": None, "rto_met": None, "rpo_met": None, "current_step": "", "steps_done": 0,
+        "steps_total": 0, "chaos": False, "timeline": [],
+    }
+    ex = list_exercises()
+    m = store.get_exercise(ex[0]["PartitionKey"]) if ex else None
+    if m:
+        xid = ex[0]["PartitionKey"]
+        status = m.get("status") or ""
+        finished_at = _dt(m.get("finished_at") or m.get("t_failback_done"))
+        stale = status in FINISHED and (not finished_at or (now - finished_at).total_seconds() > 900)
+        if not stale:
+            prof = AppProfile.model_validate_json(m.get("profile_json") or AppProfile().model_dump_json())
+            steps = json.loads(m.get("plan_json") or "{}").get("steps", [])
+            titles = {s["id"]: s["title"] for s in steps}
+            t0, t_rec = _dt(m.get("t0")), _dt(m.get("t_recovered"))
+            out.update(exercise_id=xid, rto_target_s=prof.rto_min * 60, rpo_target_s=prof.rpo_min * 60,
+                       rto_s=_num(m.get("rto_s")), rpo_s=_num(m.get("rpo_s")),
+                       rto_met=_bool(m.get("rto_met")) if m.get("rto_s") not in (None, "") else None,
+                       rpo_met=_bool(m.get("rpo_met")) if m.get("rpo_s") not in (None, "") else None,
+                       current_step=titles.get(m.get("current_step") or m.get("waiting_step") or "", ""),
+                       steps_done=len(json.loads(m.get("completed_steps_json") or "[]")), steps_total=len(steps),
+                       chaos=bool(m.get("chaos_injected")), t0=t0.isoformat() if t0 else None)
+            if t0:
+                out["elapsed_s"] = round(((t_rec or now) - t0).total_seconds(), 1)
+            if status in ("rolled_back",):
+                out.update(state="rolled_back", headline="Drill rolled back. Central India is serving again.")
+            elif status == "completed":
+                out.update(state="completed", headline="DR drill complete. Back in Central India.")
+            elif m.get("t_failback_start") and not m.get("t_failback_done"):
+                out.update(state="failing_back", headline="Recovered. Now returning service to Central India.")
+            elif t_rec:
+                out.update(state="recovered", headline=f"Recovered in Southeast Asia in {fmt_duration(out['rto_s'])}.")
+            elif t0:
+                eta, basis = _eta_basis(xid)
+                out.update(state="paused" if status == "paused_failed" else "outage",
+                           eta_s=round(max(0.0, eta - out["elapsed_s"]), 1), eta_basis=basis,
+                           headline="Central India is down. DR Agent is failing over to Southeast Asia.")
+            elif status in ("approved", "running", "waiting_human"):
+                out.update(state="armed", headline="A DR drill is about to start. Keep paying!")
+            evs = [e for e in store.get_events(xid) if e.get("kind") in PUBLIC_EVENT_KINDS][-8:]
+            out["timeline"] = [{"ts": e.get("ts") or e.get("Timestamp"), "kind": e.get("kind"),
+                                "message": (e.get("message") or "")[:200]} for e in evs]
+    _live_cache.update(t=time.monotonic(), v=out)
+    return out
+
+
+def live_config() -> dict:
+    """URLs for the presenter view: the public URL judges open, and the app URL users are routed to now."""
+    import os
+    public = os.environ.get("PUBLIC_URL") or ""
+    r = _safe(runner.tm_resolve)
+    return {"public_url": public, "app_url": public or (r.get("url") if isinstance(r, dict) else None),
+            "go_url": "/go"}
+
+
+def _dt(v: Any) -> Optional[datetime]:
+    if not v:
+        return None
+    try:
+        d = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None

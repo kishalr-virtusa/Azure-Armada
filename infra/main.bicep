@@ -43,6 +43,16 @@ param projectTag string = 'dr-agent'
 // Generate a suffix from subscription ID for unique naming
 var suffix = take(uniqueString(subscription().id), 4)
 
+@description('Public URL judges open on their phones (custom domain CNAME -> Traffic Manager). Empty = console /go redirector.')
+param publicUrl string = ''
+
+@description('Second hostname for the same app (forces a fresh DNS lookup on phones after failover). Empty = same as publicUrl.')
+param altPublicUrl string = ''
+
+var consoleBaseUrl = 'https://dra-console-${suffix}.azurewebsites.net'
+var effectivePublicUrl = empty(publicUrl) ? '${consoleBaseUrl}/go' : publicUrl
+var effectiveAltUrl = empty(altPublicUrl) ? effectivePublicUrl : altPublicUrl
+
 var workloadRgName = 'rg-dra-workload'
 var controlRgName = 'rg-dra-control'
 
@@ -121,6 +131,9 @@ module webAppA 'modules/webapp.bicep' = {
     suffix: suffix
     regionShort: 'cin'
     regionName: 'Central India'
+    drLiveUrl: '${consoleBaseUrl}/public/live'
+    publicUrl: effectivePublicUrl
+    altPublicUrl: effectiveAltUrl
     paymentProvider: paymentProvider
     keyVaultName: keyVault.outputs.keyVaultName
     sqlFogFqdn: sql.outputs.fogListenerFqdn
@@ -142,6 +155,9 @@ module webAppB 'modules/webapp.bicep' = {
     suffix: suffix
     regionShort: 'sea'
     regionName: 'Southeast Asia'
+    drLiveUrl: '${consoleBaseUrl}/public/live'
+    publicUrl: effectivePublicUrl
+    altPublicUrl: effectiveAltUrl
     paymentProvider: plantConfigGap ? '' : paymentProvider
     keyVaultName: keyVault.outputs.keyVaultName
     sqlFogFqdn: sql.outputs.fogListenerFqdn
@@ -198,6 +214,7 @@ module console 'modules/console.bicep' = {
   name: 'console-deployment'
   scope: controlRg
   params: {
+    publicUrl: effectivePublicUrl
     location: controlLocation
     suffix: suffix
     keyVaultName: keyVault.outputs.keyVaultName

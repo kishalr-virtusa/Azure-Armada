@@ -113,6 +113,8 @@ class Diagnosis(BaseModel):  # (LLM)
     likely_cause: str
     evidence: list[str]
     recommended_action: Literal["retry", "rollback", "continue"]
+    fix_action: Literal["none", "tm_set_endpoint", "start_webapp"]  # remediation the engine runs before a retry
+    fix_params: list[Param]
 
 
 class Measurement(BaseModel):
