@@ -72,6 +72,10 @@ resource project 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = if
 resource deployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = if (!useExistingOpenAI) {
   parent: foundry
   name: deploymentName
+  // serialize after the project: parallel child operations on the account fail with RequestConflict
+  dependsOn: [
+    project
+  ]
   sku: {
     name: deploymentSku
     capacity: capacity
