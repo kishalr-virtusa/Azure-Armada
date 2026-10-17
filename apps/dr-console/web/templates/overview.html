@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+
+{% block title %}Overview — DR Agent Console{% endblock %}
+
+{% block content %}
+<header>
+    <div>
+        <span class="eyebrow">DR Agent Console</span>
+        <h1>System Overview</h1>
+    </div>
+</header>
+
+<!-- KPI Cards -->
+<div class="kpis" id="statusCards">
+    <!-- Region A -->
+    <div class="kpi" id="cardRegionA">
+        <div class="l">Region A (Central India)</div>
+        <div class="v" id="statusA">—</div>
+        <div class="x" id="detailA">Loading...</div>
+    </div>
+    
+    <!-- Region B -->
+    <div class="kpi region-b" id="cardRegionB">
+        <div class="l">Region B (South India)</div>
+        <div class="v" id="statusB">—</div>
+        <div class="x" id="detailB">Loading...</div>
+    </div>
+    
+    <!-- Traffic Manager -->
+    <div class="kpi" id="cardTM">
+        <div class="l">Traffic Manager</div>
+        <div class="v" id="statusTM">—</div>
+        <div class="x" id="detailTM">Loading...</div>
+    </div>
+    
+    <!-- Failover Group -->
+    <div class="kpi" id="cardFOG">
+        <div class="l">SQL Failover Group</div>
+        <div class="v" id="statusFOG">—</div>
+        <div class="x" id="detailFOG">Loading...</div>
+    </div>
+</div>
+
+<!-- Details Section -->
+<div class="twin">
+    <!-- Endpoints Card -->
+    <div class="card">
+        <h2>Traffic Manager Endpoints</h2>
+        <p class="sub">Current routing configuration</p>
+        <div class="scroll" style="margin-top: 12px;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Endpoint</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Monitor</th>
+                    </tr>
+                </thead>
+                <tbody id="endpointsTable">
+                    <tr><td colspan="4" style="text-align:center;color:var(--ink-3);">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- DNS & Routing Card -->
+    <div class="card">
+        <h2>Current Routing</h2>
+        <p class="sub">DNS resolution and active region</p>
+        <dl class="srcs" style="margin-top: 12px;" id="routingInfo">
+            <dt>TM FQDN</dt>
+            <dd id="tmFqdn">—</dd>
+            <dt>Routes To</dt>
+            <dd id="routesTo">—</dd>
+            <dt>Active Region</dt>
+            <dd id="activeRegion">—</dd>
+            <dt>Last Check</dt>
+            <dd id="lastCheck">—</dd>
+        </dl>
+    </div>
+</div>
+
+<!-- Recent Exercises -->
+<div class="card">
+    <h2>Recent Exercises</h2>
+    <p class="sub">Latest DR exercise runs</p>
+    <div class="scroll" style="margin-top: 12px;">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Status</th>
+                    <th>Started</th>
+                    <th>RTO</th>
+                    <th>RPO</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="exercisesTable">
+                <tr><td colspan="6" style="text-align:center;color:var(--ink-3);">No exercises yet</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div style="margin-top: 16px;">
+        <a href="/phase1" class="btn btn-primary">Start New Exercise</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function loadStatus() {
+        try {
+            const res = await fetch('/api/status');
+            const data = await res.json();
+            
+            // Update Region A
+            updateCard('cardRegionA', 'statusA', 'detailA', data.region_a);
+            
+            // Update Region B
+            updateCard('cardRegionB', 'statusB', 'detailB', data.region_b);
+            
+            // Update Traffic Manager
+            updateTMCard(data.traffic_manager);
+            
+            // Update FOG
+            updateFOGCard(data.failover_group);
+            
+            // Update endpoints table
+            updateEndpointsTable(data.traffic_manager?.endpoints || []);
+            
+            // Update routing info
+            document.getElementById('tmFqdn').textContent = data.traffic_manager?.dns_config?.fqdn || '—';
+            document.getElementById('routesTo').textContent = data.routing?.cname || '—';
+            document.getElementById('activeRegion').textContent = data.routing?.active_region || '—';
+            document.getElementById('lastCheck').textContent = new Date().toLocaleTimeString();
+            
+        } catch (e) {
+            console.error('Failed to load status:', e);
+        }
+    }
+    
+    function updateCard(cardId, statusId, detailId, data) {
+        const card = document.getElementById(cardId);
+        const status = document.getElementById(statusId);
+        const detail = document.getElementById(detailId);
+        
+        if (!data || data.error) {
+            status.textContent = 'Error';
+            detail.textContent = data?.error || 'Failed to load';
+            card.classList.remove('pass', 'warn');
+            card.classList.add('fail');
+            return;
+        }
+        
+        const isHealthy = data.state === 'Running';
+        status.textContent = isHealthy ? '✓' : '✗';
+        detail.textContent = `${data.state} • ${data.location || ''}`;
+        
+        card.classList.remove('pass', 'fail', 'warn');
+        card.classList.add(isHealthy ? 'pass' : 'fail');
+    }
+    
+    function updateTMCard(data) {
+        const card = document.getElementById('cardTM');
+        const status = document.getElementById('statusTM');
+        const detail = document.getElementById('detailTM');
+        
+        if (!data || data.error) {
+            status.textContent = 'Error';
+            detail.textContent = data?.error || 'Failed to load';
+            card.classList.add('fail');
+            return;
+        }
+        
+        const onlineCount = (data.endpoints || []).filter(e => e.endpoint_monitor_status === 'Online').length;
+        status.textContent = `${onlineCount}/${data.endpoints?.length || 0}`;
+        detail.textContent = `${data.profile_status} • TTL ${data.dns_config?.ttl}s`;
+        
+        card.classList.remove('pass', 'fail', 'warn');
+        card.classList.add(onlineCount > 0 ? 'pass' : 'fail');
+    }
+    
+    function updateFOGCard(data) {
+        const card = document.getElementById('cardFOG');
+        const status = document.getElementById('statusFOG');
+        const detail = document.getElementById('detailFOG');
+        
+        if (!data || data.error) {
+            status.textContent = 'Error';
+            detail.textContent = data?.error || 'Failed to load';
+            card.classList.add('fail');
+            return;
+        }
+        
+        status.textContent = data.replication_role === 'Primary' ? 'A' : 'B';
+        detail.textContent = `${data.replication_role} • ${data.replication_state}`;
+        
+        const isHealthy = data.replication_state === 'CATCH_UP' || data.replication_state === 'SEEDING';
+        card.classList.remove('pass', 'fail', 'warn');
+        card.classList.add(isHealthy || data.replication_role ? 'pass' : 'warn');
+    }
+    
+    function updateEndpointsTable(endpoints) {
+        const tbody = document.getElementById('endpointsTable');
+        
+        if (endpoints.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ink-3);">No endpoints</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = endpoints.map(ep => {
+            const statusClass = ep.endpoint_status === 'Enabled' ? 'pass' : 'neutral';
+            const monitorClass = ep.endpoint_monitor_status === 'Online' ? 'pass' : 
+                                 ep.endpoint_monitor_status === 'Degraded' ? 'warn' : 'fail';
+            return `
+                <tr>
+                    <td class="f">${ep.name}</td>
+                    <td>${ep.priority}</td>
+                    <td><span class="st ${statusClass}">${ep.endpoint_status}</span></td>
+                    <td><span class="st ${monitorClass}">${ep.endpoint_monitor_status}</span></td>
+                </tr>
+            `;
+        }).join('');
+    }
+    
+    async function loadExercises() {
+        try {
+            const res = await fetch('/api/exercises');
+            const exercises = await res.json();
+            
+            const tbody = document.getElementById('exercisesTable');
+            
+            if (exercises.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink-3);">No exercises yet</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = exercises.map(ex => {
+                const statusClass = ex.status === 'completed' ? 'pass' :
+                                   ex.status === 'failed' ? 'fail' :
+                                   ex.status === 'running' ? 'info' : 'neutral';
+                return `
+                    <tr>
+                        <td class="f">${ex.PartitionKey}</td>
+                        <td><span class="st ${statusClass}">${ex.status}</span></td>
+                        <td>${ex.t0 ? new Date(ex.t0).toLocaleString() : '—'}</td>
+                        <td>${ex.rto_s ? formatDuration(ex.rto_s) : '—'}</td>
+                        <td>${ex.rpo_s !== undefined ? ex.rpo_s + 's' : '—'}</td>
+                        <td><a href="/exercise/${ex.PartitionKey}">View</a></td>
+                    </tr>
+                `;
+            }).join('');
+        } catch (e) {
+            console.error('Failed to load exercises:', e);
+        }
+    }
+    
+    function formatDuration(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        return `${m}m ${s}s`;
+    }
+    
+    // Initial load
+    loadStatus();
+    loadExercises();
+    
+    // Poll every 2 seconds
+    setInterval(loadStatus, 2000);
+    setInterval(loadExercises, 10000);
+</script>
+{% endblock %}
