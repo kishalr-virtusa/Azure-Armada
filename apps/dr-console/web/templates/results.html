@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Results — DR Agent Console{% endblock %}
+
+{% block content %}
+<header>
+    <div>
+        <span class="eyebrow">Exercise Results</span>
+        <h1>{{ exercise_id or 'Latest Exercise' }}</h1>
+    </div>
+    <div>
+        <span class="st {{ status_class }}">{{ status }}</span>
+    </div>
+</header>
+
+<!-- RTO/RPO Results -->
+<div class="kpis">
+    <!-- RTO -->
+    <div class="kpi {{ 'pass' if rto_met else 'fail' }}" style="text-align: center;">
+        <div class="l">Recovery Time Objective (RTO)</div>
+        <div class="v big" style="font-size: 44px;">
+            {{ rto_display }}
+            {{ '✅' if rto_met else '❌' }}
+        </div>
+        <div class="x">Target: {{ rto_target_min }}min ({{ rto_target_s }}s)</div>
+    </div>
+    
+    <!-- RPO -->
+    <div class="kpi {{ 'pass' if rpo_met else 'fail' }}" style="text-align: center;">
+        <div class="l">Recovery Point Objective (RPO)</div>
+        <div class="v big" style="font-size: 44px;">
+            {{ rpo_s }}s
+            {{ '✅' if rpo_met else '❌' }}
+        </div>
+        <div class="x">Target: {{ rpo_target_min }}min ({{ rpo_target_s }}s)</div>
+    </div>
+    
+    <!-- Failback Time -->
+    <div class="kpi">
+        <div class="l">Failback Time</div>
+        <div class="v">{{ failback_display or '—' }}</div>
+        <div class="x">Time to restore original state</div>
+    </div>
+    
+    <!-- Overall Verdict -->
+    <div class="kpi {{ 'pass' if overall_pass else 'fail' }}">
+        <div class="l">Overall Result</div>
+        <div class="v">{{ 'PASS' if overall_pass else 'FAIL' }}</div>
+        <div class="x">Both targets {{ 'met' if overall_pass else 'NOT met' }}</div>
+    </div>
+</div>
+
+<!-- Evidence Section -->
+<div class="twin">
+    <div class="card">
+        <h2>Timing Evidence</h2>
+        <p class="sub">Raw timestamps from the exercise</p>
+        <dl class="srcs" style="margin-top: 12px;">
+            <dt>Outage Injected (t0)</dt>
+            <dd>{{ t0 or '—' }}</dd>
+            <dt>Failover Triggered</dt>
+            <dd>{{ t_failover or '—' }}</dd>
+            <dt>Recovery Confirmed</dt>
+            <dd>{{ t_recovered or '—' }}</dd>
+            <dt>Failback Complete</dt>
+            <dd>{{ t_failback_done or '—' }}</dd>
+        </dl>
+    </div>
+    
+    <div class="card">
+        <h2>RPO Evidence</h2>
+        <p class="sub">Data loss measurement</p>
+        <dl class="srcs" style="margin-top: 12px;">
+            <dt>Last Heartbeat Before Failover</dt>
+            <dd>Seq {{ last_hb_seq or '—' }} at {{ last_hb_ts or '—' }}</dd>
+            <dt>Newest Heartbeat in DR</dt>
+            <dd>Seq {{ dr_hb_seq or '—' }} at {{ dr_hb_ts or '—' }}</dd>
+            <dt>Data Loss Window</dt>
+            <dd>{{ rpo_s or 0 }} seconds</dd>
+        </dl>
+    </div>
+</div>
+
+<!-- Remediation Items -->
+<div class="card">
+    <h2>Remediation Items</h2>
+    <p class="sub">Issues identified during the exercise</p>
+    
+    {% if remediation_items %}
+    <div class="scroll" style="margin-top: 12px;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Priority</th>
+                    <th>Item</th>
+                    <th>Owner</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in remediation_items %}
+                <tr>
+                    <td>
+                        <span class="pr {{ item.priority }}">{{ item.priority }}</span>
+                    </td>
+                    <td>{{ item.item }}</td>
+                    <td><span class="chip">{{ item.owner }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p style="margin-top: 12px; color: var(--ink-3);">No remediation items identified.</p>
+    {% endif %}
+</div>
+
+<!-- Report Link -->
+<div class="card" style="text-align: center;">
+    <h2>Full Report</h2>
+    <p class="sub" style="margin-bottom: 16px;">Download or view the complete exercise report</p>
+    
+    {% if report_url %}
+    <a href="{{ report_url }}" target="_blank" class="btn btn-primary">
+        📄 View HTML Report
+    </a>
+    <a href="/reports/{{ exercise_id }}" class="btn btn-secondary" style="margin-left: 8px;">
+        Open in Console
+    </a>
+    {% else %}
+    <p style="color: var(--ink-3);">Report not yet generated.</p>
+    {% endif %}
+</div>
+
+<!-- Actions -->
+<div style="text-align: center; margin-top: 24px;">
+    <a href="/phase1" class="btn btn-secondary">Start New Exercise</a>
+    <a href="/" class="btn btn-secondary" style="margin-left: 8px;">Back to Overview</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Auto-refresh if exercise is still running
+    {% if status == 'running' %}
+    setTimeout(() => location.reload(), 5000);
+    {% endif %}
+</script>
+{% endblock %}
