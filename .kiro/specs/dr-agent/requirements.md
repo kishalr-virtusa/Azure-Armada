@@ -20,7 +20,7 @@ Acceptance criteria:
 
 1. `infra/scripts/deploy.sh` SHALL deploy everything in `tech.md` idempotently into two resource groups: `rg-dra-workload` and `rg-dra-control`.
 2. THE SQL setup SHALL include servers in Region A and Region B, database `paymentsdb` (Basic), and a failover group with a manual failover policy.
-3. Traffic Manager SHALL have one endpoint and an origin group with Region A at priority 1 and Region B at priority 2, health-probing `/health` every 30s.
+3. Traffic Manager SHALL use Priority routing with Region A (priority 1) and Region B (priority 2) as Azure endpoints, DNS TTL 10s, health-probing `/health` every 10s. Both apps SHALL accept the TM hostname. Front Door is not allowed on Free Trial.
 4. THE console App Service SHALL have a system-assigned managed identity with **Contributor on `rg-dra-workload` only**, and Storage Table/Blob Data Contributor on the control storage account.
 5. `infra/scripts/budget.sh` SHALL create a subscription budget with alerts at $50, $100 and $150.
 6. `infra/scripts/teardown.sh` SHALL delete both resource groups after confirmation.
@@ -35,7 +35,7 @@ Acceptance criteria:
    - failover group replication state + lag
    - Region B app `/health` reachable directly
    - **app-settings parity** between Region A and Region B (keys and non-secret values; ignore `REGION_NAME`)
-   - Traffic Manager origins healthy/enabled
+   - Traffic Manager endpoints enabled + monitor status Online
    - Key Vault reachable
 4. WHEN "Review runbook" is clicked THE **Runbook agent** SHALL compare `docs/runbooks/payments-dr-runbook.md` with the live inventory and return each step as valid / stale / missing, with a suggested correction and an updated runbook.
 5. EACH check result SHALL be stored and shown with a timestamp and evidence (raw values).
@@ -89,7 +89,7 @@ Acceptance criteria:
    - start Region A
    - wait until healthy
    - SQL failover back to Region A (planned, no data loss)
-   - enable the Region A origin
+   - enable the Region A Traffic Manager endpoint
    - verify Traffic Manager serves Region A
    - stop the heartbeat
 2. Failback time SHALL be measured and reported separately.

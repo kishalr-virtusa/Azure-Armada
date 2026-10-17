@@ -13,8 +13,8 @@
                └─ tools/*              ── Azure SDK (web, sql, cdn/afd, resource graph), probes, heartbeat
                      │ Contributor on rg-dra-workload only
                      ▼
- Traffic Manager Standard (endpoint /, /health, /api/*, caching OFF)
-   origin group: A (prio 1) ── App Service B1 centralindia  ─┐
+ Traffic Manager (Priority routing, DNS TTL 10s, HTTP, probe /health every 10s)
+   endpoints:   A (prio 1) ── App Service B1 centralindia  ─┐
                  B (prio 2) ── App Service B1 southindia    ─┤─ SQL failover group listener
    SQL server A (primary) ═══ geo-replication ═══► SQL server B (secondary)   paymentsdb Basic
  Control store: Storage Tables (exercises, events, heartbeats) + Blob (reports)
@@ -50,10 +50,14 @@
   - App settings: `REGION_NAME`, `SQL_SERVER=<fog>.database.windows.net`, `SQL_DB`, `SQL_USER`, `SQL_PASSWORD=@Microsoft.KeyVault(...)`, `SCM_DO_BUILD_DURING_DEPLOYMENT=true`
   - `alwaysOn=true`, healthCheckPath `/health`, system identity + Key Vault Secrets User role.
 - `trafficmanager.bicep`:
-  - profile Standard_AzureFrontDoor, endpoint, origin group with health probe (GET /health, HTTPS, 30s), load-balancing sample size 2, successful samples 1
-  - origins A (priority 1) and B (priority 2)
-  - route `/*` with **no caching**, HTTPS only, forwarding protocol HttpsOnly.
-- `storage.bicep`: control storage account, tables `exercises`, `events`, `heartbeats`, blob container `reports`.
+  - profile `dra-tm-<suffix>`, trafficRoutingMethod **Priority**, DNS TTL **10**
+  - monitor: protocol **HTTPS**, port 443, path `/health`, intervalInSeconds **10**, timeoutInSeconds 5, toleratedNumberOfFailures **1**
+  - Azure endpoints (type `azureEndpoints`, targetResourceId = web app) A priority 1, B priority 2
+  - **Host header gotcha:** users reach the app at `http://<tm>.trafficmanager.net`.
+    - Each web app MUST have a `hostNameBindings` entry for `<tm>.trafficmanager.net`. Create it after the TM profile + endpoints exist, because Azure validates that the app is a TM endpoint.
+    - Users use plain HTTP via TM, so set `httpsOnly=false` on the workload apps. There's no TLS cert for trafficmanager.net; this is acceptable for the demo.
+    - Probes and the console can also use HTTPS on each app's `*.azurewebsites.net` host directly.
+  - - `storage.bicep`: control storage account, tables `exercises`, `events`, `heartbeats`, blob container `reports`.
 - `console.bicep`: plan B1 + web app (control RG), app settings for every endpoint/name the console needs (see `config.py`), system identity.
 - `roles.bicep`: console identity → Contributor on `rg-dra-workload`, Storage Table Data Contributor + Storage Blob Data Contributor on the control storage, Key Vault Secrets User, and **Cognitive Services OpenAI User** on the OpenAI resource.
 
@@ -112,13 +116,13 @@ Prompt rules (all agents):
 5. out-1 (automated, dr-agent): `inject_outage(region=A)` → records t0
 6. fo-1 (automated, db): `sql_failover(target=B, allow_data_loss=true)` → records t_failover
 7. fo-2 (automated, network): `tm_set_endpoint(region=A, enabled=false)`
-8. val-1 (automated, app): `wait_healthy(frontdoor, expect_region=B, timeout=900)` → records t_recovered
+8. val-1 (automated, app): `wait_healthy(tm, expect_region=B, timeout=900)` → records t_recovered
 9. val-2 (automated, app): `functional_txn_check`
 10. val-3 (automated, dr-agent): `measure_rpo`
 11. fb-1 (human, app): "App team approves failback"
 12. fb-2 (automated, app): `start_webapp(A)` + `wait_healthy(direct A)`
 13. fb-3 (automated, db): `sql_failover(target=A, allow_data_loss=false)`
-14. fb-4 (automated, network): `tm_set_endpoint(region=A, enabled=true)` + `wait_healthy(frontdoor, expect_region=A)`
+14. fb-4 (automated, network): `tm_set_endpoint(region=A, enabled=true)` + `wait_healthy(tm, expect_region=A)`
 15. close-1 (automated, dr-agent): `stop_heartbeat`, `snapshot_inventory` diff, generate report, notify
 
 ### 4.5 Tools (dr_agent/tools)
@@ -129,10 +133,12 @@ Prompt rules (all agents):
   - **planned:** `begin_failover(rg, <target server>, fog).result()`
   - Both are called against the **server that becomes primary**.
 - `azure_trafficmanager.py`:
-  - `CdnManagementClient.afd_origins.get(rg, profile, origin_group, origin)`
-  - set `enabled_state = "Disabled"/"Enabled"`, then `begin_create_or_update(...)`
-- `inventory.py`: Resource Graph query over `rg-dra-workload` (type, name, location, sku) + app settings of both apps (secret values masked) + FOG status + Traffic Manager origin states.
-- `probes.py`: `httpx` GET with a 5s timeout. `probe(url)` returns (ok, region, db_ok, latency). `wait_healthy(url, expect_region, timeout)` polls every 5s.
+  - `TrafficManagerManagementClient.endpoints.get(rg, profile, "AzureEndpoints", name)`
+  - set `endpoint_status = "Disabled"/"Enabled"`, then `endpoints.update(...)`
+  - `profiles.get` → `endpoint_monitor_status` per endpoint (Online/Degraded/Disabled/CheckingEndpoint)
+  - Probe through TM with **fresh DNS each time**: resolve the TM FQDN via `dns.resolver` (dnspython, no cache) to see which app it points at, then GET `http://<tm-fqdn>/health`.
+- `inventory.py`: Resource Graph query over `rg-dra-workload` (type, name, location, sku) + app settings of both apps (secret values masked) + FOG status + Traffic Manager endpoint states (enabled + monitor status).
+- `probes.py`: `httpx` GET with a 5s timeout (add `dnspython` to requirements). `probe(url)` returns (ok, region, db_ok, latency). `wait_healthy(url, expect_region, timeout)` polls every 5s.
 - `heartbeat.py`:
   - Background thread, every 2s: connect via the FOG listener and `INSERT heartbeat(seq, client_ts)`.
   - On success, records `acked=true` in the Table; on failure, `acked=false` + error.
@@ -164,7 +170,7 @@ UI:
 ## 5. Failure modes & mitigations
 | Risk | Mitigation |
 |---|---|
-| Traffic Manager keeps routing to A while A is down | The agent explicitly disables origin A. Probe interval is 30s, and `wait_healthy` also checks the `region` field. |
+| Traffic Manager keeps routing to A while A is down (DNS caching) | The agent explicitly disables endpoint A. TTL is 10s and probes every 10s. `wait_healthy` resolves DNS fresh and checks the `region` field. Expected switch time is ~20–40s. |
 | Forced failover leaves the old primary as secondary | Failback uses a planned failover after A is healthy. The FOG re-syncs automatically. |
 | LLM slow or unavailable | Deterministic fallbacks (4.3). Plans are validated before use. |
 | App Service restart mid-exercise | State persisted in Tables. The orchestrator resumes. |

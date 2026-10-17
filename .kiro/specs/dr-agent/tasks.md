@@ -16,11 +16,11 @@ Execute in order within each track. Tracks A and B can run in parallel. Referenc
 - [ ] A1 [Kiro] `infra/modules/log.bicep`, `keyvault.bicep`, `storage.bicep` per design §3. (R2.1, R2.7)
 - [ ] A2 [Kiro] `infra/modules/sql.bicep`: two servers, `paymentsdb` Basic, failover group with Manual policy, firewall allow Azure. Output the listener FQDN. (R2.2)
 - [ ] A3 [Kiro] `infra/modules/webapp.bicep` (reusable per region; settings per design §3, Key Vault references). (R2.1)
-- [ ] A4 [Kiro] `infra/modules/trafficmanager.bicep`: Standard profile, endpoint, origin group with probe `/health`, origins A (prio 1) and B (prio 2), route with caching disabled. (R2.3)
+- [ ] A4 [Kiro] `infra/modules/trafficmanager.bicep`: Priority profile, TTL 10, HTTPS monitor `/health` every 10s, Azure endpoints A (prio 1) / B (prio 2), plus the `<tm>.trafficmanager.net` hostname binding on both web apps (after the endpoints exist; see design §3). (R2.3)
 - [ ] A5 [Kiro] `infra/modules/openai.bicep` (optional via `useExistingOpenAI`), `console.bicep`, `roles.bicep` (console MI: Contributor on the workload RG only + data roles + OpenAI User). (R2.4)
 - [ ] A6 [Kiro] `infra/main.bicep` + `parameters.json`. Scripts: `deploy.sh`, `deploy-apps.sh`, `seed-secrets.sh`, `budget.sh`, `teardown.sh`, `smoke.sh`. (R2)
 - [ ] A7 [Team+Claude] Run `budget.sh` FIRST (hard rule), then `seed-secrets.sh`, `deploy.sh`. Fix deployment errors. Confirm the Traffic Manager URL serves Region A.
-- [ ] A8 [Team+Claude] **Manual failover rehearsal** with `az` (stop A → forced FOG failover to B → disable origin A → app works via Traffic Manager → failback). Note the real timings. This de-risks Sunday.
+- [ ] A8 [Team+Claude] **Manual failover rehearsal** with `az` (stop A → forced FOG failover to B → disable TM endpoint A → app works via Traffic Manager → failback). Note the real timings. This de-risks Sunday.
 
 ## Track B: Demo workload app
 - [ ] B1 [Kiro] `apps/demo-app`: FastAPI app, `db.py` (pymssql via FOG listener, table bootstrap), `/`, `/health`, `/api/txn`, `/api/recent`. (R1)
@@ -38,7 +38,7 @@ Execute in order within each track. Tracks A and B can run in parallel. Referenc
 - [ ] D2 [Claude] Planner agent + `default_plan.json` + plan validator (DAG, allowlist, mandatory order) + tests. (R4)
 - [ ] D3 [Claude] `engine/executor.py` + `engine/orchestrator.py`: step loop, human-step pause + Google Chat notify, approvals, kill switch, retry/rollback, resume after restart, timestamps t0 / t_failover / t_recovered / t_failback_done. (R5, R7)
 - [ ] D4 [Claude] Validator (diagnosis) + Reporter agent + HTML report template (Kiro may style it). (R8)
-- [ ] D5 [Kiro] `docs/runbooks/payments-dr-runbook.md`: a realistic 12-step runbook with **2 deliberately stale steps**: it references "Traffic Manager profile tm-payments" (we use Traffic Manager) and an old server name `sql-payments-old`. (R3.4)
+- [ ] D5 [Kiro] `docs/runbooks/payments-dr-runbook.md`: a realistic 12-step runbook with **2 deliberately stale steps**: it references a "Front Door profile fd-payments" (we actually use Traffic Manager) and an old server name `sql-payments-old`. (R3.4)
 
 ## Track E: Console UI
 - [ ] E1 [Kiro] Overview page: live cards for Region A, Region B, Traffic Manager, FOG role (poll `/api/status`). (R9)
