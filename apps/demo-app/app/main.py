@@ -3,6 +3,8 @@
 import os
 import random
 import logging
+import threading
+import time
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request, HTTPException
@@ -78,8 +80,25 @@ async def index(request: Request):
     )
 
 
+_health_cache: dict = {"t": 0.0, "v": None}
+_health_lock = threading.Lock()
+HEALTH_CACHE_S = 3.0
+
+
+def _cached_health() -> dict:
+    now = time.monotonic()
+    if _health_cache["v"] is not None and now - _health_cache["t"] < HEALTH_CACHE_S:
+        return _health_cache["v"]
+    with _health_lock:  # one database check at a time; concurrent probes reuse its result
+        if _health_cache["v"] is not None and time.monotonic() - _health_cache["t"] < HEALTH_CACHE_S:
+            return _health_cache["v"]
+        v = db.health_check()
+        _health_cache.update(t=time.monotonic(), v=v)
+        return v
+
+
 @app.get("/health")
-async def health():
+def health():
     """Health check endpoint for Traffic Manager probes."""
     # First check required configuration
     missing_config = check_required_config()
@@ -95,8 +114,9 @@ async def health():
             status_code=503,
         )
     
-    # Then check database
-    check = db.health_check()
+    # Then check database (cached ~3s: Traffic Manager probes from many locations at once, and each check
+    # writes to the database; without the cache a probe storm after failback can exceed TM's 5s probe timeout)
+    check = _cached_health()
     
     response = {
         "status": "ok" if check["db_ok"] else "error",
