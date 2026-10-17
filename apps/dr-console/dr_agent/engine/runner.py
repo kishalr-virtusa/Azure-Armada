@@ -72,10 +72,36 @@ def _sql_connect():
                          os.environ.get("SQL_USER", "sqladmin"), os.environ.get("SQL_PASSWORD", ""))
 
 
+def tm_resolve() -> dict:
+    """Fresh (uncached) DNS resolution of the Traffic Manager name -> the app hostname TM routes users to.
+
+    App Service on this subscription does not activate the trafficmanager.net hostname binding, so clients
+    follow TM's DNS answer and call the app's own hostname: the same routing decision, made by Traffic Manager.
+    """
+    import dns.resolver
+    r = dns.resolver.Resolver()
+    r.cache = None
+    try:
+        cname = str(r.resolve(config.tm_fqdn, "CNAME", lifetime=5)[0].target).rstrip(".")
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"DNS: {e}"[:200]}
+    region = "A" if config.webapp_a_name in cname else "B" if config.webapp_b_name in cname else None
+    return {"cname": cname, "dns_region": region, "url": f"https://{cname}"}
+
+
 def _probe(target: str) -> dict:
     """target: tm | A | B. Adds `region_key` (A/B) derived from the app's reported region name."""
     from dr_agent.tools import probes
-    r = probes.probe_tm() if target == "tm" else probes.probe_direct(target)
+    if target == "tm":
+        dns_info = tm_resolve()
+        if "error" in dns_info:
+            r = {"ok": False, **dns_info}
+        else:
+            r = probes.probe(dns_info["url"] + "/health")
+            r.update({"tm_fqdn": config.tm_fqdn, "routed_to": dns_info["cname"], "dns_region": dns_info["dns_region"],
+                      "app_url": dns_info["url"]})
+    else:
+        r = probes.probe_direct(target)
     name = (r.get("region") or "").lower()
     r["region_key"] = next((k for k, v in REGION_NAMES.items() if v.lower() == name), None)
     return r
@@ -340,7 +366,10 @@ class ExerciseRunner(threading.Thread):
 
     def functional_check(self) -> dict:
         import httpx
-        base = f"http://{config.tm_fqdn}"
+        dns_info = tm_resolve()
+        if "error" in dns_info:
+            raise StepFailed(dns_info["error"])
+        base = dns_info["url"]
         r = httpx.post(f"{base}/api/txn", timeout=10)
         r.raise_for_status()
         txn = r.json()

@@ -95,6 +95,7 @@ async def health():
         "region": REGION_NAME,
         "db_ok": check["db_ok"],
         "db_server": check.get("db_server"),
+        "db_error": (check.get("error") or "")[:300] or None,
         "time": datetime.now(timezone.utc).isoformat(),
     }
     
