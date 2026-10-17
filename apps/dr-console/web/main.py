@@ -71,6 +71,18 @@ async def public_live():
     return JSONResponse(data, headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
 
 
+def _healthy_region_url() -> Optional[str]:
+    from dr_agent.config import config
+    from dr_agent.tools import probes
+    for app_name in (config.webapp_a_name, config.webapp_b_name):
+        if app_name:
+            base = f"https://{app_name}.azurewebsites.net"
+            res = probes.probe(base + "/health")
+            if res.get("ok") and res.get("db_ok") is not False:
+                return base
+    return None
+
+
 @app.get("/pay")
 @app.get("/go")
 async def go(request: Request):
@@ -78,6 +90,8 @@ async def go(request: Request):
     from dr_agent.engine.runner import tm_resolve
     r = await run_in_threadpool(tm_resolve)
     url = r.get("url") if isinstance(r, dict) else None
+    if not url:  # Traffic Manager unreachable / not deployed: send the phone to whichever region is healthy
+        url = await run_in_threadpool(_healthy_region_url)
     if not url:
         return HTMLResponse("<h3>Contoso Payments is recovering. Retry in a few seconds.</h3>", status_code=503,
                             headers={"Refresh": "3", "Cache-Control": "no-store"})
