@@ -147,3 +147,13 @@ Azure logo 18–24 px next to the text "Microsoft Azure". Use the white Virtusa 
   - Update the bell badge count and the page `<title>` ("(2) DR Agent").
 - Kinds `action` (approval needed) must be the most prominent: amber, stays until clicked.
 - Feature-detect; never throw if Notification/WebAudio are unavailable.
+
+## L7 [Kiro] Virtual-presentation adjustments (we will most likely present remotely over a video call)
+- Presenter view `/live`: QR code at least 280 px with a white quiet zone, and the short URL
+  `azure-armada.azurewebsites.net/pay` in ≥ 28 px text under it, plus a "Copy link" button (for the meeting chat).
+- Phone frame: when the embedded app vibrates (outage alert, payment, recovery), show it VISUALLY: the
+  frame shakes briefly (CSS keyframes, ~400 ms) with ripple rings + a small "📳 haptic" label, so remote viewers
+  "see" the haptics. Implement via `postMessage` from the demo app (`{type:'haptic', pattern}`) → parent page.
+  (Demo app: in `haptics.js`, also `window.parent.postMessage(...)` when running inside an iframe.)
+- Everything must stay legible in a 1280×720 compressed screen share: min body text 18 px on `/live`,
+  high-contrast tiles, avoid thin fonts and tiny grey text.
