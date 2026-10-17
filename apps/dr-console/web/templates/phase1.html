@@ -180,11 +180,12 @@
     let runbookDone = false;
     let fixableKeys = [];
     
-    function renderSourceBadge(source) {
+    function renderSourceBadge(source, via) {
         const isAI = source === 'llm' || source === 'ai';
-        return isAI 
-            ? '<span class="badge" style="background: var(--accent); color: white; border-color: var(--accent);">🤖 AI</span>'
-            : '<span class="badge">📋 Rules</span>';
+        const label = via === 'foundry-agent' ? '🤖 Azure AI Foundry Agent' : '🤖 AI';
+        return isAI
+            ? `<span class="badge" style="background: var(--accent); color: white; border-color: var(--accent);" title="${via || ''}">${label}</span>`
+            : '<span class="badge" title="deterministic fallback">📋 Rules</span>';
     }
     
     document.getElementById('profileForm').addEventListener('submit', async (e) => {
@@ -228,7 +229,7 @@
             const data = await res.json();
             
             // Show source badge
-            document.getElementById('strategySourceBadge').innerHTML = renderSourceBadge(data.source);
+            document.getElementById('strategySourceBadge').innerHTML = renderSourceBadge(data.source, data.via);
             
             const table = document.getElementById('strategyTable');
             table.innerHTML = data.options.map(opt => `
@@ -370,7 +371,7 @@
             const data = await res.json();
             
             // Show source badge
-            document.getElementById('runbookSourceBadge').innerHTML = renderSourceBadge(data.source);
+            document.getElementById('runbookSourceBadge').innerHTML = renderSourceBadge(data.source, data.via);
             
             const table = document.getElementById('runbookTable');
             table.innerHTML = data.steps.map(step => `

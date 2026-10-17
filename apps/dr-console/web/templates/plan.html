@@ -72,11 +72,12 @@
 <script>
     let currentPlan = null;
     
-    function renderSourceBadge(source) {
+    function renderSourceBadge(source, via) {
         const isAI = source === 'llm' || source === 'ai';
-        return isAI 
-            ? '<span class="badge" style="background: var(--accent); color: white; border-color: var(--accent);">🤖 AI</span>'
-            : '<span class="badge">📋 Rules</span>';
+        const label = via === 'foundry-agent' ? '🤖 Azure AI Foundry Agent' : '🤖 AI';
+        return isAI
+            ? `<span class="badge" style="background: var(--accent); color: white; border-color: var(--accent);" title="${via || ''}">${label}</span>`
+            : '<span class="badge" title="deterministic fallback">📋 Rules</span>';
     }
     
     async function generatePlan() {
@@ -113,7 +114,7 @@
         // Show source badge
         const sourceBadge = document.getElementById('planSourceBadge');
         if (sourceBadge) {
-            sourceBadge.innerHTML = renderSourceBadge(plan.source);
+            sourceBadge.innerHTML = renderSourceBadge(plan.source, plan.via);
         }
         
         // Render assumptions
