@@ -60,6 +60,12 @@
                     I have reviewed the plan and understand that this will inject a real outage
                 </label>
             </div>
+            <div class="form-group">
+                <label class="form-label" style="color: var(--upd);">
+                    <input type="checkbox" name="chaos" style="margin-right: 8px;">
+                    🔥 Inject a surprise fault during the drill (tests the Validator agent)
+                </label>
+            </div>
             <button type="submit" class="btn btn-danger">
                 🚀 Approve & Start Exercise
             </button>
@@ -174,6 +180,7 @@
         
         const formData = new FormData(e.target);
         const approverName = formData.get('approver_name');
+        const chaos = formData.get('chaos') === 'on';
         
         if (!confirm('Are you sure you want to start the DR exercise? This will inject a real outage.')) {
             return;
@@ -186,6 +193,7 @@
                 body: JSON.stringify({
                     approver_name: approverName,
                     plan: currentPlan,
+                    chaos: chaos,
                 }),
             });
             

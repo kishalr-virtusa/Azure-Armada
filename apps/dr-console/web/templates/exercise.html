@@ -82,6 +82,18 @@
             </div>
         </div>
         
+        <!-- Chaos Injection -->
+        <div style="margin-top: 16px;">
+            <h3 style="margin-bottom: 12px;">Chaos Testing</h3>
+            <button class="btn" id="chaosBtn" onclick="injectChaos()" disabled 
+                    style="background: linear-gradient(135deg, #FF6B00, #FF0000); color: white; border: none;">
+                🔥 Inject Surprise Fault
+            </button>
+            <p style="font-size: 11px; color: var(--ink-3); margin-top: 6px;">
+                Tests the Validator agent's ability to handle unexpected failures
+            </p>
+        </div>
+        
         <!-- Demo App Embed -->
         <div style="margin-top: 24px;">
             <h3 style="margin-bottom: 12px;">Demo App Preview</h3>
@@ -97,7 +109,10 @@
 
 <!-- Paused/Failed Diagnosis Panel (hidden by default) -->
 <div id="pausedFailedBanner" class="card hide" style="background: var(--add-bg); border-color: var(--add);">
-    <h2 style="color: var(--add);">⚠️ Exercise Paused — Failure Detected</h2>
+    <h2 style="color: var(--add);">
+        ⚠️ Exercise Paused — Failure Detected
+        <span id="diagnosisBadge" class="badge hide" style="margin-left: 8px; background: var(--accent); color: white; border-color: var(--accent);"></span>
+    </h2>
     <p id="failedStepInfo" class="sub" style="margin-bottom: 16px;"></p>
     <div style="margin: 16px 0;">
         <div style="margin-bottom: 12px;">
@@ -112,9 +127,21 @@
             <strong style="color: var(--add);">Recommended Action</strong>
             <p id="diagnosisRecommendedAction" style="margin: 4px 0; padding: 12px; background: var(--surface); border-radius: 6px; border-left: 3px solid var(--accent);">—</p>
         </div>
+        
+        <!-- Proposed fix section (shown when fix_action != "none") -->
+        <div id="proposedFixSection" class="hide" style="margin-bottom: 12px;">
+            <div class="box" style="border-color: var(--have); background: var(--have-bg);">
+                <strong style="color: var(--have);">✅ Proposed Fix</strong>
+                <p id="proposedFixText" style="margin: 8px 0; font-weight: 500;"></p>
+                <div id="fixParamsList" style="font-size: 12px; color: var(--ink-2);"></div>
+            </div>
+        </div>
     </div>
     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-        <button class="btn btn-primary" onclick="retryStep()">🔄 Retry Step</button>
+        <button class="btn btn-primary" id="approveFixBtn" onclick="approveFixAndRetry()" style="display: none;">
+            ✅ Approve Fix & Retry
+        </button>
+        <button class="btn btn-secondary" id="retryStepBtn" onclick="retryStep()">🔄 Retry Step</button>
         <button class="btn btn-secondary" onclick="continueExercise()">⏭️ Continue (Skip)</button>
         <button class="btn btn-danger" onclick="rollback()">↩️ Rollback</button>
     </div>
@@ -150,6 +177,8 @@
     let lastEventSeq = 0;
     let currentHumanStep = null;
     let timerInterval = null;
+    let currentDiagnosis = null;
+    let exerciseState = null;
     
     async function loadExercise() {
         try {
@@ -194,6 +223,7 @@
             
             // Handle paused_failed status - show diagnosis panel
             if (data.status === 'paused_failed' && data.diagnosis) {
+                currentDiagnosis = data.diagnosis;
                 document.getElementById('pausedFailedBanner').classList.remove('hide');
                 document.getElementById('killedBanner').classList.add('hide');
                 document.getElementById('completedBanner').classList.add('hide');
@@ -206,13 +236,54 @@
                     failedStepInfo.textContent = 'A step in the exercise failed';
                 }
                 
+                // Show diagnosis source badge
+                const diagnosisBadge = document.getElementById('diagnosisBadge');
+                if (data.diagnosis.diagnosis_via === 'foundry-agent') {
+                    diagnosisBadge.textContent = '🤖 Azure AI Foundry Agent';
+                    diagnosisBadge.classList.remove('hide');
+                } else {
+                    diagnosisBadge.classList.add('hide');
+                }
+                
                 // Populate diagnosis details
                 document.getElementById('diagnosisLikelyCause').textContent = data.diagnosis.likely_cause || 'Unknown';
                 document.getElementById('diagnosisEvidence').textContent = data.diagnosis.evidence || 'No evidence available';
                 document.getElementById('diagnosisRecommendedAction').textContent = data.diagnosis.recommended_action || 'Contact support';
+                
+                // Handle fix_action
+                const fixSection = document.getElementById('proposedFixSection');
+                const approveFixBtn = document.getElementById('approveFixBtn');
+                const retryStepBtn = document.getElementById('retryStepBtn');
+                
+                if (data.diagnosis.fix_action && data.diagnosis.fix_action !== 'none') {
+                    fixSection.classList.remove('hide');
+                    document.getElementById('proposedFixText').textContent = data.diagnosis.recommended_action || 'Apply automated fix';
+                    
+                    // Show fix params if available
+                    const fixParams = data.diagnosis.fix_params || [];
+                    if (fixParams.length > 0) {
+                        document.getElementById('fixParamsList').innerHTML = fixParams.map(p => 
+                            `<div style="margin-top:4px;"><code>${p.key}</code> = <code>${p.value}</code></div>`
+                        ).join('');
+                    } else {
+                        document.getElementById('fixParamsList').innerHTML = '';
+                    }
+                    
+                    approveFixBtn.style.display = 'inline-block';
+                    retryStepBtn.classList.add('hide');
+                } else {
+                    fixSection.classList.add('hide');
+                    approveFixBtn.style.display = 'none';
+                    retryStepBtn.classList.remove('hide');
+                }
             } else {
                 document.getElementById('pausedFailedBanner').classList.add('hide');
+                currentDiagnosis = null;
             }
+            
+            // Update exercise state for chaos button
+            exerciseState = data.status;
+            updateChaosButton(data);
             
             // Handle killed status - show prominent rollback
             if (data.status === 'killed') {
@@ -436,6 +507,59 @@
             document.getElementById('pausedFailedBanner').classList.add('hide');
         } catch (e) {
             alert('Failed to continue exercise: ' + e.message);
+        }
+    }
+    
+    function updateChaosButton(data) {
+        const chaosBtn = document.getElementById('chaosBtn');
+        // Enable chaos button only during running state and chaos not already injected
+        const canChaos = data.status === 'running' && !data.chaos;
+        chaosBtn.disabled = !canChaos;
+    }
+    
+    async function injectChaos() {
+        if (!confirm('🔥 Inject a surprise fault?\n\nThis will create a second failure for the Validator agent to diagnose and fix.')) {
+            return;
+        }
+        
+        const btn = document.getElementById('chaosBtn');
+        btn.disabled = true;
+        
+        try {
+            const res = await fetch(`/api/exercise/${exerciseId}/chaos`, { method: 'POST' });
+            const result = await res.json();
+            if (result.error) {
+                alert('Failed: ' + result.error);
+                btn.disabled = false;
+            }
+        } catch (e) {
+            alert('Failed to inject chaos: ' + e.message);
+            btn.disabled = false;
+        }
+    }
+    
+    async function approveFixAndRetry() {
+        if (!confirm('Apply the proposed fix and retry the step?')) {
+            return;
+        }
+        
+        const btn = document.getElementById('approveFixBtn');
+        btn.disabled = true;
+        btn.textContent = 'Applying fix...';
+        
+        try {
+            // The retry endpoint with fix approval
+            await fetch(`/api/exercise/${exerciseId}/retry`, { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ approve_fix: true })
+            });
+            document.getElementById('pausedFailedBanner').classList.add('hide');
+        } catch (e) {
+            alert('Failed to apply fix: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '✅ Approve Fix & Retry';
         }
     }
     

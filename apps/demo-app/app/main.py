@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 # Environment
 REGION_NAME = os.getenv("REGION_NAME", "Unknown")
 PAYMENT_PROVIDER = os.getenv("PAYMENT_PROVIDER", "")
+DR_LIVE_URL = os.getenv("DR_LIVE_URL", "")
+PUBLIC_URL = os.getenv("PUBLIC_URL", "")
+ALT_PUBLIC_URL = os.getenv("ALT_PUBLIC_URL", "")
 
 # Required app settings (for config parity checks)
 REQUIRED_SETTINGS = ["PAYMENT_PROVIDER"]
@@ -127,3 +130,14 @@ async def recent_transactions():
     except Exception as e:
         logger.error(f"Failed to get transactions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/config")
+async def get_config():
+    """Get app configuration for live DR experience."""
+    return {
+        "region": REGION_NAME,
+        "live_url": DR_LIVE_URL,
+        "public_url": PUBLIC_URL,
+        "alt_url": ALT_PUBLIC_URL,
+    }

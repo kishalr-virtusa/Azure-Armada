@@ -145,6 +145,11 @@ async def results_page(request: Request, xid: Optional[str] = None):
     return _page(request, "results.html", "results", **ctx)
 
 
+@app.get("/live", response_class=HTMLResponse)
+def live_page(request: Request):
+    return _page(request, "live.html", "live")
+
+
 @app.get("/reports/{xid}", response_class=HTMLResponse)
 async def report(request: Request, xid: str):
     if not auth.verify_session(request):

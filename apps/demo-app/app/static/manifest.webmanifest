@@ -1,0 +1,21 @@
+{
+  "name": "Contoso Payments",
+  "short_name": "Contoso Pay",
+  "description": "Demo payment app for DR Agent - Virtusa Azure Day 2026",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F7F9",
+  "theme_color": "#5E2CFE",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

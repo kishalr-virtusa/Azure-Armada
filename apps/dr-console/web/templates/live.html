@@ -1,0 +1,562 @@
+{% extends "base.html" %}
+
+{% block title %}Live Presenter View — DR Agent Console{% endblock %}
+
+{% block head %}
+<style>
+    /* Full-screen presenter layout */
+    .presenter-wrap {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        min-height: calc(100vh - 200px);
+    }
+    @media (max-width: 1200px) {
+        .presenter-wrap { grid-template-columns: 1fr; }
+    }
+
+    /* Left panel - QR + KPIs */
+    .left-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .qr-section {
+        text-align: center;
+        padding: 24px;
+    }
+    .qr-code {
+        display: inline-block;
+        padding: 16px;
+        background: white;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+    }
+    .qr-url {
+        margin-top: 12px;
+        font-size: 13px;
+        color: var(--ink-2);
+        word-break: break-all;
+    }
+
+    /* Big KPI tiles */
+    .big-kpis {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+    .big-kpi {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        border-top: 4px solid var(--accent);
+    }
+    .big-kpi.pass { border-top-color: var(--have); }
+    .big-kpi.fail { border-top-color: var(--add); }
+    .big-kpi.region-b { border-top-color: var(--mag); }
+    .big-kpi .label {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--ink-2);
+        margin-bottom: 8px;
+    }
+    .big-kpi .value {
+        font-size: 56px;
+        font-weight: 300;
+        line-height: 1;
+    }
+    .big-kpi.pass .value { color: var(--have); }
+    .big-kpi.fail .value { color: var(--add); }
+    .big-kpi .sub {
+        font-size: 12px;
+        color: var(--ink-3);
+        margin-top: 8px;
+    }
+
+    /* Stopwatch */
+    .stopwatch-tile {
+        grid-column: 1 / -1;
+    }
+    .stopwatch-value {
+        font-size: 72px;
+        font-weight: 300;
+        font-variant-numeric: tabular-nums;
+        color: var(--add);
+    }
+    .stopwatch-value.normal { color: var(--ink); }
+    .stopwatch-value.recovered { color: var(--have); }
+
+    .eta-display {
+        font-size: 16px;
+        color: var(--ink-2);
+        margin-top: 8px;
+    }
+    .eta-display strong { color: var(--ink); }
+
+    /* Right panel - phone frame + timeline */
+    .right-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    /* Phone frame (iPhone 14 Pro dimensions: 393×852, scaled) */
+    .phone-frame {
+        position: relative;
+        width: 280px;
+        height: 604px;
+        margin: 0 auto;
+        background: #1a1a1a;
+        border-radius: 40px;
+        padding: 12px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .phone-screen {
+        width: 100%;
+        height: 100%;
+        border-radius: 28px;
+        overflow: hidden;
+        background: var(--bg);
+    }
+    .phone-screen iframe {
+        width: 390px;
+        height: 844px;
+        transform: scale(0.655);
+        transform-origin: top left;
+        border: none;
+    }
+    .phone-notch {
+        position: absolute;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 100px;
+        height: 28px;
+        background: #1a1a1a;
+        border-radius: 0 0 16px 16px;
+        z-index: 10;
+    }
+
+    /* Timeline card */
+    .timeline-card {
+        flex: 1;
+        min-height: 200px;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .timeline-item {
+        padding: 8px 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 12px;
+    }
+    .timeline-item:last-child { border-bottom: none; }
+    .timeline-time {
+        color: var(--ink-3);
+        font-size: 11px;
+    }
+    .timeline-msg {
+        font-weight: 500;
+        margin-top: 2px;
+    }
+    .timeline-item.error .timeline-msg { color: var(--add); }
+    .timeline-item.measurement .timeline-msg { color: var(--have); }
+
+    /* Chaos button */
+    .chaos-section {
+        text-align: center;
+        padding: 16px;
+    }
+    .chaos-btn {
+        background: linear-gradient(135deg, #FF6B00, #FF0000);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        padding: 14px 28px;
+        font-family: inherit;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.1s, opacity 0.2s;
+    }
+    .chaos-btn:hover { transform: scale(1.02); }
+    .chaos-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    /* State banners */
+    .state-banner {
+        padding: 16px 20px;
+        border-radius: 10px;
+        text-align: center;
+        font-weight: 500;
+    }
+    .state-banner.normal {
+        background: var(--have-bg);
+        color: var(--have);
+    }
+    .state-banner.outage {
+        background: var(--add-bg);
+        color: var(--add);
+    }
+    .state-banner.recovered {
+        background: var(--have-bg);
+        color: var(--have);
+    }
+    .state-banner.chaos {
+        background: var(--upd-bg);
+        color: var(--upd);
+    }
+
+    /* Current step display */
+    .current-step {
+        text-align: center;
+        padding: 12px;
+        background: var(--surface-2);
+        border-radius: 8px;
+        font-size: 13px;
+    }
+    .current-step strong { color: var(--accent); }
+
+    /* Progress */
+    .progress-bar {
+        height: 8px;
+        background: var(--line);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .progress-fill {
+        height: 100%;
+        background: var(--accent);
+        transition: width 0.3s;
+    }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<header>
+    <div>
+        <span class="eyebrow">Presenter View</span>
+        <h1>Live Demo</h1>
+    </div>
+    <div>
+        <span class="st" id="stateTag">Loading...</span>
+    </div>
+</header>
+
+<div class="presenter-wrap">
+    <!-- Left: QR + KPIs -->
+    <div class="left-panel">
+        <!-- QR Code -->
+        <div class="card qr-section">
+            <h2 style="margin-bottom: 16px;">Scan to Open Contoso Payments</h2>
+            <div class="qr-code" id="qrCode"></div>
+            <div class="qr-url" id="qrUrl">Loading...</div>
+        </div>
+
+        <!-- State banner -->
+        <div class="state-banner normal" id="stateBanner">All systems normal</div>
+
+        <!-- Big KPI tiles -->
+        <div class="big-kpis">
+            <!-- Stopwatch -->
+            <div class="big-kpi stopwatch-tile" id="stopwatchTile">
+                <div class="label">Elapsed Time</div>
+                <div class="stopwatch-value normal" id="stopwatchValue">00:00.0</div>
+                <div class="eta-display" id="etaDisplay"></div>
+            </div>
+
+            <!-- RTO -->
+            <div class="big-kpi" id="rtoTile">
+                <div class="label">RTO</div>
+                <div class="value" id="rtoValue">—</div>
+                <div class="sub" id="rtoTarget">target —</div>
+            </div>
+
+            <!-- RPO -->
+            <div class="big-kpi" id="rpoTile">
+                <div class="label">RPO</div>
+                <div class="value" id="rpoValue">—</div>
+                <div class="sub" id="rpoTarget">target —</div>
+            </div>
+        </div>
+
+        <!-- Current step + progress -->
+        <div class="current-step" id="currentStep">Waiting for exercise...</div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <!-- Right: Phone frame + Timeline -->
+    <div class="right-panel">
+        <!-- Phone frame -->
+        <div class="card" style="text-align: center;">
+            <h2 style="margin-bottom: 16px;">User View</h2>
+            <div class="phone-frame">
+                <div class="phone-notch"></div>
+                <div class="phone-screen">
+                    <iframe id="phoneFrame" src="about:blank"></iframe>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timeline -->
+        <div class="card timeline-card">
+            <h2 style="margin-bottom: 12px;">Agent Timeline</h2>
+            <div id="timelineList">
+                <div style="color: var(--ink-3); text-align: center; padding: 20px;">Waiting for events...</div>
+            </div>
+        </div>
+
+        <!-- Chaos button -->
+        <div class="card chaos-section">
+            <button class="chaos-btn" id="chaosBtn" onclick="injectChaos()" disabled>
+                🔥 Inject Surprise Fault
+            </button>
+            <div style="font-size: 12px; color: var(--ink-3); margin-top: 8px;">
+                Tests the Validator agent's ability to handle unexpected failures
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let publicUrl = '';
+    let appUrl = '';
+    let exerciseId = null;
+    let clockSkew = 0;
+    let t0 = null;
+    let stopwatchInterval = null;
+    let lastState = null;
+
+    // Load config and generate QR
+    async function loadConfig() {
+        try {
+            const res = await fetch('/api/live-config');
+            const cfg = await res.json();
+            publicUrl = cfg.public_url || '';
+            appUrl = cfg.app_url || '';
+
+            // Generate QR code
+            if (publicUrl) {
+                const qr = qrcode(0, 'M');
+                qr.addData(publicUrl);
+                qr.make();
+                document.getElementById('qrCode').innerHTML = qr.createSvgTag(6);
+                document.getElementById('qrUrl').textContent = publicUrl;
+            } else {
+                document.getElementById('qrCode').innerHTML = '<div style="padding:40px;color:var(--ink-3);">No public URL configured</div>';
+                document.getElementById('qrUrl').textContent = '—';
+            }
+
+            // Load phone iframe
+            if (appUrl) {
+                document.getElementById('phoneFrame').src = appUrl;
+            }
+        } catch (e) {
+            console.error('Failed to load config:', e);
+        }
+    }
+
+    // Poll live status
+    async function pollLive() {
+        try {
+            const res = await fetch('/public/live', { cache: 'no-store' });
+            const data = await res.json();
+
+            // Clock skew
+            if (data.server_time) {
+                clockSkew = Date.now() - Date.parse(data.server_time);
+            }
+
+            exerciseId = data.exercise_id;
+            handleState(data);
+        } catch (e) {
+            console.error('Live poll failed:', e);
+        }
+    }
+
+    function handleState(data) {
+        const state = data.state;
+        lastState = state;
+
+        // State tag
+        const stateTag = document.getElementById('stateTag');
+        stateTag.textContent = state;
+        stateTag.className = 'st ' + getStateClass(state);
+
+        // State banner
+        const banner = document.getElementById('stateBanner');
+        banner.textContent = data.headline || getDefaultHeadline(state);
+        banner.className = 'state-banner ' + (data.chaos ? 'chaos' : getStateClass(state));
+
+        // Stopwatch
+        const stopwatchValue = document.getElementById('stopwatchValue');
+        if (state === 'outage') {
+            if (data.t0) {
+                t0 = Date.parse(data.t0);
+                startStopwatch();
+            }
+            stopwatchValue.className = 'stopwatch-value';
+
+            // ETA
+            if (data.eta_s != null) {
+                const elapsed = data.elapsed_s || 0;
+                if (elapsed > data.eta_s) {
+                    document.getElementById('etaDisplay').innerHTML = 'Taking longer than usual…';
+                } else {
+                    document.getElementById('etaDisplay').innerHTML = `<strong>ETA:</strong> ~${Math.ceil(data.eta_s - elapsed)}s`;
+                }
+            }
+        } else if (state === 'recovered' || state === 'completed') {
+            stopStopwatch();
+            if (data.rto_s != null) {
+                stopwatchValue.textContent = formatStopwatch(data.rto_s);
+            }
+            stopwatchValue.className = 'stopwatch-value recovered';
+            document.getElementById('etaDisplay').innerHTML = '';
+        } else {
+            stopStopwatch();
+            stopwatchValue.textContent = '00:00.0';
+            stopwatchValue.className = 'stopwatch-value normal';
+            document.getElementById('etaDisplay').innerHTML = '';
+        }
+
+        // RTO/RPO tiles
+        updateRtoRpo(data);
+
+        // Current step + progress
+        if (data.current_step) {
+            document.getElementById('currentStep').innerHTML = `<strong>Now:</strong> ${data.current_step}`;
+        } else {
+            document.getElementById('currentStep').textContent = 'Waiting for exercise...';
+        }
+        if (data.steps_total > 0) {
+            const pct = (data.steps_done / data.steps_total) * 100;
+            document.getElementById('progressFill').style.width = pct + '%';
+        }
+
+        // Timeline
+        if (data.timeline && data.timeline.length > 0) {
+            document.getElementById('timelineList').innerHTML = data.timeline.slice(-8).reverse().map(e => `
+                <div class="timeline-item ${e.kind}">
+                    <div class="timeline-time">${formatTime(e.ts)}</div>
+                    <div class="timeline-msg">${e.message}</div>
+                </div>
+            `).join('');
+        }
+
+        // Chaos button - only enabled during outage
+        document.getElementById('chaosBtn').disabled = (state !== 'outage' || data.chaos);
+    }
+
+    function updateRtoRpo(data) {
+        const rtoTile = document.getElementById('rtoTile');
+        const rpoTile = document.getElementById('rpoTile');
+
+        // Targets
+        if (data.rto_target_s) {
+            document.getElementById('rtoTarget').textContent = `target ${Math.floor(data.rto_target_s / 60)}min`;
+        }
+        if (data.rpo_target_s) {
+            document.getElementById('rpoTarget').textContent = `target ${Math.floor(data.rpo_target_s / 60)}min`;
+        }
+
+        // Values
+        if (data.rto_s != null) {
+            document.getElementById('rtoValue').textContent = `${Math.floor(data.rto_s)}s`;
+            rtoTile.className = 'big-kpi ' + (data.rto_met ? 'pass' : 'fail');
+        }
+        if (data.rpo_s != null) {
+            document.getElementById('rpoValue').textContent = `${data.rpo_s}s`;
+            rpoTile.className = 'big-kpi ' + (data.rpo_met ? 'pass' : 'fail');
+        }
+    }
+
+    function getStateClass(state) {
+        switch (state) {
+            case 'normal': case 'armed': return 'pass';
+            case 'outage': return 'fail';
+            case 'recovered': case 'failing_back': case 'completed': return 'pass';
+            case 'paused': case 'paused_failed': return 'warn';
+            default: return 'neutral';
+        }
+    }
+
+    function getDefaultHeadline(state) {
+        switch (state) {
+            case 'normal': case 'armed': return 'All systems normal';
+            case 'outage': return 'Outage in progress — failover running';
+            case 'recovered': return 'Service recovered';
+            case 'failing_back': return 'Returning to primary region';
+            case 'completed': return 'Drill complete';
+            default: return state;
+        }
+    }
+
+    // Stopwatch
+    function startStopwatch() {
+        if (stopwatchInterval) return;
+        stopwatchInterval = setInterval(() => {
+            if (!t0) return;
+            const elapsed = (Date.now() - clockSkew - t0) / 1000;
+            document.getElementById('stopwatchValue').textContent = formatStopwatch(Math.max(0, elapsed));
+        }, 100);
+    }
+
+    function stopStopwatch() {
+        if (stopwatchInterval) {
+            clearInterval(stopwatchInterval);
+            stopwatchInterval = null;
+        }
+    }
+
+    function formatStopwatch(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        const t = Math.floor((seconds % 1) * 10);
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${t}`;
+    }
+
+    function formatTime(iso) {
+        if (!iso) return '';
+        return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    // Inject chaos
+    async function injectChaos() {
+        if (!exerciseId) {
+            alert('No active exercise');
+            return;
+        }
+        if (!confirm('🔥 Inject a surprise fault?\n\nThis will create a second failure for the Validator agent to diagnose and fix.')) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/exercise/${exerciseId}/chaos`, { method: 'POST' });
+            const result = await res.json();
+            if (result.error) {
+                alert('Failed: ' + result.error);
+            } else {
+                document.getElementById('chaosBtn').disabled = true;
+            }
+        } catch (e) {
+            alert('Failed to inject chaos: ' + e.message);
+        }
+    }
+
+    // Initialize
+    loadConfig();
+    pollLive();
+    setInterval(pollLive, 1000);
+</script>
+{% endblock %}

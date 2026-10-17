@@ -2,202 +2,874 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#5E2CFE">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Contoso Payments</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/virtusa.css">
+    <link rel="manifest" href="/static/manifest.webmanifest">
+    <style>
+        :root {
+            --bg: #F7F7F9;
+            --surface: #FFFFFF;
+            --surface-2: #F2F2F4;
+            --ink: #161B28;
+            --ink-2: #4A4F5E;
+            --ink-3: #7C8190;
+            --line: #E3E3E8;
+            --line-2: #D0D0D8;
+            --accent: #5E2CFE;
+            --mag: #C105B2;
+            --have: #0A7A48;
+            --have-bg: #D8F2E4;
+            --upd: #9A6400;
+            --upd-bg: #FDF0D5;
+            --add: #C0392B;
+            --add-bg: #FBE3E0;
+            --nr: #6B7080;
+            --nr-bg: #ECECF0;
+            --oth: #2F5FB3;
+            --oth-bg: #DCE7FA;
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --safe-left: env(safe-area-inset-left, 0px);
+            --safe-right: env(safe-area-inset-right, 0px);
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                color-scheme: dark;
+                --bg: #0C0E15;
+                --surface: #12151F;
+                --surface-2: #1A1E2B;
+                --ink: #F3F3F7;
+                --ink-2: #C2C5D0;
+                --ink-3: #8C90A0;
+                --line: #252A38;
+                --line-2: #323849;
+                --accent: #8A6CFF;
+                --mag: #E35BD6;
+                --have: #2BC47F;
+                --have-bg: #10301F;
+                --upd: #F0B040;
+                --upd-bg: #33260C;
+                --add: #F07266;
+                --add-bg: #3A1714;
+                --nr: #A4A8B6;
+                --nr-bg: #23273A;
+                --oth: #7FA6F0;
+                --oth-bg: #16223A;
+            }
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            background: var(--bg);
+            color: var(--ink);
+            font-family: "Montserrat", system-ui, -apple-system, "Segoe UI", sans-serif;
+            font-size: 14px;
+            line-height: 1.5;
+            padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        .app-container {
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            min-height: 100vh;
+        }
+        @media (min-width: 481px) {
+            .app-container { padding: 24px; }
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 8px;
+        }
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .brand-logo { font-size: 28px; }
+        .brand-name {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .region-chip {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 999px;
+            color: white;
+            white-space: nowrap;
+        }
+        .region-chip.region-a { background: var(--accent); }
+        .region-chip.region-b { background: var(--mag); }
+        .mute-btn {
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+            color: var(--ink-2);
+        }
+        .mute-btn:hover { background: var(--surface-2); }
+
+        /* Balance card */
+        .balance-card {
+            background: linear-gradient(135deg, var(--accent), var(--mag));
+            border-radius: 16px;
+            padding: 24px;
+            color: white;
+        }
+        .balance-label {
+            font-size: 12px;
+            font-weight: 500;
+            opacity: 0.85;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        .balance-amount {
+            font-size: 36px;
+            font-weight: 300;
+            margin: 4px 0 16px;
+        }
+        .pay-btn {
+            width: 100%;
+            padding: 14px 24px;
+            font-family: inherit;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            background: white;
+            color: var(--accent);
+            cursor: pointer;
+            min-height: 48px;
+            transition: transform 0.1s, opacity 0.2s;
+        }
+        .pay-btn:active { transform: scale(0.98); }
+        .pay-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .payment-result {
+            margin-top: 12px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            text-align: center;
+        }
+        .payment-result.success { background: rgba(255,255,255,0.2); }
+        .payment-result.error { background: rgba(255,255,255,0.15); color: #FFD6D6; }
+        .payment-result.hide { display: none; }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 16px;
+        }
+        .card-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--ink-2);
+            margin-bottom: 12px;
+        }
+
+        /* Live DR Status Card */
+        .live-card { transition: border-color 0.3s, background 0.3s; }
+        .live-card.normal { border-color: var(--have); }
+        .live-card.outage { border-color: var(--add); background: var(--add-bg); }
+        .live-card.recovered { border-color: var(--have); background: var(--have-bg); }
+        .live-card.chaos { border-color: var(--upd); }
+
+        .live-banner {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+            font-size: 13px;
+        }
+        .live-banner.normal { color: var(--have); }
+        .live-banner.outage { color: var(--add); }
+        .live-banner.recovered { color: var(--have); }
+
+        .live-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+        .live-status-dot.pulse { animation: pulse 1.5s infinite; }
+
+        .stopwatch {
+            font-size: 48px;
+            font-weight: 300;
+            text-align: center;
+            margin: 16px 0;
+            font-variant-numeric: tabular-nums;
+            color: var(--add);
+        }
+
+        .eta-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--ink-2);
+            margin-bottom: 8px;
+        }
+        .eta-value { font-weight: 600; color: var(--ink); }
+
+        .progress-bar {
+            height: 6px;
+            background: var(--line);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--accent);
+            transition: width 0.3s;
+        }
+
+        .current-step {
+            font-size: 12px;
+            color: var(--ink-2);
+            margin-bottom: 12px;
+        }
+        .current-step strong { color: var(--ink); }
+
+        .timeline-mini {
+            font-size: 11px;
+            color: var(--ink-3);
+            max-height: 80px;
+            overflow-y: auto;
+        }
+        .timeline-mini div {
+            padding: 4px 0;
+            border-top: 1px solid var(--line);
+        }
+
+        /* RTO/RPO results */
+        .results-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin: 16px 0;
+        }
+        .result-box {
+            text-align: center;
+            padding: 12px;
+            border-radius: 8px;
+            background: var(--surface-2);
+        }
+        .result-box.pass { background: var(--have-bg); }
+        .result-box.fail { background: var(--add-bg); }
+        .result-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--ink-3);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .result-value {
+            font-size: 24px;
+            font-weight: 300;
+            margin: 4px 0;
+        }
+        .result-box.pass .result-value { color: var(--have); }
+        .result-box.fail .result-value { color: var(--add); }
+        .result-target {
+            font-size: 10px;
+            color: var(--ink-3);
+        }
+
+        /* Chaos banner */
+        .chaos-banner {
+            background: var(--upd-bg);
+            color: var(--upd);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+
+        /* Reconnecting overlay */
+        .reconnecting-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            color: white;
+            text-align: center;
+            padding: 24px;
+        }
+        .reconnecting-overlay.hide { display: none; }
+        .reconnecting-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+
+        /* Unlock alerts prompt */
+        .unlock-prompt {
+            background: var(--oth-bg);
+            border: 1px solid var(--oth);
+            border-radius: 10px;
+            padding: 14px;
+            text-align: center;
+        }
+        .unlock-prompt.hide { display: none; }
+        .unlock-btn {
+            margin-top: 10px;
+            padding: 10px 20px;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            background: var(--oth);
+            color: white;
+            cursor: pointer;
+            min-height: 44px;
+        }
+
+        /* Transactions */
+        .txn-list { list-style: none; }
+        .txn-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--line);
+        }
+        .txn-item:last-child { border-bottom: none; }
+        .txn-amount {
+            font-weight: 600;
+            font-size: 15px;
+        }
+        .txn-meta {
+            font-size: 11px;
+            color: var(--ink-3);
+        }
+        .txn-region {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: var(--nr-bg);
+            color: var(--nr);
+        }
+        .txn-region.region-a { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
+        .txn-region.region-b { background: color-mix(in srgb, var(--mag) 20%, transparent); color: var(--mag); }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            font-size: 11px;
+            color: var(--ink-3);
+            padding: 16px 0;
+            margin-top: auto;
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .hide { display: none !important; }
+    </style>
 </head>
 <body>
-    <div class="wrap">
-        <header>
-            <div>
-                <span class="eyebrow">Demo Application</span>
-                <h1>Contoso Payments</h1>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="brand">
+                <span class="brand-logo">💳</span>
+                <span class="brand-name">Contoso Payments</span>
             </div>
-            <div class="region-status">
-                <span class="region-pill {% if 'Central' in region %}region-a{% else %}region-b{% endif %}">
-                    {{ region }}
-                </span>
-                <span class="status-dot" id="statusDot" title="Service status"></span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="region-chip" id="regionChip">{{ region }}</span>
+                <button class="mute-btn" id="muteBtn" title="Toggle sound">🔔</button>
             </div>
         </header>
 
+        <!-- Unlock alerts prompt -->
+        <div class="unlock-prompt" id="unlockPrompt">
+            <div style="font-size: 13px; color: var(--oth);">
+                <strong>Enable live alerts</strong> for haptic feedback during DR drills
+            </div>
+            <button class="unlock-btn" id="unlockBtn">Enable Alerts</button>
+        </div>
+
         <!-- Configuration error banner -->
         {% if config_error %}
-        <div class="outage-banner" id="configBanner" style="background: var(--upd-bg); border-color: var(--upd); color: var(--upd);">
-            <strong>⚙️ Configuration Error</strong> — Missing required settings: {{ missing_config | join(', ') }}
+        <div class="card" style="background: var(--upd-bg); border-color: var(--upd);">
+            <div style="color: var(--upd); font-weight: 500;">
+                ⚙️ Configuration Error — Missing: {{ missing_config | join(', ') }}
+            </div>
         </div>
         {% endif %}
 
-        <!-- Outage banner (hidden by default) -->
-        <div class="outage-banner hide" id="outageBanner">
-            <strong>⚠️ Service Unavailable</strong> — Unable to connect to backend services. Failover may be in progress.
+        <!-- Balance card with Pay button -->
+        <div class="balance-card">
+            <div class="balance-label">Available Balance</div>
+            <div class="balance-amount" id="balance">$12,450.00</div>
+            <button class="pay-btn" id="payBtn" onclick="makePayment()">💳 Make Payment</button>
+            <div id="paymentResult" class="payment-result hide"></div>
         </div>
 
-        <div class="twin">
-            <!-- Make Payment Card -->
-            <div class="card">
-                <h2>Make Payment</h2>
-                <p class="sub">Create a test transaction</p>
-                <div style="margin-top: 16px;">
-                    <button class="btn-primary" id="payBtn" onclick="makePayment()">
-                        💳 Make Payment
-                    </button>
+        <!-- Live DR Status Card -->
+        <div class="card live-card" id="liveCard">
+            <div class="live-banner normal" id="liveBanner">
+                <span class="live-status-dot"></span>
+                <span id="liveBannerText">All systems normal</span>
+            </div>
+            
+            <!-- Outage view (hidden by default) -->
+            <div id="outageView" class="hide">
+                <div class="stopwatch" id="stopwatch">00:00.0</div>
+                <div class="eta-row">
+                    <span>Estimated recovery:</span>
+                    <span class="eta-value" id="etaValue">—</span>
                 </div>
-                <div id="paymentResult" class="payment-result hide"></div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                </div>
+                <div class="current-step" id="currentStep"></div>
+                <div class="timeline-mini" id="timelineMini"></div>
             </div>
 
-            <!-- Status Card -->
-            <div class="card">
-                <h2>Service Status</h2>
-                <p class="sub">Current connection info</p>
-                <dl class="srcs" style="margin-top: 12px;">
-                    <dt>Region</dt>
-                    <dd id="infoRegion">{{ region }}</dd>
-                    <dt>DB Server</dt>
-                    <dd id="infoDbServer">—</dd>
-                    <dt>Last Check</dt>
-                    <dd id="infoLastCheck">—</dd>
-                </dl>
+            <!-- Recovered view (hidden by default) -->
+            <div id="recoveredView" class="hide">
+                <div class="results-row">
+                    <div class="result-box" id="rtoBox">
+                        <div class="result-label">RTO</div>
+                        <div class="result-value" id="rtoValue">—</div>
+                        <div class="result-target" id="rtoTarget">target —</div>
+                    </div>
+                    <div class="result-box" id="rpoBox">
+                        <div class="result-label">RPO</div>
+                        <div class="result-value" id="rpoValue">—</div>
+                        <div class="result-target" id="rpoTarget">target —</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chaos banner -->
+            <div class="chaos-banner hide" id="chaosBanner">
+                🔥 A second fault was injected; the Validator agent is handling it
             </div>
         </div>
 
         <!-- Recent Transactions -->
         <div class="card">
-            <h2>Recent Transactions</h2>
-            <p class="sub">Last 10 payments</p>
-            <div class="scroll" style="margin-top: 12px;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Amount</th>
-                            <th>Region</th>
-                            <th>Time</th>
-                        </tr>
-                    </thead>
-                    <tbody id="txnTable">
-                        <tr><td colspan="4" style="text-align:center;color:var(--ink-3);">Loading...</td></tr>
-                    </tbody>
-                </table>
-            </div>
+            <div class="card-title">Recent Payments</div>
+            <ul class="txn-list" id="txnList">
+                <li style="color: var(--ink-3); text-align: center; padding: 20px 0;">Loading...</li>
+            </ul>
         </div>
 
-        <footer>
-            <p>Contoso Payments — DR Agent Demo for Virtusa Azure Day 2026</p>
+        <footer class="footer">
+            Contoso Payments — DR Agent Demo<br>Virtusa Azure Day 2026
         </footer>
     </div>
 
+    <!-- Reconnecting overlay -->
+    <div class="reconnecting-overlay hide" id="reconnectingOverlay">
+        <div class="reconnecting-spinner"></div>
+        <div style="font-size: 16px; font-weight: 500;">Reconnecting to recovered region...</div>
+        <div style="font-size: 13px; margin-top: 8px; opacity: 0.8;">Please wait</div>
+    </div>
+
+    <script src="/static/haptics.js"></script>
     <script>
-        let isHealthy = true;
+        // Config from server
+        const serverRegion = '{{ region }}';
+        let liveUrl = '';
+        let publicUrl = '';
+        let altUrl = '';
+        let clockSkew = 0;
+        let lastLiveState = null;
+        let stopwatchInterval = null;
+        let t0 = null;
+        let healthFailCount = 0;
+        let expectedRegion = null;
+        let balance = 12450.00;
 
-        function formatTime(isoString) {
-            if (!isoString) return '—';
-            const d = new Date(isoString);
-            return d.toLocaleTimeString();
-        }
+        // Elements
+        const regionChip = document.getElementById('regionChip');
+        const muteBtn = document.getElementById('muteBtn');
+        const unlockPrompt = document.getElementById('unlockPrompt');
+        const unlockBtn = document.getElementById('unlockBtn');
+        const payBtn = document.getElementById('payBtn');
+        const paymentResult = document.getElementById('paymentResult');
+        const liveCard = document.getElementById('liveCard');
+        const liveBanner = document.getElementById('liveBanner');
+        const liveBannerText = document.getElementById('liveBannerText');
+        const outageView = document.getElementById('outageView');
+        const recoveredView = document.getElementById('recoveredView');
+        const stopwatchEl = document.getElementById('stopwatch');
+        const chaosBanner = document.getElementById('chaosBanner');
+        const reconnectingOverlay = document.getElementById('reconnectingOverlay');
 
-        function formatCurrency(amount) {
-            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-        }
-
-        async function checkHealth() {
+        // Load config
+        async function loadConfig() {
             try {
-                const res = await fetch('/health', { timeout: 5000 });
-                const data = await res.json();
-                
-                // Handle config error
-                if (data.status === 'config_error') {
-                    isHealthy = false;
-                    document.getElementById('statusDot').className = 'status-dot unhealthy';
-                    // Show config banner if it exists (server-side rendered)
-                    const configBanner = document.getElementById('configBanner');
-                    if (configBanner) configBanner.classList.remove('hide');
-                    document.getElementById('outageBanner').classList.add('hide');
-                    document.getElementById('infoRegion').textContent = data.region || '—';
-                    document.getElementById('infoDbServer').textContent = 'Config error';
-                    document.getElementById('infoLastCheck').textContent = formatTime(data.time);
-                    return;
-                }
-                
-                isHealthy = data.db_ok;
-                document.getElementById('statusDot').className = 'status-dot ' + (isHealthy ? 'healthy' : 'unhealthy');
-                document.getElementById('outageBanner').classList.toggle('hide', isHealthy);
-                
-                document.getElementById('infoRegion').textContent = data.region || '—';
-                document.getElementById('infoDbServer').textContent = data.db_server || '—';
-                document.getElementById('infoLastCheck').textContent = formatTime(data.time);
+                const res = await fetch('/api/config');
+                const cfg = await res.json();
+                liveUrl = cfg.live_url || '';
+                publicUrl = cfg.public_url || '';
+                altUrl = cfg.alt_url || '';
             } catch (e) {
-                isHealthy = false;
-                document.getElementById('statusDot').className = 'status-dot unhealthy';
-                document.getElementById('outageBanner').classList.remove('hide');
-                document.getElementById('infoLastCheck').textContent = 'Failed';
+                console.warn('Config load failed, live features disabled');
             }
         }
 
+        // Format currency
+        function formatCurrency(n) {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+        }
+
+        // Format time
+        function formatTime(iso) {
+            if (!iso) return '';
+            return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Format stopwatch (mm:ss.t)
+        function formatStopwatch(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            const t = Math.floor((seconds % 1) * 10);
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${t}`;
+        }
+
+        // Region chip update
+        function updateRegionChip(region) {
+            regionChip.textContent = region;
+            regionChip.className = 'region-chip ' + (region.includes('Central') ? 'region-a' : 'region-b');
+        }
+
+        // Payment
+        async function makePayment() {
+            payBtn.disabled = true;
+            payBtn.textContent = 'Processing...';
+            Haptics.trigger('tap', true);
+
+            try {
+                const res = await fetch('/api/txn', { method: 'POST' });
+                const txn = await res.json();
+                balance -= txn.amount;
+                document.getElementById('balance').textContent = formatCurrency(balance);
+
+                paymentResult.className = 'payment-result success';
+                paymentResult.textContent = `✅ ${formatCurrency(txn.amount)} sent`;
+                paymentResult.classList.remove('hide');
+                Haptics.trigger('success', true);
+
+                loadTransactions();
+            } catch (e) {
+                paymentResult.className = 'payment-result error';
+                paymentResult.textContent = '❌ Payment failed';
+                paymentResult.classList.remove('hide');
+                Haptics.trigger('error', true);
+            } finally {
+                payBtn.disabled = false;
+                payBtn.textContent = '💳 Make Payment';
+                setTimeout(() => paymentResult.classList.add('hide'), 4000);
+            }
+        }
+
+        // Load transactions
         async function loadTransactions() {
             try {
                 const res = await fetch('/api/recent');
                 const txns = await res.json();
-                
-                const tbody = document.getElementById('txnTable');
+                const list = document.getElementById('txnList');
+
                 if (txns.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--ink-3);">No transactions yet</td></tr>';
+                    list.innerHTML = '<li style="color: var(--ink-3); text-align: center; padding: 20px 0;">No payments yet</li>';
                     return;
                 }
-                
-                tbody.innerHTML = txns.map((t, i) => `
-                    <tr class="fade-in" style="animation-delay: ${i * 50}ms">
-                        <td class="f">#${t.id}</td>
-                        <td class="f">${formatCurrency(t.amount)}</td>
-                        <td><span class="badge">${t.region}</span></td>
-                        <td>${formatTime(t.created_at)}</td>
-                    </tr>
-                `).join('');
-            } catch (e) {
-                // Silent fail, health check will show status
-            }
+
+                list.innerHTML = txns.slice(0, 8).map(t => {
+                    const regionClass = t.region.includes('Central') ? 'region-a' : 'region-b';
+                    return `
+                        <li class="txn-item">
+                            <div>
+                                <div class="txn-amount">${formatCurrency(t.amount)}</div>
+                                <div class="txn-meta">${formatTime(t.created_at)}</div>
+                            </div>
+                            <span class="txn-region ${regionClass}">${t.region.split(' ')[0]}</span>
+                        </li>
+                    `;
+                }).join('');
+            } catch (e) { /* silent */ }
         }
 
-        async function makePayment() {
-            const btn = document.getElementById('payBtn');
-            const result = document.getElementById('paymentResult');
-            
-            btn.disabled = true;
-            btn.textContent = 'Processing...';
-            
+        // Poll live status
+        async function pollLive() {
+            if (!liveUrl) return;
+
             try {
-                const res = await fetch('/api/txn', { method: 'POST' });
-                const txn = await res.json();
-                
-                result.className = 'payment-result success';
-                result.innerHTML = `✅ Payment #${txn.id} created: ${formatCurrency(txn.amount)}`;
-                result.classList.remove('hide');
-                
-                // Reload transactions
-                await loadTransactions();
+                const res = await fetch(liveUrl, { cache: 'no-store' });
+                const data = await res.json();
+
+                // Calculate clock skew
+                if (data.server_time) {
+                    clockSkew = Date.now() - Date.parse(data.server_time);
+                }
+
+                handleLiveState(data);
             } catch (e) {
-                result.className = 'payment-result error';
-                result.innerHTML = '❌ Payment failed: ' + (e.message || 'Service unavailable');
-                result.classList.remove('hide');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '💳 Make Payment';
+                // Live URL unreachable - just hide live features
             }
-            
-            // Hide result after 5s
-            setTimeout(() => result.classList.add('hide'), 5000);
         }
 
-        // Initial load
-        checkHealth();
-        loadTransactions();
+        function handleLiveState(data) {
+            const state = data.state;
+            const prevState = lastLiveState;
+            lastLiveState = state;
 
-        // Poll every 3s
-        setInterval(checkHealth, 3000);
-        setInterval(loadTransactions, 3000);
+            // Update chaos banner
+            chaosBanner.classList.toggle('hide', !data.chaos);
+
+            if (state === 'normal' || state === 'armed') {
+                liveCard.className = 'card live-card normal';
+                liveBanner.className = 'live-banner normal';
+                liveBannerText.textContent = 'All systems normal · DR drills verified by DR Agent';
+                outageView.classList.add('hide');
+                recoveredView.classList.add('hide');
+                payBtn.disabled = false;
+                payBtn.textContent = '💳 Make Payment';
+                stopStopwatch();
+            }
+            else if (state === 'outage') {
+                // Trigger alert haptic on state change
+                if (prevState !== 'outage') {
+                    Haptics.trigger('alert', false);
+                }
+
+                liveCard.className = 'card live-card outage';
+                liveBanner.className = 'live-banner outage';
+                liveBanner.querySelector('.live-status-dot').classList.add('pulse');
+                liveBannerText.textContent = data.headline || 'Service disruption detected';
+                outageView.classList.remove('hide');
+                recoveredView.classList.add('hide');
+                payBtn.disabled = true;
+                payBtn.textContent = 'Payments paused during failover';
+
+                // Start stopwatch
+                if (data.t0) {
+                    t0 = Date.parse(data.t0);
+                    startStopwatch();
+                }
+
+                // ETA
+                const etaEl = document.getElementById('etaValue');
+                if (data.eta_s != null) {
+                    const elapsed = data.elapsed_s || 0;
+                    if (elapsed > data.eta_s) {
+                        etaEl.textContent = 'Taking longer than usual…';
+                    } else {
+                        etaEl.textContent = `~${Math.ceil(data.eta_s - elapsed)}s`;
+                    }
+                } else {
+                    etaEl.textContent = 'Calculating...';
+                }
+
+                // Progress
+                if (data.steps_total > 0) {
+                    const pct = (data.steps_done / data.steps_total) * 100;
+                    document.getElementById('progressFill').style.width = pct + '%';
+                }
+
+                // Current step
+                if (data.current_step) {
+                    document.getElementById('currentStep').innerHTML = `<strong>Now:</strong> ${data.current_step}`;
+                }
+
+                // Timeline
+                if (data.timeline && data.timeline.length > 0) {
+                    document.getElementById('timelineMini').innerHTML = data.timeline.slice(-3).map(e =>
+                        `<div>${formatTime(e.ts)} — ${e.message}</div>`
+                    ).join('');
+                }
+
+                expectedRegion = data.serving_region;
+            }
+            else if (state === 'recovered' || state === 'failing_back' || state === 'completed') {
+                // Trigger success haptic on recovery
+                if (prevState === 'outage' && state === 'recovered') {
+                    Haptics.trigger('success', false);
+                }
+
+                liveCard.className = 'card live-card recovered';
+                liveBanner.className = 'live-banner recovered';
+                liveBanner.querySelector('.live-status-dot').classList.remove('pulse');
+                liveBannerText.textContent = state === 'recovered'
+                    ? `Recovered in ${data.serving_region || 'DR region'}`
+                    : state === 'failing_back' ? 'Returning to primary region...'
+                    : 'Drill complete';
+                outageView.classList.add('hide');
+                recoveredView.classList.remove('hide');
+                payBtn.disabled = false;
+                payBtn.textContent = '💳 Make Payment';
+                stopStopwatch();
+
+                // RTO/RPO display
+                if (data.rto_s != null) {
+                    const rtoBox = document.getElementById('rtoBox');
+                    const rtoVal = document.getElementById('rtoValue');
+                    rtoVal.textContent = `${Math.floor(data.rto_s)}s`;
+                    document.getElementById('rtoTarget').textContent = `target ${Math.floor(data.rto_target_s / 60)}min`;
+                    rtoBox.className = 'result-box ' + (data.rto_met ? 'pass' : 'fail');
+                    rtoVal.innerHTML += data.rto_met ? ' ✅' : ' ❌';
+                }
+                if (data.rpo_s != null) {
+                    const rpoBox = document.getElementById('rpoBox');
+                    const rpoVal = document.getElementById('rpoValue');
+                    rpoVal.textContent = `${data.rpo_s}s`;
+                    document.getElementById('rpoTarget').textContent = `target ${Math.floor(data.rpo_target_s / 60)}min`;
+                    rpoBox.className = 'result-box ' + (data.rpo_met ? 'pass' : 'fail');
+                    rpoVal.innerHTML += data.rpo_met ? ' ✅' : ' ❌';
+                }
+
+                expectedRegion = data.serving_region;
+            }
+            else if (state === 'paused' || state === 'rolled_back') {
+                liveCard.className = 'card live-card';
+                liveBanner.className = 'live-banner';
+                liveBannerText.textContent = state === 'paused' ? 'Exercise paused' : 'Rolled back to original state';
+                outageView.classList.add('hide');
+                recoveredView.classList.add('hide');
+                stopStopwatch();
+            }
+        }
+
+        // Stopwatch
+        function startStopwatch() {
+            if (stopwatchInterval) return;
+            stopwatchInterval = setInterval(() => {
+                if (!t0) return;
+                const elapsed = (Date.now() - clockSkew - t0) / 1000;
+                stopwatchEl.textContent = formatStopwatch(Math.max(0, elapsed));
+            }, 100);
+        }
+
+        function stopStopwatch() {
+            if (stopwatchInterval) {
+                clearInterval(stopwatchInterval);
+                stopwatchInterval = null;
+            }
+        }
+
+        // Health check + reconnect logic
+        async function checkHealth() {
+            try {
+                const res = await fetch('/health?ts=' + Date.now(), { cache: 'no-store' });
+                const data = await res.json();
+
+                if (data.status === 'ok' || data.status === 'config_error') {
+                    // Check if region matches expected after recovery
+                    if (lastLiveState === 'recovered' && expectedRegion && data.region !== expectedRegion) {
+                        healthFailCount++;
+                        if (healthFailCount > 4) { // > 8s
+                            reconnect();
+                        }
+                    } else {
+                        healthFailCount = 0;
+                        if (data.region && data.region !== serverRegion) {
+                            updateRegionChip(data.region);
+                        }
+                    }
+                }
+            } catch (e) {
+                healthFailCount++;
+                // If recovered but can't reach this origin for > 8s, try reconnect
+                if (lastLiveState === 'recovered' && healthFailCount > 4) {
+                    reconnect();
+                }
+            }
+        }
+
+        function reconnect() {
+            reconnectingOverlay.classList.remove('hide');
+            if (altUrl) {
+                setTimeout(() => {
+                    window.location.href = altUrl + window.location.pathname;
+                }, 1500);
+            } else {
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            }
+        }
+
+        // Mute toggle
+        muteBtn.addEventListener('click', () => {
+            const muted = !Haptics.isMuted();
+            Haptics.setMuted(muted);
+            muteBtn.textContent = muted ? '🔕' : '🔔';
+            if (!muted) Haptics.trigger('tap', true);
+        });
+
+        // Unlock alerts
+        unlockBtn.addEventListener('click', () => {
+            Haptics.unlock();
+            unlockPrompt.classList.add('hide');
+            localStorage.setItem('haptics_unlocked', '1');
+        });
+
+        // Check if already unlocked
+        if (localStorage.getItem('haptics_unlocked')) {
+            unlockPrompt.classList.add('hide');
+            Haptics.unlock();
+        }
+
+        // Initialize
+        (async () => {
+            await loadConfig();
+            loadTransactions();
+            checkHealth();
+
+            // Start polling
+            if (liveUrl) {
+                pollLive();
+                setInterval(pollLive, 1000);
+            }
+            setInterval(loadTransactions, 3000);
+            setInterval(checkHealth, 2000);
+        })();
     </script>
 </body>
 </html>
