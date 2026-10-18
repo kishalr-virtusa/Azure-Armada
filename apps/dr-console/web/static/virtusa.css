@@ -269,3 +269,6 @@ textarea.form-input { height: auto; min-height: 72px; padding: 8px 12px; }
     .env-card { display: none; }
     .nav-section { padding-top: 8px; }
 }
+
+/* plan tables: step ids and dependencies never break across lines */
+.plan-table td:nth-child(1), .plan-table td:nth-child(6), .plan-table td:nth-child(5) { white-space: nowrap; }
