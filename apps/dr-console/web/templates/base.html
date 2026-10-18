@@ -7,51 +7,50 @@
     <link rel="icon" type="image/svg+xml" href="/static/brand/favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/virtusa.css">
     {% block head %}{% endblock %}
 </head>
 <body>
-    <nav class="nav">
+    <nav class="nav" aria-label="Main">
         <a href="/" class="nav-brand">
-            <img src="/static/brand/virtusa.svg" alt="Virtusa" class="brand-logo" style="height: 24px;">
-            <span class="brand-logo-dark" style="display: none;">
-                <img src="/static/brand/virtusa-white.svg" alt="Virtusa" style="height: 24px;">
-            </span>
-            <span class="brand-divider" style="width: 1px; height: 24px; background: var(--line-2); margin: 0 12px;"></span>
-            <span style="font-weight: 600;">DR Agent</span>
+            <img src="/static/brand/virtusa.svg" alt="Virtusa" class="brand-logo" style="height: 20px;">
+            <span class="brand-logo-dark" style="display: none;"><img src="/static/brand/virtusa-white.svg" alt="Virtusa" style="height: 20px;"></span>
+            <span class="product">DR Agent</span>
         </a>
-        
+
         <div class="nav-links">
-            <a href="/" class="nav-link {% if active_page == 'overview' %}active{% endif %}">Overview</a>
-            <a href="/phase1" class="nav-link {% if active_page == 'phase1' %}active{% endif %}">Phase 1</a>
-            <a href="/plan" class="nav-link {% if active_page == 'plan' %}active{% endif %}">Plan</a>
-            <a href="/exercise" class="nav-link {% if active_page == 'exercise' %}active{% endif %}">Exercise</a>
-            <a href="/results" class="nav-link {% if active_page == 'results' %}active{% endif %}">Results</a>
-            <a href="/live" class="nav-link {% if active_page == 'live' %}active{% endif %}">Live</a>
+            <div class="nav-section">Prepare</div>
+            <a href="/" class="nav-link {% if active_page == 'overview' %}active{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span>Overview</span></a>
+            <a href="/phase1" class="nav-link {% if active_page == 'phase1' %}active{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg><span>Design &amp; readiness</span></a>
+            <div class="nav-section">Exercise</div>
+            <a href="/plan" class="nav-link {% if active_page == 'plan' %}active{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg><span>Plan</span></a>
+            <a href="/exercise" class="nav-link {% if active_page == 'exercise' %}active{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Live exercise</span></a>
+            <a href="/results" class="nav-link {% if active_page == 'results' %}active{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Results</span></a>
+            <div class="nav-section">Present</div>
+            <a href="/live" class="nav-link {% if active_page == 'live' %}active{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg><span>Presenter view</span></a>
         </div>
-        
+
         <div class="nav-right">
-            <div class="azure-badge" style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-3); padding: 6px 10px; background: var(--surface-2); border-radius: 6px;">
-                <img src="/static/brand/azure.svg" alt="Azure" style="height: 18px;">
-                <span>Built on Microsoft Azure · AI Foundry</span>
+            <div class="env-card">
+                <span class="t">Environment</span>
+                <span class="r"><span class="swatch a"></span>A · East Asia (primary)</span>
+                <span class="r"><span class="swatch b"></span>B · Southeast Asia (DR)</span>
             </div>
-            <div style="position: relative;">
-                <button class="bell-btn" onclick="toggleNotifications()" title="Notifications">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                    </svg>
-                    <span class="bell-badge hide" id="bellBadge">0</span>
-                </button>
-                <div class="notif-dropdown hide" id="notifDropdown">
-                    <div class="notif-header">Notifications</div>
-                    <div id="notifList">
-                        <div style="padding: 16px; color: var(--ink-3); text-align: center;">No notifications</div>
+            <div class="azure-badge"><img src="/static/brand/azure.svg" alt=""><span>Built on Microsoft Azure</span></div>
+            <div class="nav-foot">
+                <div style="position: relative;">
+                    <button class="bell-btn" onclick="toggleNotifications()" title="Notifications" aria-label="Notifications">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                        <span class="bell-badge hide" id="bellBadge">0</span>
+                    </button>
+                    <div class="notif-dropdown hide" id="notifDropdown">
+                        <div class="notif-header">Notifications</div>
+                        <div id="notifList"><div style="padding: 16px; color: var(--mute); text-align: center;">No notifications</div></div>
                     </div>
                 </div>
+                <a href="/logout" class="btn btn-secondary" style="height: 30px; font-size: 13px;">Sign out</a>
             </div>
-            <a href="/logout" class="nav-link">Logout</a>
         </div>
     </nav>
 
