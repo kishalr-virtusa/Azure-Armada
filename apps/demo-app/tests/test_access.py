@@ -47,3 +47,20 @@ def test_reconnect_token_grants_access_on_other_region():
     r = client.get("/?k=" + access._token(), follow_redirects=False)
     assert r.status_code == 303 and "contoso_access=" in r.headers["set-cookie"]
     assert client.get("/?k=wrong", follow_redirects=False).status_code == 401
+
+
+def test_reconnect_link_keeps_device_id_but_drops_secrets():
+    r = client.get(f"/?k={access._token()}&d=abcd-1234-efgh", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/?d=abcd-1234-efgh"
+
+
+def test_balance_is_per_device_and_errors_are_not_payments():
+    h = {"X-Access-Code": "s3cret", "X-Device": "abcd-1234-efgh"}
+    with mock.patch("app.db.device_spent", return_value=(450.0, 2)) as spent:
+        r = client.get("/api/balance", headers=h)
+        assert r.json()["balance"] == 12000.0 and spent.call_args.args == ("abcd-1234-efgh",)
+    assert client.get("/api/balance", headers={"X-Access-Code": "s3cret", "X-Device": "bad id!"}).status_code == 400
+    with mock.patch("app.db.device_spent", side_effect=Exception("failover in progress")):
+        assert client.get("/api/balance", headers=h).status_code == 503
+    with mock.patch("app.db.insert_transaction", side_effect=Exception("failover in progress")):
+        assert client.post("/api/txn", headers=h).status_code == 500

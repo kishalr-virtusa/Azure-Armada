@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import urlencode
 from typing import Optional
 
 from fastapi import Body, Depends, FastAPI, Form, Request
@@ -110,8 +110,11 @@ async def go(request: Request):
     if not url:
         return HTMLResponse("<h3>Contoso Payments is recovering. Retry in a few seconds.</h3>", status_code=503,
                             headers={"Refresh": "3", "Cache-Control": "no-store"})
-    code, token = request.query_params.get("code"), request.query_params.get("k")
-    target = url + "/" + (f"?code={quote(code)}" if code else f"?k={quote(token)}" if token else "")  # team link: hand the code to the app once
+    # team link: hand the code (or device token) to the app once; d = the phone's id so its balance follows it
+    q = request.query_params
+    params = [("code", q["code"])] if q.get("code") else [("k", q["k"])] if q.get("k") else []
+    params += [("d", q["d"])] if q.get("d") else []
+    target = url + "/" + (f"?{urlencode(params)}" if params else "")
     return RedirectResponse(target, status_code=302, headers={"Cache-Control": "no-store"})
 
 

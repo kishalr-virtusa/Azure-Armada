@@ -516,7 +516,7 @@
         <!-- Balance card with Pay button -->
         <div class="balance-card">
             <div class="balance-label">Available Balance</div>
-            <div class="balance-amount" id="balance">$12,450.00</div>
+            <div class="balance-amount" id="balance">—</div>
             <button class="pay-btn" id="payBtn" onclick="makePayment()">Make payment</button>
             <div id="paymentResult" class="payment-result hide"></div>
         </div>
@@ -600,7 +600,19 @@
         let returnedHome = false;
         // users have been moved to the DR region: an unreachable or wrong origin must reconnect
         const AFTER_RECOVERY = ['recovered', 'failing_back'];
-        let balance = 12450.00;
+        let balance = null;            // always from the server (Azure SQL), never guessed in the browser
+
+        // Anonymous id for this phone: its balance and payments are stored against it in the database, and it is
+        // carried along when the app reconnects to the other region, so the balance survives a failover.
+        const deviceId = (() => {
+            const fromUrl = new URLSearchParams(location.search).get('d');
+            let id = fromUrl && /^[A-Za-z0-9-]{8,64}$/.test(fromUrl) ? fromUrl : null;
+            try { id = id || localStorage.getItem('contoso-device'); } catch (e) { /* storage blocked */ }
+            if (!id) id = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 12));
+            try { localStorage.setItem('contoso-device', id); } catch (e) { /* storage blocked */ }
+            return id;
+        })();
+        const deviceHeaders = { 'X-Device': deviceId };
 
         // Elements
         const regionChip = document.getElementById('regionChip');
@@ -634,6 +646,7 @@
 
         // Format currency
         function formatCurrency(n) {
+            if (typeof n !== 'number' || !Number.isFinite(n)) return '—';
             return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
         }
 
@@ -664,20 +677,25 @@
             Haptics.trigger('tap', true);
 
             try {
-                const res = await fetch('/api/txn', { method: 'POST' });
-                const txn = await res.json();
-                balance -= txn.amount;
-                document.getElementById('balance').textContent = formatCurrency(balance);
+                const res = await fetch('/api/txn', { method: 'POST', headers: deviceHeaders });
+                const txn = res.ok ? await res.json() : null;
+                // only a confirmed payment from the server counts; anything else is a failure, never "$NaN sent"
+                if (!txn || typeof txn.amount !== 'number' || !Number.isFinite(txn.amount)) {
+                    throw new Error(res.status === 401 ? 'session' : 'unavailable');
+                }
 
                 paymentResult.className = 'payment-result success';
-                paymentResult.textContent = `✅ ${formatCurrency(txn.amount)} sent`;
+                paymentResult.textContent = `${formatCurrency(txn.amount)} sent`;
                 paymentResult.classList.remove('hide');
                 Haptics.trigger('success', true);
 
+                loadBalance();
                 loadTransactions();
             } catch (e) {
                 paymentResult.className = 'payment-result error';
-                paymentResult.textContent = '❌ Payment failed';
+                paymentResult.textContent = e.message === 'session'
+                    ? 'Your session expired. Reload the page to continue.'
+                    : 'Payment not processed. You have not been charged; please try again.';
                 paymentResult.classList.remove('hide');
                 Haptics.trigger('error', true);
             } finally {
@@ -687,11 +705,27 @@
             }
         }
 
+        // Balance: computed by the server from this phone's payments in Azure SQL. If it can't be read right now
+        // (e.g. mid-failover) the last confirmed value stays on screen.
+        async function loadBalance() {
+            try {
+                const res = await fetch('/api/balance', { headers: deviceHeaders, cache: 'no-store' });
+                if (!res.ok) return;
+                const data = await res.json();
+                if (typeof data.balance === 'number' && Number.isFinite(data.balance)) {
+                    balance = data.balance;
+                    document.getElementById('balance').textContent = formatCurrency(balance);
+                }
+            } catch (e) { /* keep the last confirmed balance */ }
+        }
+
         // Load transactions
         async function loadTransactions() {
             try {
-                const res = await fetch('/api/recent');
+                const res = await fetch('/api/recent', { headers: deviceHeaders, cache: 'no-store' });
+                if (!res.ok) return;
                 const txns = await res.json();
+                if (!Array.isArray(txns)) return;
                 const list = document.getElementById('txnList');
 
                 if (txns.length === 0) {
@@ -700,7 +734,7 @@
                 }
 
                 list.innerHTML = txns.slice(0, 8).map(t => {
-                    const regionClass = t.region.includes('Central') ? 'region-a' : 'region-b';
+                    const regionClass = t.region === 'Southeast Asia' ? 'region-b' : 'region-a';
                     return `
                         <li class="txn-item">
                             <div>
@@ -888,7 +922,7 @@
             reconnectingOverlay.classList.remove('hide');
             if (altUrl) {
                 setTimeout(() => {
-                    window.location.href = altUrl + (accessToken ? '?k=' + encodeURIComponent(accessToken) : '');
+                    window.location.href = altUrl + '?d=' + encodeURIComponent(deviceId) + (accessToken ? '&k=' + encodeURIComponent(accessToken) : '');
                 }, 1500);
             } else {
                 setTimeout(() => {
@@ -921,6 +955,7 @@
         // Initialize
         (async () => {
             await loadConfig();
+            loadBalance();
             loadTransactions();
             checkHealth();
 
@@ -929,7 +964,7 @@
                 pollLive();
                 setInterval(pollLive, 1000);
             }
-            setInterval(loadTransactions, 3000);
+            setInterval(() => { loadBalance(); loadTransactions(); }, 3000);
             setInterval(checkHealth, 2000);
         })();
     </script>

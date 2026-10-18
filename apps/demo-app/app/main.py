@@ -2,6 +2,7 @@
 
 import os
 import random
+import re
 import logging
 import threading
 import time
@@ -138,13 +139,23 @@ def health():
     return response
 
 
+OPENING_BALANCE = 12450.00
+_DEVICE_RE = re.compile(r"^[A-Za-z0-9-]{8,64}$")
+
+
+def _device(request: Request) -> str | None:
+    """Anonymous per-phone id (random, made in the browser) so each phone sees its own balance."""
+    d = request.headers.get("x-device") or request.query_params.get("device") or ""
+    return d if _DEVICE_RE.match(d) else None
+
+
 @app.post("/api/txn")
-async def create_transaction():
+def create_transaction(request: Request):
     """Create a new random transaction."""
     try:
         # Random amount between $10 and $500
         amount = round(random.uniform(10, 500), 2)
-        txn = db.insert_transaction(amount, REGION_NAME)
+        txn = db.insert_transaction(amount, REGION_NAME, _device(request))
         logger.info(f"Transaction created: {txn['id']} for ${amount}")
         return txn
     except Exception as e:
@@ -153,13 +164,27 @@ async def create_transaction():
 
 
 @app.get("/api/recent")
-async def recent_transactions():
-    """Get recent transactions."""
+def recent_transactions(request: Request):
+    """Get recent transactions (this phone's own when it sends its device id)."""
     try:
-        return db.get_recent_transactions(10)
+        return db.get_recent_transactions(10, _device(request))
     except Exception as e:
         logger.error(f"Failed to get transactions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/balance")
+def balance(request: Request):
+    """This phone's balance, computed from its payments stored in Azure SQL (so it survives a failover)."""
+    device = _device(request)
+    if not device:
+        raise HTTPException(status_code=400, detail="device id required")
+    try:
+        spent, n = db.device_spent(device)
+        return {"balance": round(OPENING_BALANCE - spent, 2), "payments": n, "region": REGION_NAME}
+    except Exception as e:
+        logger.error(f"Failed to get balance: {e}")
+        raise HTTPException(status_code=503, detail="balance temporarily unavailable")
 
 
 @app.get("/api/config")

@@ -14,6 +14,7 @@ import logging
 import os
 import threading
 import time
+from urllib.parse import urlencode
 
 import httpx
 from fastapi import Request
@@ -107,8 +108,9 @@ async def gate_middleware(request: Request, call_next):
     code = request.query_params.get("code")
     token = request.query_params.get("k")  # device token handed over by a reconnect to the other region
     if ACCESS_CODE and ((code and hmac.compare_digest(code, ACCESS_CODE)) or (token and hmac.compare_digest(token, _token()))):
-        # one-time link: remember the device, then drop the code from the URL
-        return _grant(RedirectResponse(path or "/", status_code=303), request)
+        # one-time link: remember the device, then drop the code from the URL (other parameters are kept)
+        rest = urlencode([(k, v) for k, v in request.query_params.multi_items() if k not in ("code", "k")])
+        return _grant(RedirectResponse((path or "/") + (f"?{rest}" if rest else ""), status_code=303), request)
     if await run_in_threadpool(has_access, request):
         return await call_next(request)
     if path.startswith("/api/"):

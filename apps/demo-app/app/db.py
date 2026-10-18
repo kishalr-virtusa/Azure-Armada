@@ -57,6 +57,12 @@ def init_tables():
             )
         """)
         
+        # Per-device ledger: the balance a phone shows is computed here, so it survives a failover
+        cursor.execute("""
+            IF COL_LENGTH('transactions', 'device') IS NULL
+            ALTER TABLE transactions ADD device NVARCHAR(64) NULL
+        """)
+
         # Heartbeat table (written by DR engine)
         cursor.execute("""
             IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='heartbeat' AND xtype='U')
@@ -98,16 +104,16 @@ def health_check() -> dict[str, Any]:
         return {"db_ok": False, "db_server": None, "error": str(e)}
 
 
-def insert_transaction(amount: float, region: str) -> dict[str, Any]:
+def insert_transaction(amount: float, region: str, device: str | None = None) -> dict[str, Any]:
     """Insert a new transaction and return it."""
     with get_cursor() as cursor:
         cursor.execute(
             """
-            INSERT INTO transactions (amount, region)
+            INSERT INTO transactions (amount, region, device)
             OUTPUT INSERTED.id, INSERTED.amount, INSERTED.created_at, INSERTED.region
-            VALUES (%s, %s)
+            VALUES (%s, %s, %s)
             """,
-            (amount, region),
+            (amount, region, device),
         )
         row = cursor.fetchone()
         return {
@@ -118,17 +124,17 @@ def insert_transaction(amount: float, region: str) -> dict[str, Any]:
         }
 
 
-def get_recent_transactions(limit: int = 10) -> list[dict[str, Any]]:
-    """Get the most recent transactions."""
+def get_recent_transactions(limit: int = 10, device: str | None = None) -> list[dict[str, Any]]:
+    """Get the most recent transactions (only this device's when a device id is given)."""
     with get_cursor() as cursor:
         cursor.execute(
-            """
+            f"""
             SELECT TOP(%s) id, amount, created_at, region
             FROM transactions
-            WHERE amount > 0
+            WHERE amount > 0 {"AND device = %s" if device else ""}
             ORDER BY created_at DESC
             """,
-            (limit,),
+            (limit, device) if device else (limit,),
         )
         rows = cursor.fetchall()
         return [
@@ -140,3 +146,14 @@ def get_recent_transactions(limit: int = 10) -> list[dict[str, Any]]:
             }
             for r in rows
         ]
+
+
+def device_spent(device: str) -> tuple[float, int]:
+    """Total paid and number of payments made by one device."""
+    with get_cursor() as cursor:
+        cursor.execute(
+            "SELECT COALESCE(SUM(amount), 0) AS spent, COUNT(*) AS n FROM transactions WHERE device = %s AND amount > 0",
+            (device,),
+        )
+        row = cursor.fetchone()
+        return float(row["spent"]), int(row["n"])
