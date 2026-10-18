@@ -289,6 +289,13 @@ def list_exercises() -> list[dict]:
     return sorted(rows, key=lambda e: e["PartitionKey"], reverse=True)[:50]
 
 
+def _precise(sec):
+    """Measured seconds shown exactly as recorded (2 decimals), never rounded to whole seconds."""
+    if sec is None:
+        return "—"
+    return f"{sec:.2f}s" if sec < 60 else f"{int(sec // 60)}m {sec % 60:05.2f}s"
+
+
 def results_context(xid: Optional[str]) -> dict:
     if not xid:
         ex = list_exercises()
@@ -304,7 +311,7 @@ def results_context(xid: Optional[str]) -> dict:
     return {
         "exercise_id": xid, "status": status,
         "status_class": {"completed": "pass", "rolled_back": "warn", "failed": "fail", "killed": "fail"}.get(status, "upd"),
-        "rto_display": fmt_duration(rto), "rto_met": rto_met, "rto_target_min": prof.rto_min, "rto_target_s": prof.rto_min * 60,
+        "rto_display": fmt_duration(rto), "rto_precise": _precise(rto), "rpo_precise": _precise(rpo), "rto_met": rto_met, "rto_target_min": prof.rto_min, "rto_target_s": prof.rto_min * 60,
         "rpo_s": None if rpo is None else round(rpo, 1), "rpo_met": rpo_met,
         "rpo_target_min": prof.rpo_min, "rpo_target_s": prof.rpo_min * 60,
         "failback_display": fmt_duration(fb) if fb is not None else None,

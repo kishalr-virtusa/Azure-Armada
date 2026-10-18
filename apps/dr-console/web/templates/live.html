@@ -321,14 +321,20 @@
         overflow-y: auto;
     }
     .timeline-item {
-        padding: 10px 0;
+        padding: 10px 0 10px 18px;
         border-bottom: 1px solid var(--line);
         font-size: 16px;
     }
+    /* dot centred on the first (time) line, inside the card */
+    .timeline-card .timeline-item::before { left: 2px; top: 16px; background: var(--hairline-strong); box-shadow: none; }
+    .timeline-card .timeline-item.measurement::before { background: var(--success); }
+    .timeline-card .timeline-item.error::before { background: var(--danger); }
+    .timeline-card .timeline-item.approval::before, .timeline-card .timeline-item.step_start::before { background: var(--accent); }
     .timeline-item:last-child { border-bottom: none; }
     .timeline-time {
         color: var(--ink-2);
         font-size: 14px;
+        line-height: 20px;
     }
     .timeline-msg {
         font-weight: 500;
@@ -453,6 +459,7 @@
     .pv-progress .current-step { font-size: 13px !important; color: var(--body); background: none !important; padding: 0 !important; text-align: left !important; }
     body:not(.drill-active) .pv-progress { display: none; }
     .pv-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .pv-card-head > .sub { margin: 0; line-height: 24px; }
     .pv-card-head h2 { font-size: 16px !important; margin: 0 !important; }
     .pv-empty { color: var(--mute); font-size: 13px; padding: 12px 0; }
     .pv-phone { align-items: stretch; text-align: left; padding-bottom: 24px; }
@@ -517,7 +524,7 @@
             <div class="pv-card-head">
                 <div>
                     <h2>Agent timeline</h2>
-                    <p class="sub">Decisions and actions of the DR Agent, newest last</p>
+                    <p class="sub">Decisions and actions of the DR Agent, newest first</p>
                 </div>
                 <button class="btn btn-secondary chaos-btn" id="chaosBtn" onclick="injectChaos()" disabled
                         title="Disables the Southeast Asia traffic endpoint mid-failover to test the Validator agent">Inject surprise fault</button>

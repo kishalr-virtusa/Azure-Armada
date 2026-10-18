@@ -26,11 +26,11 @@
 </div>
 
 <!-- Plan Display Section -->
-<div id="planSection" class="hide">
+<div id="planSection" class="hide stack">
     <!-- Assumptions -->
     <div class="card">
         <h2>Assumptions</h2>
-        <ul id="assumptionsList" style="margin: 12px 0 0 20px; color: var(--ink-2);"></ul>
+        <ul id="assumptionsList" style="margin: 0; padding-left: 20px; color: var(--ink-2); display: flex; flex-direction: column; gap: 6px;"></ul>
     </div>
     
     <!-- Plan Steps by Phase -->
@@ -49,24 +49,20 @@
         <h2>Approve & Start Exercise</h2>
         <p class="sub">Review the plan and approve to begin execution</p>
         
-        <form id="approvalForm" style="margin-top: 16px;">
-            <div class="form-group">
-                <label class="form-label">Your Name (for audit)</label>
-                <input type="text" name="approver_name" class="form-input" placeholder="e.g., John Smith" required>
+        <form id="approvalForm" class="form-stack" style="margin-top: 8px;">
+            <div class="form-group" style="max-width: 420px;">
+                <label class="form-label" for="approverName">Your name (for audit)</label>
+                <input type="text" id="approverName" name="approver_name" class="form-input" placeholder="e.g., John Smith" required>
             </div>
-            <div class="form-group">
-                <label class="form-label">
-                    <input type="checkbox" name="confirm" required style="margin-right: 8px;">
-                    I have reviewed the plan and understand that this will inject a real outage
-                </label>
-            </div>
-            <div class="form-group">
-                <label class="form-label" style="color: var(--upd);">
-                    <input type="checkbox" name="chaos" style="margin-right: 8px;">
-                    Inject a surprise fault during the drill (tests the Validator agent)
-                </label>
-            </div>
-            <button type="submit" class="btn btn-danger">
+            <label class="check-row">
+                <input type="checkbox" name="confirm" required>
+                <span>I have reviewed the plan and understand that this will inject a real outage</span>
+            </label>
+            <label class="check-row" style="color: var(--upd);">
+                <input type="checkbox" name="chaos">
+                <span>Inject a surprise fault during the drill (tests the Validator agent)</span>
+            </label>
+            <button type="submit" class="btn btn-danger" style="align-self: flex-start; margin-top: 4px;">
                 Approve & Start Exercise
             </button>
         </form>
