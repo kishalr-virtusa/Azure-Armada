@@ -20,7 +20,7 @@
         <div class="l">Recovery Time Objective (RTO)</div>
         <div class="v big" style="font-size: 44px;">
             {{ rto_display }}
-            {{ '✅' if rto_met else '❌' }}
+            {{ '' if rto_met else '' }}
         </div>
         <div class="x">Target: {{ rto_target_min }}min ({{ rto_target_s }}s)</div>
     </div>
@@ -30,7 +30,7 @@
         <div class="l">Recovery Point Objective (RPO)</div>
         <div class="v big" style="font-size: 44px;">
             {{ rpo_s }}s
-            {{ '✅' if rpo_met else '❌' }}
+            {{ '' if rpo_met else '' }}
         </div>
         <div class="x">Target: {{ rpo_target_min }}min ({{ rpo_target_s }}s)</div>
     </div>
@@ -121,7 +121,7 @@
     
     {% if report_url %}
     <a href="{{ report_url }}" target="_blank" class="btn btn-primary">
-        📄 View HTML Report
+        View HTML Report
     </a>
     <a href="/reports/{{ exercise_id }}" class="btn btn-secondary" style="margin-left: 8px;">
         Open in Console

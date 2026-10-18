@@ -115,7 +115,7 @@
         <!-- Fixable items section -->
         <div id="fixableSection" class="hide" style="margin-top: 16px;">
             <div class="box" style="border-color: var(--upd); background: var(--upd-bg);">
-                <h4 style="color: var(--upd); margin-bottom: 8px;">⚠️ Fixable Issues Found</h4>
+                <h4 style="color: var(--upd); margin-bottom: 8px;">Fixable Issues Found</h4>
                 <p id="fixableDescription" style="margin-bottom: 12px; font-size: 13px;"></p>
                 <div class="form-group">
                     <label class="form-label">Your Name (for audit)</label>
@@ -182,10 +182,10 @@
     
     function renderSourceBadge(source, via) {
         const isAI = source === 'llm' || source === 'ai';
-        const label = via === 'foundry-agent' ? '🤖 Azure AI Foundry Agent' : '🤖 AI';
+        const label = via === 'foundry-agent' ? 'Azure AI Foundry Agent' : 'AI';
         return isAI
             ? `<span class="badge" style="background: var(--accent); color: white; border-color: var(--accent);" title="${via || ''}">${label}</span>`
-            : '<span class="badge" title="deterministic fallback">📋 Rules</span>';
+            : '<span class="badge" title="deterministic fallback">Rules</span>';
     }
     
     document.getElementById('profileForm').addEventListener('submit', async (e) => {

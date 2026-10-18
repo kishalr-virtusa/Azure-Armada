@@ -63,11 +63,11 @@
             <div class="form-group">
                 <label class="form-label" style="color: var(--upd);">
                     <input type="checkbox" name="chaos" style="margin-right: 8px;">
-                    🔥 Inject a surprise fault during the drill (tests the Validator agent)
+                    Inject a surprise fault during the drill (tests the Validator agent)
                 </label>
             </div>
             <button type="submit" class="btn btn-danger">
-                🚀 Approve & Start Exercise
+                Approve & Start Exercise
             </button>
         </form>
     </div>
@@ -80,10 +80,10 @@
     
     function renderSourceBadge(source, via) {
         const isAI = source === 'llm' || source === 'ai';
-        const label = via === 'foundry-agent' ? '🤖 Azure AI Foundry Agent' : '🤖 AI';
+        const label = via === 'foundry-agent' ? 'Azure AI Foundry Agent' : 'AI';
         return isAI
             ? `<span class="badge" style="background: var(--accent); color: white; border-color: var(--accent);" title="${via || ''}">${label}</span>`
-            : '<span class="badge" title="deterministic fallback">📋 Rules</span>';
+            : '<span class="badge" title="deterministic fallback">Rules</span>';
     }
     
     async function generatePlan() {
@@ -161,7 +161,7 @@
                                     <td><span class="chip">${step.owner_team}</span></td>
                                     <td>
                                         <span class="st ${step.type === 'human' ? 'warn' : 'info'}">
-                                            ${step.type === 'human' ? '👤 Human' : '🤖 Auto'}
+                                            ${step.type === 'human' ? 'Human' : 'Auto'}
                                         </span>
                                     </td>
                                     <td style="font-family: monospace; font-size: 11px;">${step.action || '—'}</td>

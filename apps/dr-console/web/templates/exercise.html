@@ -74,10 +74,10 @@
             <h3 style="margin-bottom: 12px;">Emergency Controls</h3>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 <button class="btn btn-danger" onclick="killSwitch()" id="killBtn">
-                    🛑 Kill Switch
+                    Kill Switch
                 </button>
                 <button class="btn btn-secondary" onclick="rollback()" id="rollbackBtn">
-                    ↩️ Rollback
+                    Rollback
                 </button>
             </div>
         </div>
@@ -85,9 +85,8 @@
         <!-- Chaos Injection -->
         <div style="margin-top: 16px;">
             <h3 style="margin-bottom: 12px;">Chaos Testing</h3>
-            <button class="btn" id="chaosBtn" onclick="injectChaos()" disabled 
-                    style="background: linear-gradient(135deg, #FF6B00, #FF0000); color: white; border: none;">
-                🔥 Inject Surprise Fault
+            <button class="btn btn-secondary" id="chaosBtn" onclick="injectChaos()" disabled style="color: var(--danger);">
+                Inject Surprise Fault
             </button>
             <p style="font-size: 11px; color: var(--ink-3); margin-top: 6px;">
                 Tests the Validator agent's ability to handle unexpected failures
@@ -110,7 +109,7 @@
 <!-- Paused/Failed Diagnosis Panel (hidden by default) -->
 <div id="pausedFailedBanner" class="card hide" style="background: var(--add-bg); border-color: var(--add);">
     <h2 style="color: var(--add);">
-        ⚠️ Exercise Paused — Failure Detected
+        Exercise Paused — Failure Detected
         <span id="diagnosisBadge" class="badge hide" style="margin-left: 8px; background: var(--accent); color: white; border-color: var(--accent);"></span>
     </h2>
     <p id="failedStepInfo" class="sub" style="margin-bottom: 16px;"></p>
@@ -131,7 +130,7 @@
         <!-- Proposed fix section (shown when fix_action != "none") -->
         <div id="proposedFixSection" class="hide" style="margin-bottom: 12px;">
             <div class="box" style="border-color: var(--have); background: var(--have-bg);">
-                <strong style="color: var(--have);">✅ Proposed Fix</strong>
+                <strong style="color: var(--have);"> Proposed Fix</strong>
                 <p id="proposedFixText" style="margin: 8px 0; font-weight: 500;"></p>
                 <div id="fixParamsList" style="font-size: 12px; color: var(--ink-2);"></div>
             </div>
@@ -139,33 +138,33 @@
     </div>
     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
         <button class="btn btn-primary" id="approveFixBtn" onclick="approveFixAndRetry()" style="display: none;">
-            ✅ Approve Fix & Retry
+             Approve Fix & Retry
         </button>
-        <button class="btn btn-secondary" id="retryStepBtn" onclick="retryStep()">🔄 Retry Step</button>
+        <button class="btn btn-secondary" id="retryStepBtn" onclick="retryStep()">Retry Step</button>
         <button class="btn btn-secondary" onclick="continueExercise()">⏭️ Continue (Skip)</button>
-        <button class="btn btn-danger" onclick="rollback()">↩️ Rollback</button>
+        <button class="btn btn-danger" onclick="rollback()">Rollback</button>
     </div>
 </div>
 
 <!-- Killed Banner (hidden by default) -->
 <div id="killedBanner" class="card hide" style="background: var(--add-bg); border-color: var(--add); text-align: center;">
-    <h2 style="color: var(--add);">🛑 Exercise Killed</h2>
+    <h2 style="color: var(--add);">Exercise Killed</h2>
     <p style="margin: 12px 0;">The exercise was stopped by an operator. Infrastructure may be in an inconsistent state.</p>
     <div style="margin-top: 16px;">
         <button class="btn btn-danger" style="font-size: 16px; padding: 12px 32px;" onclick="rollback()">
-            ↩️ Rollback to Original State
+            Rollback to Original State
         </button>
     </div>
     <p style="margin-top: 12px; font-size: 12px; color: var(--ink-3);">Rollback will restore Traffic Manager and SQL failover group to their pre-exercise configuration.</p>
 </div>
 
 <!-- Completed Banner (hidden by default) -->
-<div id="completedBanner" class="card hide" style="background: var(--have-bg); border-color: var(--have); text-align: center;">
-    <h2 style="color: var(--have);">✅ Exercise Completed</h2>
+<div id="completedBanner" class="card hide" style="flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+    <h2><span class="st pass" style="margin-right: 8px;">Completed</span>Exercise completed</h2>
     <p style="margin: 12px 0;">The DR exercise has finished successfully.</p>
     <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
         <a href="/results/{{ exercise_id }}" class="btn btn-primary">View Results</a>
-        <a id="reportUrlLink" href="#" class="btn btn-secondary hide" target="_blank">📄 Download Report</a>
+        <a id="reportUrlLink" href="#" class="btn btn-secondary hide" target="_blank">Download Report</a>
     </div>
 </div>
 {% endblock %}
@@ -242,7 +241,7 @@
                 // Show diagnosis source badge
                 const diagnosisBadge = document.getElementById('diagnosisBadge');
                 if (data.diagnosis.diagnosis_via === 'foundry-agent') {
-                    diagnosisBadge.textContent = '🤖 Azure AI Foundry Agent';
+                    diagnosisBadge.textContent = 'Azure AI Foundry Agent';
                     diagnosisBadge.classList.remove('hide');
                 } else {
                     diagnosisBadge.classList.add('hide');
@@ -460,7 +459,7 @@
     }
     
     async function killSwitch() {
-        if (!confirm('⚠️ Are you sure you want to KILL the exercise? This will stop execution immediately.')) {
+        if (!confirm('Are you sure you want to KILL the exercise? This will stop execution immediately.')) {
             return;
         }
         
@@ -519,7 +518,7 @@
     }
     
     async function injectChaos() {
-        if (!confirm('🔥 Inject a surprise fault?\n\nThis will create a second failure for the Validator agent to diagnose and fix.')) {
+        if (!confirm('Inject a surprise fault?\n\nThis will create a second failure for the Validator agent to diagnose and fix.')) {
             return;
         }
         
@@ -560,7 +559,7 @@
             alert('Failed to apply fix: ' + e.message);
         } finally {
             btn.disabled = false;
-            btn.textContent = '✅ Approve Fix & Retry';
+            btn.textContent = ' Approve Fix & Retry';
         }
     }
     

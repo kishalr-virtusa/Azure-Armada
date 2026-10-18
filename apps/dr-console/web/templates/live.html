@@ -354,7 +354,7 @@
         cursor: pointer;
         transition: transform 0.1s, opacity 0.2s;
     }
-    .chaos-btn:hover { transform: scale(1.02); }
+    .chaos-btn:hover { transform: none; filter: brightness(.95); }
     .chaos-btn:disabled { background: var(--surface-2); color: var(--ink-3); cursor: not-allowed; transform: none; }
     header .st { font-size: 12px; padding: 6px 12px; }
     .chaos-btn:disabled {
@@ -461,7 +461,7 @@
             <div class="qr-url" id="qrUrl">Loading...</div>
             <div class="qr-caption">Team Azure Armada</div>
             <button class="copy-link-btn" id="copyLinkBtn" onclick="copyLink()">
-                <span id="copyBtnIcon">📋</span>
+                <span id="copyBtnIcon"></span>
                 <span id="copyBtnText">Copy link</span>
             </button>
         </div>
@@ -515,7 +515,7 @@
                 <!-- L7: Ripple rings for haptic visualization -->
                 <div class="haptic-ripple" id="hapticRipple"></div>
                 <!-- L7: Haptic label -->
-                <div class="haptic-label" id="hapticLabel">📳 haptic</div>
+                <div class="haptic-label" id="hapticLabel"> haptic</div>
             </div>
         </div>
 
@@ -530,7 +530,7 @@
         <!-- Chaos button -->
         <div class="card chaos-section">
             <button class="chaos-btn" id="chaosBtn" onclick="injectChaos()" disabled>
-                🔥 Inject Surprise Fault
+                Inject Surprise Fault
             </button>
             <div style="font-size: 14px; color: var(--ink-2); margin-top: 10px;">
                 Tests the Validator agent's ability to handle unexpected failures
@@ -598,7 +598,7 @@
             text.textContent = 'Copied!';
             setTimeout(() => {
                 btn.classList.remove('copied');
-                icon.textContent = '📋';
+                icon.textContent = '';
                 text.textContent = 'Copy link';
             }, 2000);
         } catch (e) {
@@ -628,12 +628,12 @@
 
         // Update label based on pattern
         const patternLabels = {
-            'tap': '📳 tap',
-            'success': '📳 success',
-            'error': '📳 error',
-            'alert': '📳 alert!'
+            'tap': ' tap',
+            'success': ' success',
+            'error': ' error',
+            'alert': ' alert!'
         };
-        label.textContent = patternLabels[pattern] || '📳 haptic';
+        label.textContent = patternLabels[pattern] || ' haptic';
 
         // Reset animations by removing and re-adding classes
         phoneFrame.classList.remove('shaking');
@@ -830,7 +830,7 @@
             alert('No active exercise');
             return;
         }
-        if (!confirm('🔥 Inject a surprise fault?\n\nThis will create a second failure for the Validator agent to diagnose and fix.')) {
+        if (!confirm('Inject a surprise fault?\n\nThis will create a second failure for the Validator agent to diagnose and fix.')) {
             return;
         }
 
