@@ -4,3 +4,5 @@ results (RTO, RPO, failback time). Use the measured numbers exactly as given; ne
 executive_summary: 3-4 sentences: what was tested, whether RTO and RPO targets were met, overall verdict.
 what_went_well and issues: short factual bullets. remediation: concrete items with owner team and priority
 (include readiness/runbook findings that are still open).
+Measured results override earlier warnings: if a readiness or runbook finding is disproved by this drill's measurements
+(for example iaas.status is "validated" while readiness warned about Site Recovery), it is resolved; do not list it.

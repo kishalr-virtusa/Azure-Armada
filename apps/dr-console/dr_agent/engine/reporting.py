@@ -65,6 +65,9 @@ td{padding:6px;border-bottom:1px solid var(--line);vertical-align:top;color:var(
 </div></body></html>"""
 
 
+ASR_TERMS = ("asr", "site recovery", "test failover", "replication of the reports vm")
+
+
 def build_report(xid: str) -> str:
     from dr_agent.agents import reporter
     m = store.get_exercise(xid) or {}
@@ -94,6 +97,11 @@ def build_report(xid: str) -> str:
             "recovered_in": fmt_duration(iaas_s) if iaas_s is not None else None,
             "result": json.loads(m["iaas_result_json"]) if m.get("iaas_result_json") else None,
             "status": "validated" if iaas_s is not None else ("not run" if not m.get("iaas_started") else "failed")}
+    # A measured result supersedes a readiness warning: once the ASR test failover was proven in this drill,
+    # earlier Site Recovery warnings are no longer open findings (neither as input nor in the agent's output).
+    asr_proven = iaas["status"] == "validated"
+    superseded = lambda text: asr_proven and any(k in text.lower() for k in ASR_TERMS)  # noqa: E731
+    open_findings = [f for f in open_findings if not superseded(f)]
     facts = {
         "profile": prof.model_dump(), "strategy": strategy, "iaas": iaas,
         "rto_breakdown_s": [(s["label"], s["seconds"]) for s in segs], "rto_precision_s": precision,
@@ -105,6 +113,8 @@ def build_report(xid: str) -> str:
         "timeline": [f"{e.get('ts', '')[11:19]} {e.get('step_id') or ''} {e.get('message')}" for e in events][-60:],
     }
     narrative = reporter.run(facts).output
+    narrative.issues = [x for x in narrative.issues if not superseded(x)]
+    narrative.remediation = [r for r in narrative.remediation if not superseded(r.item)]
     env = Environment(autoescape=select_autoescape(["html"]))
     html = env.from_string(TEMPLATE).render(
         xid=xid, profile=prof, n=narrative, m=m, ev=ev, events=events, strategy=strategy,
