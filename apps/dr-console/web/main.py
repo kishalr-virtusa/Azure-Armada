@@ -274,7 +274,10 @@ async def api_readiness(request: Request):
 
 @app.post("/api/readiness/fix", dependencies=[api])
 async def api_readiness_fix(request: Request, data: dict = Body(...)):
-    return await run_in_threadpool(service.apply_parity_fix, data.get("keys", []), _who(request, data.get("approver_name")))
+    try:
+        return await run_in_threadpool(service.apply_parity_fix, data.get("keys", []), _who(request, data.get("approver_name")))
+    except Exception as e:  # noqa: BLE001 - shown to the operator; nothing was half-applied (single settings update)
+        return {"success": False, "error": f"{type(e).__name__}: {e}"[:300]}
 
 
 @app.post("/api/runbook", dependencies=[api])

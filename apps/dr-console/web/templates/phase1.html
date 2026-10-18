@@ -115,14 +115,16 @@
         
         <!-- Fixable items section -->
         <div id="fixableSection" class="hide" style="margin-top: 16px;">
-            <div class="box" style="border-color: var(--upd); background: var(--upd-bg);">
-                <h4 style="color: var(--upd); margin-bottom: 8px;">Fixable Issues Found</h4>
-                <p id="fixableDescription" style="margin-bottom: 12px; font-size: 13px;"></p>
-                <div class="form-group">
-                    <label class="form-label">Your Name (for audit)</label>
-                    <input type="text" id="fixApproverName" class="form-input" placeholder="e.g., John Smith" style="max-width: 300px;">
+            <div class="box" style="border-color: var(--upd); background: var(--upd-bg); display: flex; flex-direction: column; gap: 14px;">
+                <div>
+                    <h4 style="color: var(--upd); margin: 0 0 4px;">Fixable issue found</h4>
+                    <p id="fixableDescription" style="margin: 0; font-size: 13px;"></p>
                 </div>
-                <button id="applyFixBtn" class="btn btn-primary" onclick="applyFix()">Apply Fix</button>
+                <div class="form-group" style="max-width: 320px;">
+                    <label class="form-label" for="fixApproverName">Your name (for audit)</label>
+                    <input type="text" id="fixApproverName" class="form-input" placeholder="e.g., John Smith">
+                </div>
+                <button id="applyFixBtn" class="btn btn-primary" style="align-self: flex-start;" onclick="applyFix()">Apply Fix</button>
             </div>
         </div>
         
@@ -355,12 +357,12 @@
             const fixResult = document.getElementById('fixResult');
             fixResult.classList.remove('hide');
             
-            if (result.success) {
+            if (result.success && !result.error) {
                 fixResult.innerHTML = `
-                    <div class="box" style="border-color: var(--have); background: var(--have-bg);">
-                        <span class="st pass">Fix Applied</span>
-                        <span style="margin-left: 8px;">${result.message || 'Settings updated successfully'}</span>
-                        <button class="btn btn-secondary" onclick="checkReadiness()" style="margin-left: 12px;">Re-run Readiness</button>
+                    <div class="box" style="border-color: var(--have); background: var(--have-bg); display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <span class="st pass">Fix applied</span>
+                        <span style="flex: 1; min-width: 240px;">${AgentUI.esc(result.message || 'Settings updated successfully')}</span>
+                        <button class="btn btn-secondary" onclick="checkReadiness()">Re-run Readiness</button>
                     </div>
                 `;
                 document.getElementById('fixableSection').classList.add('hide');
@@ -368,7 +370,7 @@
                 fixResult.innerHTML = `
                     <div class="box" style="border-color: var(--add); background: var(--add-bg);">
                         <span class="st fail">Fix Failed</span>
-                        <span style="margin-left: 8px;">${result.error || 'Unknown error'}</span>
+                        <span style="margin-left: 8px;">${AgentUI.esc(result.error || 'Unknown error')}</span>
                     </div>
                 `;
             }

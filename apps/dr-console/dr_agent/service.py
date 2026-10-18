@@ -183,8 +183,10 @@ def apply_parity_fix(keys: list[str], approver: str) -> dict:
     from dr_agent.tools.notify import notify
     notify("success", "Configuration drift fixed",
            f"Copied {', '.join(copied) or 'nothing'} to Region B (approved by {approver}).", link="/phase1", send_email=False)
-    return {"copied": copied, "approved_by": approver,
-            "note": "Region B app restarts to load the setting; re-run readiness in ~60s."}
+    return {"success": True, "copied": copied, "approved_by": approver,
+            "message": (f"Copied {', '.join(copied)} to Southeast Asia (approved by {approver})." if copied
+                        else "Nothing to copy: Southeast Asia already has these settings.")
+                       + " The app restarts to load it; re-run readiness in about 60 seconds."}
 
 
 def review_runbook() -> dict:
