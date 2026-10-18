@@ -89,28 +89,28 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
 
   // ---------- 2. Problem: what downtime costs ----------
   s = add(); s.background = { color: C.white };
-  title(s, "One hour of downtime now costs more than most DR budgets",
-    "Independent surveys and real incidents, 2024: the cost of not recovering on time.");
+  title(s, "Downtime now costs about $900,000 an hour",
+    "The latest independent research (2026) and a 2025 cloud outage: the cost of not recovering on time.");
   const stats = [
-    ["$300K+", "per hour of downtime", "for over 90% of mid-size and large enterprises. 41% put it at $1M to over $5M per hour, before fines and litigation.", "ITIC 2024 Hourly Cost of Downtime Survey (1,000+ firms) [1]"],
-    ["$200M", "per company, every year", "lost to downtime by each Global 2000 company: about 9% of profits. Includes $49M lost revenue and $22M in regulatory fines.", "Splunk & Oxford Economics, The Hidden Costs of Downtime, Jun 2024 (2,000 executives) [2]"],
-    ["$5.4B", "from one IT outage", "in direct losses to Fortune 500 companies from the 19 July 2024 CrowdStrike incident; banking alone about $1.15B. Insurance covers only 10–20%.", "Parametrix estimate, Jul 2024 [3]"],
+    ["$15,000", "per minute of downtime", "is the average for Global 2000 companies: about $900,000 an hour and $600B a year in total. Regulatory fines alone average $51M per company a year.", "Splunk & Oxford Economics, The Hidden Costs of Downtime, May 2026 (2,000 executives) [1]"],
+    ["57%", "had a last major outage over $100K", "and 1 in 5 operators said their last major outage cost more than $1 million, for the second year running.", "Uptime Institute, Annual Outage Analysis 2026 [2]"],
+    ["$500–650M", "from one cloud-region outage", "lost by US companies when AWS us-east-1 failed on 20 October 2025. Even hyperscalers fail; what matters is whether your recovery works.", "Parametrix estimate, Oct 2025 [3]"],
   ];
   stats.forEach(([big, unit, body, src], i) => {
     const x = 0.6 + i * 4.1, y = 1.75;
     card(s, x, y, 3.85, 4.15);
-    s.addText(big, { x: x + 0.3, y: y + 0.3, w: 3.3, h: 1.0, fontFace: HF, fontSize: 48, bold: true, color: C.teal, margin: 0, isTextBox: true });
+    s.addText(big, { x: x + 0.3, y: y + 0.3, w: 3.3, h: 1.0, fontFace: HF, fontSize: 42, bold: true, color: C.teal, margin: 0, isTextBox: true });
     s.addText(unit, { x: x + 0.3, y: y + 1.3, w: 3.3, h: 0.45, fontFace: BF, fontSize: 16, bold: true, color: C.navy, margin: 0, isTextBox: true });
     s.addText(body, { x: x + 0.3, y: y + 1.85, w: 3.3, h: 1.45, fontFace: BF, fontSize: 13, color: C.ink, valign: "top", margin: 0, isTextBox: true });
     s.addText(src, { x: x + 0.3, y: y + 3.35, w: 3.3, h: 0.6, fontFace: BF, fontSize: 9.5, color: C.muted, italic: true, valign: "bottom", margin: 0, isTextBox: true });
   });
   card(s, 0.6, 6.12, 12.1, 0.72, C.navy, false);
   s.addText([
-    { text: "At $300K per hour, every minute of downtime costs about $5,000.", options: { bold: true, color: C.white } },
+    { text: "At $15,000 a minute, one hour of downtime costs about $900,000.", options: { bold: true, color: C.white } },
     { text: "   Recovery that is assumed, not proven, is an unpriced risk.", options: { color: "C9C3E6" } },
   ], { x: 0.85, y: 6.12, w: 11.7, h: 0.72, fontFace: BF, fontSize: 16, valign: "middle", margin: 0, isTextBox: true });
   footer(s);
-  s.addNotes("Start with money. ITIC's 2024 survey of over 1,000 firms: for more than 90% of mid-size and large enterprises one hour of downtime costs over $300,000, and 41% say $1M to over $5M, excluding fines and litigation. Splunk with Oxford Economics (June 2024, 2,000 executives): downtime costs each Global 2000 company about $200M a year, roughly 9% of profits, including $22M of regulatory fines. And in July 2024 one faulty update caused an estimated $5.4B of direct losses to the Fortune 500, $1.15B of it in banking. Simple arithmetic: $300K an hour is $5,000 a minute.");
+  s.addNotes("Start with money, using the latest research. Splunk with Oxford Economics, May 2026, 2,000 executives: downtime now costs Global 2000 companies $15,000 a minute on average, about $900,000 an hour and $600 billion a year, including $51 million a year in regulatory fines per company. Uptime Institute's 2026 analysis: 57% say their last major outage cost over $100,000, and one in five over $1 million. And in October 2025 a single AWS region outage cost US companies an estimated $500 to $650 million. Even hyperscalers fail; what matters is whether your recovery works.");
 
   // ---------- 3. Problem: India, consequences ----------
   s = add(); s.background = { color: C.white };
@@ -118,7 +118,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
     "Regulators act on outages and weak disaster recovery, not just on breaches.");
   const cases = [
     ["HDFC Bank", "Dec 2020", "After repeated outages, the latest caused by a power failure at a primary data centre, the RBI stopped all new digital launches and new credit-card sourcing.", "≈15 months", "until digital launches were allowed again (Mar 2022); cards resumed Aug 2021", "[4]"],
-    ["NSE", "Feb 2021", "Trading was halted for nearly four hours on 24 February 2021. NSE and NSE Clearing settled with SEBI; executives were ordered to do community service and training.", "₹72.64 crore", "paid by NSE and NSE Clearing to settle (2023)", "[5]"],
+    ["NSE", "Feb 2021", "Trading was halted for nearly four hours on 24 February 2021. NSE and NSE Clearing settled with SEBI; executives were ordered to do community service and training.", "≈ $8.8M", "paid by NSE and NSE Clearing to settle with SEBI (2023)", "[5]"],
     ["Kotak Mahindra Bank", "Apr 2024", "The RBI cited deficiencies including business continuity and disaster recovery, and frequent outages, and barred online customer onboarding and new credit cards.", "≈10 months", "until the restrictions were lifted (Feb 2025)", "[6]"],
   ];
   cases.forEach(([who, when, body, big, unit, ref], i) => {
@@ -134,7 +134,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   });
   s.addText("For a bank, a 10–15 month ban on new digital customers costs far more than any fine.", { x: 0.6, y: 6.72, w: 12.1, h: 0.35, fontFace: BF, fontSize: 14, bold: true, color: C.navy, margin: 0, isTextBox: true });
   footer(s);
-  s.addNotes("Closer to home, the penalty is a growth freeze. HDFC Bank: after repeated outages, the most recent a power failure at a primary data centre, the RBI stopped new digital launches and new credit cards in December 2020; cards resumed in August 2021, digital launches only in March 2022. NSE: a nearly four-hour trading halt in February 2021 ended in a ₹72.64 crore settlement with SEBI. Kotak Mahindra Bank: in April 2024 the RBI cited deficiencies including business continuity and disaster recovery, plus frequent outages, and stopped online onboarding and new cards for about ten months.");
+  s.addNotes("Closer to home, the penalty is a growth freeze. HDFC Bank: after repeated outages, the most recent a power failure at a primary data centre, the RBI stopped new digital launches and new credit cards in December 2020; cards resumed in August 2021, digital launches only in March 2022. NSE: a nearly four-hour trading halt in February 2021 ended in a settlement of about $8.8 million with SEBI. Kotak Mahindra Bank: in April 2024 the RBI cited deficiencies including business continuity and disaster recovery, plus frequent outages, and stopped online onboarding and new cards for about ten months.");
 
   // ---------- 4. Problem: regulators require proof ----------
   s = add(); s.background = { color: C.white };
@@ -149,7 +149,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
      cell("Supervisory restrictions on business, as with HDFC Bank and Kotak Mahindra Bank. [4][6]")],
     [cell("SEBI\nCybersecurity & Cyber Resilience Framework", { bold: true }),
      cell("Resume critical operations within 2 hours (RTO) with a 15-minute RPO. Market infrastructure: run from the DR site within 45 minutes of declaring a disaster, drills every quarter, unannounced live trading from the DR site every six months. [8][9]"),
-     cell("Enforcement and settlements, as with NSE: ₹72.64 crore. [5]")],
+     cell("Enforcement and settlements, as with NSE: about $8.8M. [5]")],
     [cell("EU DORA\nRegulation (EU) 2022/2554, applies from 17 Jan 2025", { bold: true }),
      cell("Test ICT business continuity and response and recovery plans at least yearly and after major changes (Art. 11(6)); test backup restoration periodically (Art. 12). [10]"),
      cell("Penalties set by each EU state (Art. 50). Critical ICT providers: up to 1% of average daily worldwide turnover, every day, for up to six months (Art. 35). [10]")],
@@ -170,7 +170,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   const gap = [
     ["< 1 in 3", "organisations perform regular failover testing", "Cockroach Labs, State of Resilience 2025 (1,000 executives) [11]"],
     ["20%", "of executives believe their organisation is fully prepared to prevent or respond to outages", "Cockroach Labs, State of Resilience 2025 [11]"],
-    ["85%", "of major human-error outages come from staff not following procedures, or from flawed procedures", "Uptime Institute, Annual Outage Analysis 2025 [12]"],
+    ["#1", "cause of human-error outages: staff not following established procedures", "Uptime Institute, Annual Outage Analysis 2026 [2]"],
   ];
   gap.forEach(([big, body, src], i) => {
     const y = 1.75 + i * 1.6;
@@ -193,7 +193,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
     s.addText(b, { x: 7.95, y: y + 0.32, w: 4.8, h: 0.65, fontFace: BF, fontSize: 12, color: C.ink, valign: "top", margin: 0, isTextBox: true });
   });
   footer(s);
-  s.addNotes("So why don't companies just test? Cockroach Labs surveyed 1,000 executives: fewer than one in three do regular failover testing, and only 20% feel fully prepared. Uptime Institute found 85% of major human-error outages come from procedures not followed or flawed procedures, which is exactly what a stale runbook is. The reasons are structural: tests are disruptive and manual, environments drift between tests, runbooks go stale, and RTO/RPO are signed off on paper instead of measured.");
+  s.addNotes("So why don't companies just test? Cockroach Labs surveyed 1,000 executives: fewer than one in three do regular failover testing, and only 20% feel fully prepared. Uptime Institute's 2026 analysis names failure to follow established procedures as the leading driver of human-error outages, which is exactly what a stale runbook causes. The reasons are structural: tests are disruptive and manual, environments drift between tests, runbooks go stale, and RTO/RPO are signed off on paper instead of measured.");
 
   // ---------- 6. Problem: worked example ----------
   s = add(); s.background = { color: C.white };
@@ -202,9 +202,9 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   const rows = [
     ["Recovery target (RTO)", "30 minutes", "Signed off on paper; never measured end to end"],
     ["Actual recovery", "4 hours", "Comparable to the NSE trading halt of Feb 2021 [5]"],
-    ["Hourly cost of downtime", "$300,000", "ITIC 2024 floor for 90%+ of mid-size and large firms [1]"],
-    ["Direct loss", "$1.2M", "4 h × $300K; $1.05M of it beyond the 30-minute target"],
-    ["Regulatory precedent", "₹72.64 crore", "What NSE paid to settle its 2021 outage case [5]; banks have faced 10–15 month business restrictions [4][6]"],
+    ["Hourly cost of downtime", "$900,000", "$15,000 a minute, the Global 2000 average (Splunk & Oxford Economics, 2026) [1]"],
+    ["Direct loss", "$3.6M", "4 h × $900K; $3.15M of it beyond the 30-minute target"],
+    ["Regulatory precedent", "≈ $8.8M", "What NSE paid to settle its 2021 outage case [5]; banks have faced 10–15 month business restrictions [4][6]"],
   ];
   rows.forEach(([k, v, n], i) => {
     const y = 1.75 + i * 0.86;
@@ -220,7 +220,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
     { text: " to recover the same kind of service in our live Azure drill (18 Oct 2026), with zero payments lost, and proves it again on every run.", options: { color: "C9C3E6" } },
   ], { x: 0.85, y: 6.15, w: 11.7, h: 0.72, fontFace: BF, fontSize: 14.5, valign: "middle", margin: 0, isTextBox: true });
   footer(s);
-  s.addNotes("Put it together with transparent inputs. A tier-1 payments service with a 30-minute target that has never really been tested. On the day, recovery takes four hours, like the NSE halt. At ITIC's floor of $300,000 an hour, that is $1.2M of direct loss, $1.05M of it beyond the target, before any regulatory action: the NSE settlement was ₹72.64 crore, and the RBI froze HDFC's and Kotak's digital growth for 10 to 15 months. Our agent measured 34.35 seconds for the same kind of service, with zero payments lost, and it can prove it again every week.");
+  s.addNotes("Put it together with transparent inputs. A tier-1 payments service with a 30-minute target that has never really been tested. On the day, recovery takes four hours, like the NSE halt. At the 2026 average of $15,000 a minute, that is $3.6 million of direct loss, $3.15 million of it beyond the target, before any regulatory action: NSE paid about $8.8 million to settle, and the RBI froze HDFC's and Kotak's digital growth for 10 to 15 months. Our agent measured 34.35 seconds for the same kind of service, with zero payments lost, and it can prove it again on demand.");
 
   // ---------- 7. Solution ----------
   s = add(); s.background = { color: C.white };
@@ -355,9 +355,9 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   s = add(); s.background = { color: C.white };
   title(s, "What it costs to prove recovery",
     "Actual Azure bills and list prices for what we built, compared with the cost of downtime.");
-  const cost = [["₹8.33", "all AI agent calls", "every Foundry agent run across 2 days of building and 9 drills (Azure Cost Management) [13]"],
-    ["₹234", "entire environment so far", "two regions, database, VM, console, monitoring: everything, 17–18 Oct 2026 [13]"],
-    ["$38.26", "per month for the DR set-up", "both regions + Traffic Manager at Azure list prices (Retail Prices API) [14]"]];
+  const cost = [["$0.09", "all AI agent calls", "every Foundry agent run across 2 days of building and 9 drills: $0.087 (Azure Cost Management) [12]"],
+    ["$2.44", "entire environment so far", "two regions, database, VM, console, monitoring: everything, 17–18 Oct 2026 (Azure Cost Management) [12]"],
+    ["$38.26", "per month for the DR set-up", "both regions + Traffic Manager at Azure list prices (Retail Prices API) [13]"]];
   cost.forEach(([v, l, n], i) => {
     const x = 0.6 + i * 4.1;
     card(s, x, 1.75, 3.85, 2.55);
@@ -367,15 +367,15 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   });
   card(s, 0.6, 4.55, 12.1, 1.15, C.navy, false);
   s.addText([
-    { text: "A month of this DR set-up costs less than half a second of downtime ", options: { bold: true, color: C.white } },
-    { text: "at the ITIC floor of $300,000 an hour ($38.26 ÷ $83.33 per second = 0.46 s). [1][14]", options: { color: "C9C3E6" } },
+    { text: "A month of this DR set-up costs less than a fifth of a second of downtime ", options: { bold: true, color: C.white } },
+    { text: "at the 2026 average of $15,000 a minute ($38.26 ÷ $250 per second = 0.15 s). [1][13]", options: { color: "C9C3E6" } },
   ], { x: 0.85, y: 4.55, w: 11.6, h: 1.15, fontFace: BF, fontSize: 16, valign: "middle", margin: 0, isTextBox: true });
   s.addText([
     { text: "Cost-aware by design: ", options: { bold: true, color: C.navy } },
     { text: "the Architect prices every strategy from live Azure list prices and flags anything over budget; the whole environment is created and removed with one command (up.sh / down.sh), so nothing runs when it is not needed.", options: { color: C.ink } },
   ], { x: 0.6, y: 5.95, w: 12.1, h: 0.9, fontFace: BF, fontSize: 13, valign: "top", margin: 0, isTextBox: true });
   footer(s);
-  s.addNotes("Cost is where this gets compelling. Every AI agent call we made across two days and nine drills cost ₹8.33 in total, from Azure Cost Management. The entire environment so far cost ₹234. At Azure list prices the DR set-up itself is $38.26 a month. Compare that with ITIC's floor of $300,000 an hour: a month of DR costs less than half a second of downtime.");
+  s.addNotes("Cost is where this gets compelling. Every AI agent call we made across two days and nine drills cost 9 cents in total, from Azure Cost Management. The entire environment so far cost $2.44. At Azure list prices the DR set-up itself is $38.26 a month. At the 2026 average of $15,000 a minute, a whole month of DR costs less than a fifth of a second of downtime.");
 
   // ---------- 13. Demo + roadmap ----------
   s = add(); s.background = { color: C.white };
@@ -408,20 +408,19 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   s = add(); s.background = { color: C.white };
   title(s, "Sources", "Every figure in this deck is taken from the source below. Our own figures come from live drills on Azure.");
   const refs = [
-    "[1] ITIC, 2024 Hourly Cost of Downtime Survey, Part 2 (L. DiDio), 1,000+ firms, Nov 2023–Mar 2024. calyptix.com/wp-content/uploads/ITIC-2024-Hourly-Cost-of-Downtime-Survey-Results-Part-2.pdf",
-    "[2] Splunk with Oxford Economics, The Hidden Costs of Downtime, 12 Jun 2024. splunk.com/en_us/blog/cio-office/uncovering-downtime.html",
-    "[3] Parametrix estimate of CrowdStrike outage losses (19 Jul 2024), reported by Dark Reading and Cybersecurity Dive, Jul 2024. darkreading.com/cybersecurity-operations/crowdstrike-outage-losses-estimated-staggering-54b",
+    "[1] Splunk with Oxford Economics, The Hidden Costs of Downtime 2026, 19 May 2026 (2,000 Global 2000 executives). newsroom.cisco.com (The $600 Billion Wake-up Call)",
+    "[2] Uptime Institute, Annual Outage Analysis 2026, press release 13 May 2026. uptimeinstitute.com",
+    "[3] Parametrix estimate of losses from the AWS us-east-1 outage of 20 Oct 2025 (Insurance Edge, 30 Oct 2025).",
     "[4] RBI order to HDFC Bank, 2 Dec 2020 (Outlook Business, 3 Dec 2020); curbs lifted 17 Aug 2021 (cards) and 11 Mar 2022 (digital) (Business Standard, 12 Mar 2022).",
-    "[5] NSE and NSE Clearing settle the 24 Feb 2021 trading-halt case with SEBI for ₹72.64 crore (Moneylife; Business Standard, Jun 2023).",
+    "[5] NSE and NSE Clearing settle the 24 Feb 2021 trading-halt case with SEBI for ₹72.64 crore (Moneylife; Business Standard, Jun 2023); ≈ $8.8M at June 2023 rates of ₹82–83 per US$.",
     "[6] RBI action on Kotak Mahindra Bank under Sec. 35A, 24 Apr 2024 (TechCrunch); restrictions lifted 12 Feb 2025 (Business Standard).",
     "[7] RBI, Cybersecurity, Technology: Risk, Resilience and Assurance Framework Directions, 31 Jul 2026, summarised by KPMG India, Sep 2026.",
     "[8] SEBI Cybersecurity and Cyber Resilience Framework: RTO 2 hours, RPO 15 minutes (clarification reported by PTI / The Week, 28 Aug 2025).",
     "[9] SEBI framework for market infrastructure institutions: DR site within 45 minutes, quarterly drills (Business Standard, 22 Mar 2021).",
     "[10] Regulation (EU) 2022/2554 (DORA), Articles 11(6), 12, 35(7)–(8), 50, 51. eur-lex.europa.eu/eli/reg/2022/2554/oj",
     "[11] Cockroach Labs with Wakefield Research, The State of Resilience 2025 (1,000 executives, Aug–Sep 2024). cockroachlabs.com",
-    "[12] Uptime Institute, Annual Outage Analysis 2025, press release 6 May 2025. uptimeinstitute.com",
-    "[13] Azure Cost Management, subscription actual cost by service, month to date, queried 18 Oct 2026 (our environment).",
-    "[14] Azure Retail Prices API (prices.azure.com), East Asia / Southeast Asia list prices for App Service B1 Linux, SQL Database Basic, Traffic Manager, 18 Oct 2026.",
+    "[12] Azure Cost Management, actual cost by service in US$ (CostUSD), month to date, queried 18 Oct 2026 (our environment).",
+    "[13] Azure Retail Prices API (prices.azure.com), East Asia / Southeast Asia list prices for App Service B1 Linux, SQL Database Basic, Traffic Manager, 18 Oct 2026.",
     "Our measurements: 9 drills recorded by the DR Agent (17–18 Oct 2026); each report keeps the raw timestamps, events and approvals.",
   ];
   s.addText(refs.map((r, i) => ({ text: r, options: { breakLine: i < refs.length - 1 } })),
