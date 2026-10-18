@@ -10,20 +10,6 @@
     </div>
 </header>
 
-<!-- Verdict: can we recover right now? -->
-<div class="card verdict" id="verdict">
-    <div class="verdict-row">
-        <span class="verdict-dot"></span>
-        <div style="flex: 1; min-width: 0;">
-            <div class="verdict-title" id="verdictTitle">Running live checks…</div>
-            <div class="verdict-sub" id="verdictSub">Checking both regions, routing, database replication, settings, Site Recovery and Key Vault.</div>
-            <ul class="verdict-list hide" id="verdictList"></ul>
-        </div>
-        <div class="verdict-actions" id="verdictActions"></div>
-    </div>
-    <div class="verdict-meta" id="verdictMeta"></div>
-</div>
-
 <!-- KPI Cards -->
 <div class="kpis" id="statusCards">
     <div class="kpi" id="cardRegionA">
@@ -333,34 +319,11 @@
             const data = await res.json();
             if (data.pending) { setTimeout(loadOverview, 2500); return; }
             summary = data;
-            renderVerdict(data);
             renderProof(data.drills);
             renderSystem(data);
             if (lastStatus) { updateRegion('A', lastStatus); updateRegion('B', lastStatus); }
             renderDrills();
         } catch (e) { console.error('overview failed', e); }
-    }
-
-    function renderVerdict(d) {
-        const v = document.getElementById('verdict'), list = document.getElementById('verdictList');
-        const dr = d.drills || {}, last = dr.latest;
-        v.classList.remove('go', 'nogo');
-        v.classList.add(d.go ? 'go' : 'nogo');
-        const proven = last ? `Last proven ${when(last.t0)}: RTO ${formatDuration(last.rto_s)} against a ${dr.rto_target_min}-minute target, RPO ${formatDuration(last.rpo_s ?? 0)}.` : 'No drill has proven recovery yet.';
-        if (d.go) {
-            document.getElementById('verdictTitle').textContent = 'Ready to recover';
-            document.getElementById('verdictSub').textContent = `All ${d.checks.length} live checks pass. ${proven}`;
-            list.classList.add('hide');
-            document.getElementById('verdictActions').innerHTML = '<a href="/plan" class="btn btn-primary">Run a drill</a>';
-        } else {
-            document.getElementById('verdictTitle').textContent = 'Not ready: recovery would fail right now';
-            document.getElementById('verdictSub').textContent = `${d.blocking.length} of ${d.checks.length} live checks fail. If East Asia went down now, customers would not be served correctly. ${proven}`;
-            list.innerHTML = d.blocking.map(b => `<li><b>${esc(b.name)}</b>: ${esc(b.detail)}</li>`).join('');
-            list.classList.remove('hide');
-            document.getElementById('verdictActions').innerHTML = '<a href="/phase1" class="btn btn-primary">Review and fix →</a>';
-        }
-        document.getElementById('verdictMeta').textContent =
-            `Live checks (no AI): checked ${Math.max(0, Math.round(d.age_s || 0))} s ago${d.refreshing ? ' · refreshing' : ''} · refreshes every 45 s`;
     }
 
     function renderProof(dr) {
@@ -391,7 +354,6 @@
             ['Site Recovery (reports VM)', asr.protected ? `${pill(asrOk, asr.health || asr.state || 'protected')} ${asr.rpo_s != null ? `<span class="sys-n">replication RPO ${esc(asr.rpo_s)} s</span>` : ''}` : pill(false, asr.state || 'not protected')],
             ['AI agents', `${pill(d.agents?.connected, d.agents?.connected ? '6 registered' : 'not configured')} <span class="sys-n">${esc(d.agents?.platform || '')}</span>`],
             ['Demo app (Contoso)', acc ? pill(null, acc.public ? 'Public' : 'Private') + (acc.public && acc.public_until ? ` <span class="sys-n">until ${when(acc.public_until)}</span>` : ' <span class="sys-n">team access link only</span>') : '—'],
-            ['Live checks', `${pill(d.go, d.go ? 'GO' : 'NO-GO')} <span class="sys-n">${d.checks.filter(c => c.status === 'pass').length} of ${d.checks.length} pass</span>`],
         ];
         document.getElementById('sysList').innerHTML = items.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
     }
