@@ -50,7 +50,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
     s.addText(t, { x: 0.6, y: 0.35, w: 12.1, h: 0.75, fontFace: HF, fontSize: 32, bold: true,
       color: dark ? C.white : C.navy, margin: 0, isTextBox: true });
     if (sub) s.addText(sub, { x: 0.6, y: 1.08, w: 12.1, h: 0.4, fontFace: BF, fontSize: 15,
-      color: dark ? "B8C7DA" : C.muted, italic: true, margin: 0, isTextBox: true });
+      color: dark ? "C9C3E6" : C.muted, italic: true, margin: 0, isTextBox: true });
   };
   const circ = (s, img, x, y, d, fill) => {
     s.addShape(pres.shapes.OVAL, { x, y, w: d, h: d, fill: { color: fill }, line: { color: fill } });
@@ -62,20 +62,20 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
       fill: { color: fill }, line: { color: fill }, ...(sh ? { shadow: shadow() } : {}) });
   const footer = (s, _n, dark = false) =>
     s.addText(`DR Agent: Autonomous DR Validation  ·  Team Azure Armada  ·  Azure Day 2026 Hackathon   ${slideNo}`, {
-      x: 0.6, y: 7.08, w: 12.1, h: 0.3, fontFace: BF, fontSize: 9, color: dark ? "8FA3BD" : "8C99AA",
+      x: 0.6, y: 7.08, w: 12.1, h: 0.3, fontFace: BF, fontSize: 9, color: dark ? "9C95BD" : "8C99AA",
       align: "right", margin: 0, isTextBox: true });
 
   // ---------- 1. Title ----------
   let s = add(); s.background = { color: C.navy };
   circ(s, I.shield, 0.6, 0.7, 1.0, C.teal);
   s.addText("AZURE DAY 2026 HACKATHON  ·  DISASTER RECOVERY AGENT", { x: 1.85, y: 0.95, w: 9, h: 0.5,
-    fontFace: BF, fontSize: 13, bold: true, color: "8FD6D3", charSpacing: 2, margin: 0, isTextBox: true });
+    fontFace: BF, fontSize: 13, bold: true, color: "B9A8FF", charSpacing: 2, margin: 0, isTextBox: true });
   s.addText("Disaster Recovery (DR) Agent", { x: 0.6, y: 2.1, w: 12, h: 1.3, fontFace: HF, fontSize: 54, bold: true,
     color: C.white, margin: 0, isTextBox: true });
   s.addText("Autonomous Disaster Recovery Validation", { x: 0.6, y: 3.35, w: 12, h: 0.7,
-    fontFace: HF, fontSize: 28, color: "CFE0F2", margin: 0, isTextBox: true });
-  s.addText("Built 100% on Azure. AI agents that validate DR by executing real tests: fail over, measure RTO/RPO, fail back, and prove you can recover, every week instead of once a year.",
-    { x: 0.6, y: 4.3, w: 9.5, h: 0.9, fontFace: BF, fontSize: 17, color: "B8C7DA", italic: true, margin: 0, isTextBox: true });
+    fontFace: HF, fontSize: 28, color: "E4DFF7", margin: 0, isTextBox: true });
+  s.addText("Built 100% on Azure. AI agents that validate DR by executing real tests: fail over, measure RTO/RPO, fail back, and prove you can recover, on any day instead of once a year.",
+    { x: 0.6, y: 4.3, w: 9.5, h: 0.9, fontFace: BF, fontSize: 17, color: "C9C3E6", italic: true, margin: 0, isTextBox: true });
   const steps1 = [["Fail over", I.sync], ["Measure", I.clock], ["Fail back", I.undo], ["Prove", I.audit]];
   steps1.forEach(([t, ic], i) => {
     const x = 0.6 + i * 2.2;
@@ -84,7 +84,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
       color: C.white, valign: "middle", margin: 0, isTextBox: true });
   });
   s.addText("Team Azure Armada  ·  Virtusa", { x: 8.7, y: 6.75, w: 4.0, h: 0.4, fontFace: BF, fontSize: 13,
-    color: "8FA3BD", align: "right", margin: 0, isTextBox: true });
+    color: "9C95BD", align: "right", margin: 0, isTextBox: true });
   s.addNotes("The Disaster Recovery (DR) Agent is a team of AI agents built entirely on Azure that actually performs disaster recovery testing: it fails workloads over, measures real recovery time and data loss, fails back, and produces audit-ready proof.");
 
   // ---------- 2. Problem: what downtime costs ----------
@@ -222,272 +222,187 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   footer(s);
   s.addNotes("Put it together with transparent inputs. A tier-1 payments service with a 30-minute target that has never really been tested. On the day, recovery takes four hours, like the NSE halt. At ITIC's floor of $300,000 an hour, that is $1.2M of direct loss, $1.05M of it beyond the target, before any regulatory action: the NSE settlement was ₹72.64 crore, and the RBI froze HDFC's and Kotak's digital growth for 10 to 15 months. Our agent measured 34.35 seconds for the same kind of service, with zero payments lost, and it can prove it again every week.");
 
-  // ---------- 3. Solution loop ----------
+  // ---------- 7. Solution ----------
   s = add(); s.background = { color: C.white };
-  title(s, "Validation by execution: the agent runs real DR tests",
-    "Not just DR design review — autonomous, end-to-end failover testing with a human approving anything risky.");
-  const loop = [
-    [I.search, "Discover", "Map workload & dependencies"],
-    [I.check, "Assess", "Find readiness gaps"],
-    [I.route, "Plan test", "Order failover steps"],
-    [I.user, "Approve", "Human sign-off in Teams"],
-    [I.play, "Execute", "Run the failover drill"],
-    [I.heart, "Validate", "Synthetic tests, RTO/RPO"],
-    [I.undo, "Fail back", "Restore & clean up"],
-    [I.file, "Fix & prove", "Bicep PRs, evidence pack"],
+  title(s, "The DR Agent runs the real drill and proves the result",
+    "Six AI agents on Azure AI Foundry plan and judge; a guarded engine executes on live Azure resources; humans approve.");
+  const phases = [
+    ["1", "Design & prepare", [["Architect", "picks the cheapest strategy that truly meets RTO/RPO, with real Azure prices"], ["Readiness", "7 live checks; finds drift before the disaster; one-click approved fix"], ["Runbook", "flags stale steps and writes the corrected runbook"]]],
+    ["2", "Plan, execute, fail back, report", [["Planner", "builds a 21-step drill from an allowlist of safe actions"], ["Engine + Validator", "injects the outage, fails over, measures; diagnoses any failure live"], ["Reporter", "audit-ready report with every second of RTO accounted for"]]],
   ];
-  loop.forEach(([ic, h, b], i) => {
-    const x = 0.6 + i * 1.53;
-    const core = i >= 4 && i <= 6;
-    if (i < loop.length - 1)
-      s.addShape(pres.shapes.LINE, { x: x + 0.95, y: 2.35, w: 1.05, h: 0, line: { color: C.line, width: 2, endArrowType: "triangle" } });
-    circ(s, ic, x + 0.2, 1.9, 0.9, core ? C.teal : C.navy);
-    s.addText(h, { x: x - 0.1, y: 2.9, w: 1.5, h: 0.4, fontFace: BF, fontSize: 14, bold: true,
-      color: core ? C.teal : C.navy, align: "center", margin: 0, isTextBox: true });
-    s.addText(b, { x: x - 0.1, y: 3.28, w: 1.5, h: 0.55, fontFace: BF, fontSize: 11, color: C.muted,
-      align: "center", margin: 0, isTextBox: true });
+  phases.forEach(([n, h, items], i) => {
+    const x = 0.6 + i * 6.15, y = 1.75;
+    card(s, x, y, 5.95, 3.6);
+    s.addText(`Phase ${n}`, { x: x + 0.3, y: y + 0.25, w: 2, h: 0.3, fontFace: BF, fontSize: 11, bold: true, color: C.teal, charSpacing: 1, margin: 0, isTextBox: true });
+    s.addText(h, { x: x + 0.3, y: y + 0.55, w: 5.4, h: 0.45, fontFace: HF, fontSize: 19, bold: true, color: C.navy, margin: 0, isTextBox: true });
+    items.forEach(([a, b], j) => {
+      const yy = y + 1.2 + j * 0.78;
+      s.addText(a, { x: x + 0.3, y: yy, w: 1.75, h: 0.6, fontFace: BF, fontSize: 13, bold: true, color: C.navy, valign: "top", margin: 0, isTextBox: true });
+      s.addText(b, { x: x + 2.05, y: yy, w: 3.65, h: 0.65, fontFace: BF, fontSize: 12.5, color: C.ink, valign: "top", margin: 0, isTextBox: true });
+    });
   });
-  s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 6.6, y: 1.72, w: 4.65, h: 2.2, rectRadius: 0.1,
-    fill: { color: C.teal, transparency: 92 }, line: { color: C.teal, width: 1.25, dashType: "dash" } });
-  s.addText("CORE: LIVE DR TEST", { x: 6.6, y: 1.42, w: 4.65, h: 0.28, fontFace: BF, fontSize: 10, bold: true,
-    color: C.teal, align: "center", charSpacing: 2, margin: 0, isTextBox: true });
-  // Before / after
-  const rowsBA = [
-    ["DR testing frequency", "Once or twice a year", "Every week, or after every change"],
-    ["Effort per drill", "Weeks, many teams, weekends", "Automated; engineers approve & review"],
-    ["RTO / RPO", "Assumed on paper", "Measured on every test"],
-    ["Gaps found", "During a real outage", "Before the outage — with a fix PR"],
-    ["Audit evidence", "Screenshots & spreadsheets", "Auto-generated evidence pack"],
-  ];
-  card(s, 0.6, 4.25, 12.1, 2.7, C.card, false);
-  s.addText("Today", { x: 4.1, y: 4.35, w: 4, h: 0.35, fontFace: BF, fontSize: 13, bold: true, color: C.red, margin: 0, isTextBox: true });
-  s.addText("With the DR Agent", { x: 8.3, y: 4.35, w: 4.2, h: 0.35, fontFace: BF, fontSize: 13, bold: true, color: C.teal, margin: 0, isTextBox: true });
-  rowsBA.forEach(([a, b, c], i) => {
-    const y = 4.75 + i * 0.42;
-    s.addText(a, { x: 0.9, y, w: 3.1, h: 0.38, fontFace: BF, fontSize: 13, bold: true, color: C.navy, margin: 0, valign: "middle", isTextBox: true });
-    s.addText(b, { x: 4.1, y, w: 4.0, h: 0.38, fontFace: BF, fontSize: 13, color: C.ink, margin: 0, valign: "middle", isTextBox: true });
-    s.addText(c, { x: 8.3, y, w: 4.2, h: 0.38, fontFace: BF, fontSize: 13, bold: true, color: C.ink, margin: 0, valign: "middle", isTextBox: true });
-  });
-  footer(s, 3);
-  s.addNotes("The agent closes the full loop. The highlighted steps — execute, validate, fail back — are the heart of the solution: the agent really performs the DR test rather than only reviewing design.");
+  const cmp = [["How often DR is proven", "Once or twice a year", "On demand, any day"], ["RTO and RPO", "Assumed on paper", "Measured on every drill, to the millisecond"],
+    ["Configuration drift", "Found during the real outage", "Found by readiness checks, fixed with approval"], ["Audit evidence", "Screenshots and spreadsheets", "Generated report with timestamps and approvals"]];
+  s.addTable([[{ text: "", options: { fill: { color: C.white } } }, { text: "Today", options: { bold: true, color: C.red } }, { text: "With the DR Agent", options: { bold: true, color: C.teal } }],
+    ...cmp.map(([a, b, c]) => [{ text: a, options: { bold: true, color: C.navy } }, { text: b, options: { color: C.ink } }, { text: c, options: { color: C.ink } }])],
+    { x: 0.6, y: 5.5, w: 12.1, colW: [3.3, 3.9, 4.9], fontFace: BF, fontSize: 12, rowH: 0.27, margin: [2, 6, 2, 6],
+      border: { type: "solid", color: C.line, pt: 0.75 } });
+  footer(s);
+  s.addNotes("Our answer follows the DR lifecycle. Phase 1, design and prepare: the Architect picks the cheapest strategy that genuinely meets the targets using live Azure prices; Readiness runs seven live checks and catches drift; the Runbook agent finds stale steps. Phase 2: the Planner builds the drill from an allowlist, the engine executes it on real Azure resources and measures, the Validator diagnoses failures live, and the Reporter writes an audit-ready report. Humans approve every risky step.");
 
-  // ---------- 4. DR tests executed ----------
+  // ---------- 8. Agents ----------
   s = add(); s.background = { color: C.white };
-  title(s, "How the agent validates DR: the tests it executes",
-    "Real failovers on Azure, ordered by dependency (data → app → traffic), with measured RTO/RPO and automatic failback.");
-  const tests = [
-    [I.server, "VM / IaaS failover", "Fail over replicated VMs into an isolated test VNet, boot, health-check, clean up.", "Azure Site Recovery · Test Failover"],
-    [I.db, "Database failover", "Planned failover of SQL failover group / Cosmos DB region; measure replication lag and switch time.", "SQL Failover Groups · Cosmos DB"],
-    [I.hdd, "Storage failover", "Initiate storage account failover in non-prod; verify data is readable in the secondary region.", "GRS / GZRS customer-managed failover"],
-    [I.globe, "Traffic / region switch", "Shift user traffic to the secondary region and run synthetic user journeys end to end.", "Azure Front Door · Traffic Manager"],
-    [I.flask, "Fault injection", "Simulate zone outage, network block, Key Vault denial or AKS pod loss — prove the app survives.", "Azure Chaos Studio"],
-    [I.undo, "Failback", "Return to primary, re-protect replication, verify nothing broke on the way back.", "ASR re-protect · SQL failover"],
-  ];
-  tests.forEach(([ic, h, b, svc], i) => {
-    const col = i % 3, row = Math.floor(i / 3);
-    const x = 0.6 + col * 4.1, y = 1.75 + row * 2.05;
-    card(s, x, y, 3.85, 1.85);
-    circ(s, ic, x + 0.25, y + 0.25, 0.6, C.teal);
-    s.addText(h, { x: x + 1.0, y: y + 0.25, w: 2.7, h: 0.6, fontFace: BF, fontSize: 16, bold: true,
-      color: C.navy, valign: "middle", margin: 0, isTextBox: true });
-    s.addText(b, { x: x + 0.25, y: y + 0.95, w: 3.4, h: 0.55, fontFace: BF, fontSize: 11.5, color: C.ink, margin: 0, valign: "top", isTextBox: true });
-    s.addText(svc, { x: x + 0.25, y: y + 1.5, w: 3.4, h: 0.28, fontFace: BF, fontSize: 10.5, bold: true, color: C.teal, margin: 0, isTextBox: true });
-  });
-  const modes = [
-    ["Isolated test", "Production-safe · no user impact · runs weekly", C.teal],
-    ["Full drill", "Non-prod / staging · real region failover and failback", C.navy],
-    ["Game day", "Production · explicit approval, kill switch, auto-rollback", C.amber],
-  ];
-  s.addText("TESTING MODES", { x: 0.6, y: 5.95, w: 2, h: 0.3, fontFace: BF, fontSize: 10, bold: true, color: C.muted, charSpacing: 2, margin: 0, isTextBox: true });
-  modes.forEach(([h, b, col], i) => {
-    const x = 0.6 + i * 4.1;
-    s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x, y: 6.25, w: 3.85, h: 0.75, rectRadius: 0.08, fill: { color: col }, line: { color: col } });
-    s.addText([{ text: h, options: { bold: true, fontSize: 14, breakLine: true } }, { text: b, options: { fontSize: 10.5 } }],
-      { x: x + 0.2, y: 6.25, w: 3.5, h: 0.75, fontFace: BF, color: col === C.amber ? C.navy : C.white, valign: "middle", margin: 0, isTextBox: true });
-  });
-  footer(s, 4);
-  s.addNotes("This is the heart of the solution: the agent performs real DR tests. Three modes let it run safely everywhere — isolated test failovers weekly in production, full drills in staging, and approved game days in production.");
-
-  // ---------- 5. Agent team ----------
-  s = add(); s.background = { color: C.white };
-  title(s, "A team of specialist agents on Azure AI Foundry",
-    "Each agent has its own tools, its own Managed Identity and least-privilege RBAC.");
-  card(s, 0.6, 1.7, 12.1, 0.95, C.navy);
-  circ(s, I.brain, 0.85, 1.85, 0.65, C.teal);
-  s.addText([{ text: "Orchestrator Agent  ", options: { bold: true, fontSize: 17 } },
-    { text: "Takes a goal (\"Run a DR test on the Payments workload\"), plans the drill, delegates to specialists, enforces guardrails and approval gates.", options: { fontSize: 13 } }],
-    { x: 1.7, y: 1.7, w: 7.6, h: 0.95, fontFace: BF, color: C.white, valign: "middle", margin: 0, isTextBox: true });
-  s.addText("Azure AI Foundry Agent Service · Azure OpenAI · Microsoft Agent Framework", { x: 9.4, y: 1.7, w: 3.1, h: 0.95,
-    fontFace: BF, fontSize: 10.5, color: "8FD6D3", valign: "middle", align: "right", margin: 0, isTextBox: true });
+  title(s, "Six specialist agents, each with one job and a contract",
+    "Versioned prompt agents in Azure AI Foundry Agent Service. Every answer must match a strict JSON schema and pass code checks.");
   const agents = [
-    [I.play, "DR Test Executor", "CORE · Runs failovers in dependency order, monitors each step, rolls back or fails back.", "Site Recovery · Chaos Studio · Durable Functions", true],
-    [I.heart, "Validation", "Synthetic transactions on the recovered app, data-integrity checks, measures actual RTO & RPO.", "Azure Monitor · App Insights · Load Testing", true],
-    [I.search, "Discovery", "Builds a live dependency graph of the workload and ranks components by criticality.", "Resource Graph · App Insights map · Cosmos DB", false],
-    [I.check, "Readiness Assessor", "Pre-test checks: replication, failover groups, secondary Key Vault, quota, Front Door, NSGs.", "Azure Policy · Business Continuity Center", false],
-    [I.book, "Runbook Intelligence", "Reads existing runbooks (RAG), flags stale steps, generates an executable test plan.", "Azure AI Search · Document Intelligence", false],
-    [I.branch, "Remediation & Reporting", "Bicep/Terraform fix PRs, work items, evidence pack and resilience score.", "Azure DevOps / GitHub · Power BI · Teams", false],
+    ["Architect", "gpt-4.1-mini", "Profile, inventory, live Azure prices", "Strategy + all 5 options", "Cheapest option that truly meets targets"],
+    ["Readiness", "gpt-4.1-mini", "7 deterministic checks with evidence", "GO / NO-GO, risks", "Any failed check forces NO-GO"],
+    ["Runbook", "gpt-4.1-mini", "Runbook markdown, inventory", "Stale / valid per step, corrected runbook", "Schema only (advisory)"],
+    ["Planner", "gpt-5-mini", "Strategy, risks, allowlist, safe sequence", "21-step drill plan", "Allowlisted actions, mandatory sequence, approvals"],
+    ["Validator", "gpt-5-mini", "Failed step, error, events, live probes", "Cause, evidence, fix", "Fix allowlisted; never Region A mid-outage; human approves"],
+    ["Reporter", "gpt-4.1-mini", "Measured RTO/RPO, timeline, findings", "Summary, remediation items", "Numbers rendered by code, not retyped"],
   ];
-  agents.forEach(([ic, h, b, svc, core], i) => {
-    const col = i % 3, row = Math.floor(i / 3);
-    const x = 0.6 + col * 4.1, y = 2.9 + row * 2.05;
-    card(s, x, y, 3.85, 1.85, core ? C.tealLight : C.card);
-    circ(s, ic, x + 0.25, y + 0.25, 0.6, core ? C.teal : C.navy);
-    s.addText(h + " Agent", { x: x + 1.0, y: y + 0.25, w: 2.75, h: 0.6, fontFace: BF, fontSize: 15, bold: true,
-      color: C.navy, valign: "middle", margin: 0, isTextBox: true });
-    s.addText(b, { x: x + 0.25, y: y + 0.92, w: 3.4, h: 0.6, fontFace: BF, fontSize: 11.5, color: C.ink, margin: 0, valign: "top", isTextBox: true });
-    s.addText(svc, { x: x + 0.25, y: y + 1.5, w: 3.4, h: 0.28, fontFace: BF, fontSize: 10, bold: true, color: C.teal, margin: 0, isTextBox: true });
-  });
-  footer(s, 5);
-  s.addNotes("Seven agents. The DR Test Executor and Validation agents (highlighted) do the actual testing; the others prepare the test and turn results into fixes and evidence.");
-
-  // ---------- 6. Architecture ----------
-  s = add(); s.background = { color: C.white };
-  title(s, "Azure architecture", "100% Azure-native · agents orchestrate real Azure resilience services against the workload under test.");
-  const box = (x, y, w, h, fill, line, text, opts = {}) => {
-    s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x, y, w, h, rectRadius: 0.06, fill: { color: fill }, line: { color: line, width: 1 } });
-    if (text) s.addText(text, { x, y, w, h, fontFace: BF, fontSize: 10, color: C.ink, align: "center", valign: "middle", margin: 3, isTextBox: true, ...opts });
-  };
-  const lbl = (t, x, y, w, col = C.muted) => s.addText(t, { x, y, w, h: 0.26, fontFace: BF, fontSize: 9.5, bold: true, color: col, charSpacing: 1.5, margin: 0, isTextBox: true });
-  // Triggers
-  lbl("TRIGGERS", 0.6, 1.62, 1.9);
-  [["Schedule", "Logic Apps"], ["Infra change", "Event Grid"], ["On demand", "Teams / Portal"]].forEach(([a, b], i) =>
-    box(0.6, 1.95 + i * 0.85, 1.9, 0.7, C.card, C.line, [{ text: a, options: { bold: true, breakLine: true } }, { text: b, options: { color: C.muted } }]));
-  s.addShape(pres.shapes.LINE, { x: 2.5, y: 2.95, w: 0.35, h: 0, line: { color: C.navy, width: 1.5, endArrowType: "triangle" } });
-  // Foundry
-  s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 2.9, y: 1.6, w: 6.6, h: 2.65, rectRadius: 0.08, fill: { color: C.navy }, line: { color: C.navy } });
-  lbl("AZURE AI FOUNDRY AGENT SERVICE", 3.1, 1.7, 5, "8FD6D3");
-  box(3.1, 2.02, 6.2, 0.55, C.teal, C.teal, "Orchestrator Agent  ·  Azure OpenAI (GPT-4.1 / o-series)  ·  Agent Framework", { color: C.white, bold: true, fontSize: 11 });
-  const ag = ["Discovery", "Readiness", "Runbook", "DR Test\nExecutor", "Validation", "Remediate\n& Report"];
-  ag.forEach((a, i) => {
-    const x = 3.1 + i * 1.04;
-    const core = i === 3 || i === 4;
-    box(x, 2.75, 0.96, 0.8, core ? C.amber : C.navy2, core ? C.amber : "3B5A85", a, { color: core ? C.navy : C.white, bold: true, fontSize: 10 });
-  });
-  s.addText("Agent memory & state: Cosmos DB  ·  Tracing: Application Insights", { x: 3.1, y: 3.7, w: 6.2, h: 0.4, fontFace: BF, fontSize: 10, color: "B8C7DA", align: "center", margin: 0, isTextBox: true });
-  // Tools row
-  lbl("AZURE SERVICES USED AS AGENT TOOLS", 2.9, 4.38, 6);
-  const tools = ["Resource Graph", "Policy · BCC · Defender", "AI Search · Blob · Doc Intel", "Site Recovery · Chaos Studio · Automation", "Monitor · Log Analytics · Load Testing", "DevOps / GitHub · Power BI"];
-  tools.forEach((t, i) => {
-    const x = 3.1 + i * 1.04;
-    s.addShape(pres.shapes.LINE, { x: x + 0.48, y: 4.25, w: 0, h: 0.42, line: { color: C.line, width: 1, dashType: "dash" } });
-    box(x, 4.67, 0.96, 1.0, (i === 3 || i === 4) ? C.amberLight : C.tealLight, (i === 3 || i === 4) ? C.amber : C.teal, t, { fontSize: 9 });
-  });
-  // Outputs
-  lbl("PEOPLE & OUTPUTS", 9.95, 1.62, 2.8);
-  [["Teams approvals", "Human-in-the-loop"], ["Power BI", "Resilience score"], ["Bicep / Terraform PRs", "Gap fixes"], ["Evidence pack", "Audit-ready report"]].forEach(([a, b], i) =>
-    box(9.95, 1.95 + i * 0.68, 2.75, 0.56, C.card, C.line, [{ text: a + "  ", options: { bold: true } }, { text: b, options: { color: C.muted } }]));
-  s.addShape(pres.shapes.LINE, { x: 9.5, y: 2.95, w: 0.45, h: 0, line: { color: C.navy, width: 1.5, endArrowType: "triangle", beginArrowType: "triangle" } });
-  // Workload under test
-  lbl("WORKLOAD UNDER TEST", 2.9, 5.82, 4);
-  box(3.1, 6.12, 2.75, 0.85, C.white, C.navy, [{ text: "Region A · Primary", options: { bold: true, breakLine: true } }, { text: "Front Door · App Service · SQL · Storage · Key Vault", options: { fontSize: 9, color: C.muted } }]);
-  box(6.55, 6.12, 2.75, 0.85, C.white, C.navy, [{ text: "Region B · Secondary", options: { bold: true, breakLine: true } }, { text: "Replicas · Failover group · GZRS · Isolated test VNet", options: { fontSize: 9, color: C.muted } }]);
-  s.addShape(pres.shapes.LINE, { x: 5.85, y: 6.55, w: 0.7, h: 0, line: { color: C.amber, width: 2, endArrowType: "triangle", beginArrowType: "triangle" } });
-  s.addText("failover\nfailback", { x: 5.85, y: 6.62, w: 0.7, h: 0.35, fontFace: BF, fontSize: 8, color: C.amber, bold: true, align: "center", margin: 0, isTextBox: true });
-  s.addShape(pres.shapes.LINE, { x: 6.2, y: 5.67, w: 0, h: 0.5, line: { color: C.amber, width: 2, endArrowType: "triangle" } });
-  // Security
-  card(s, 9.95, 4.75, 2.75, 2.22, C.navy, false);
-  circ(s, I.lock, 10.1, 4.88, 0.45, C.teal);
-  s.addText("Security & governance", { x: 10.62, y: 4.88, w: 2.0, h: 0.45, fontFace: BF, fontSize: 11.5, bold: true, color: C.white, valign: "middle", margin: 0, isTextBox: true });
+  const th = (t) => ({ text: t, options: { bold: true, color: C.white, fill: { color: C.navy } } });
+  s.addTable([[th("Agent"), th("Model"), th("Gets (facts from code)"), th("Returns"), th("Checked by code")],
+    ...agents.map((r) => r.map((t, j) => ({ text: t, options: { bold: j === 0, color: j === 0 ? C.navy : C.ink, fontFace: j === 1 ? "Consolas" : BF } })))],
+    { x: 0.6, y: 1.7, w: 12.1, colW: [1.5, 1.55, 3.15, 2.75, 3.15], fontFace: BF, fontSize: 12, rowH: 0.5, margin: [4, 6, 4, 6],
+      border: { type: "solid", color: C.line, pt: 0.75 } });
+  card(s, 0.6, 5.55, 12.1, 1.3, C.tealLight, false);
   s.addText([
-    { text: "Managed Identity per agent", options: { bullet: true, breakLine: true } },
-    { text: "RBAC + Entra PIM (JIT)", options: { bullet: true, breakLine: true } },
-    { text: "Key Vault for secrets", options: { bullet: true, breakLine: true } },
-    { text: "AI Content Safety", options: { bullet: true, breakLine: true } },
-    { text: "Kill switch + auto-rollback", options: { bullet: true } },
-  ], { x: 10.1, y: 5.4, w: 2.5, h: 1.5, fontFace: BF, fontSize: 10, color: "DCE6F2", margin: 0, paraSpaceAfter: 2, valign: "top", isTextBox: true });
-  footer(s, 6);
-  s.addNotes("Triggers start a DR test run. The orchestrator in AI Foundry delegates to specialist agents, which use Azure services as tools. Amber highlights the testing path: the DR Test Executor drives Site Recovery, SQL failover groups, Front Door and Chaos Studio against the workload, failing over Region A to Region B and back, while the Validation agent measures RTO/RPO through Azure Monitor.");
+    { text: "Watch them think. ", options: { bold: true, color: C.navy } },
+    { text: "A live activity panel streams every Azure read, the Foundry call (agent version, latency, tokens) and the code check, as it happens. It caught a real defect: the Architect compared a cost multiplier with a dollar budget; we now give it Azure list prices and it is right first time (5 of 5 runs).", options: { color: C.ink } },
+  ], { x: 0.85, y: 5.55, w: 11.6, h: 1.3, fontFace: BF, fontSize: 13.5, valign: "middle", margin: 0, isTextBox: true });
+  footer(s);
+  s.addNotes("Each agent is a versioned prompt agent in Azure AI Foundry with a strict JSON schema. Code gathers the facts, the agent decides, code checks the answer, and every agent has a deterministic fallback so the demo never depends on one model call. The live activity panel shows exactly what each agent did. It also exposed a real defect: we were giving the Architect a cost multiplier and a dollar budget; it guessed wrong. We fixed the input, not the model, and it is now right first time.");
 
-  // ---------- 7. Guardrails ----------
+  // ---------- 9. Safety ----------
   s = add(); s.background = { color: C.white };
-  title(s, "Autonomy with guardrails", "Safe enough for BFSI and healthcare: the riskier the action, the stronger the control.");
-  const ladder = [
-    ["Read-only discovery & assessment", "Fully autonomous", C.teal, 1],
-    ["Isolated test failover (no user impact)", "Autonomous, pre-approved policy", C.teal, 2],
-    ["Full drill in non-prod", "Approval in Teams", C.navy, 3],
-    ["Production game day", "Approval + kill switch + auto-rollback", C.amber, 4],
-  ];
-  s.addText("AUTONOMY LADDER", { x: 0.6, y: 1.75, w: 5, h: 0.3, fontFace: BF, fontSize: 10, bold: true, color: C.muted, charSpacing: 2, margin: 0, isTextBox: true });
-  ladder.forEach(([a, b, col, lv], i) => {
-    const y = 5.3 - i * 1.05, w = 3.4 + lv * 0.6;
-    s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 0.6, y, w, h: 0.85, rectRadius: 0.08, fill: { color: col }, line: { color: col } });
-    s.addText([{ text: a, options: { bold: true, fontSize: 14, breakLine: true } }, { text: b, options: { fontSize: 11.5 } }],
-      { x: 0.85, y, w: w - 0.4, h: 0.85, fontFace: BF, color: col === C.amber ? C.navy : C.white, valign: "middle", margin: 0, isTextBox: true });
-  });
+  title(s, "Agents decide. The engine acts. Humans approve.",
+    "DR touches production, so no model can call an Azure write API. Every action is allowlisted, ordered, approved and reversible.");
   const guards = [
-    [I.key, "Least privilege", "A Managed Identity per agent with scoped RBAC; write actions need just-in-time elevation via Entra PIM."],
-    [I.power, "Kill switch & rollback", "Any step can be halted; the agent rolls back automatically if health checks fail mid-test."],
-    [I.eye, "Full traceability", "Every decision, tool call and approval logged to Log Analytics & AI Foundry tracing."],
-    [I.shield, "Responsible AI", "Content Safety and prompt-injection shields on all inputs; secrets never reach prompts."],
+    [I.lock, "Allowlisted actions", "The engine runs only 15 known actions (stop/start app, SQL failover, endpoint on/off, ASR test). Anything else is rejected."],
+    [I.route, "Mandatory safe sequence", "Every plan must contain heartbeat → outage → SQL failover → reroute → verify → measure → fail back, in that order."],
+    [I.user, "Human approval gates", "The plan, the forced database failover, the failback and any Validator fix wait for a named approver."],
+    [I.power, "Kill switch and rollback", "One click stops the drill; rollback restores the primary region and the database role."],
+    [I.history, "Fallback for every agent", "Foundry agent → model deployment → deterministic rules. The screen shows which one answered."],
+    [I.audit, "Full audit trail", "Every event, approval and measurement is timestamped and stored, then written into the report."],
   ];
   guards.forEach(([ic, h, b], i) => {
-    const y = 1.8 + i * 1.3;
-    circ(s, ic, 7.2, y, 0.7, C.navy);
-    s.addText(h, { x: 8.1, y: y - 0.02, w: 4.6, h: 0.38, fontFace: BF, fontSize: 16, bold: true, color: C.navy, margin: 0, isTextBox: true });
-    s.addText(b, { x: 8.1, y: y + 0.36, w: 4.6, h: 0.7, fontFace: BF, fontSize: 12.5, color: C.ink, margin: 0, valign: "top", isTextBox: true });
-  });
-  footer(s, 7);
-  s.addNotes("Because the agent performs real failovers, safety is designed in: graduated autonomy, least-privilege identities, kill switch with auto-rollback, and a full audit trail.");
-
-  // ---------- 8. MVP & demo ----------
-  s = add(); s.background = { color: C.white };
-  title(s, "What we'll build and demo live", "Sample 3-tier app across two regions with deliberately planted DR gaps — the DR Agent validates it for real.");
-  const tl = [["Oct 15", "Idea submitted"], ["Oct 16–17", "Two-region workload + planted gaps (Bicep)"], ["Oct 18–20", "Agents, tools & Teams approvals"], ["Oct 21–22", "End-to-end DR test runs, reports"], ["Oct 23", "Build demo to panel"], ["Oct 29", "Finals at Azure Day"]];
-  s.addShape(pres.shapes.LINE, { x: 0.9, y: 2.05, w: 11.5, h: 0, line: { color: C.line, width: 2 } });
-  tl.forEach(([d, t], i) => {
-    const x = 0.6 + i * 2.05;
-    s.addShape(pres.shapes.OVAL, { x: x + 0.2, y: 1.9, w: 0.3, h: 0.3, fill: { color: i >= 4 ? C.amber : C.teal }, line: { color: C.white, width: 2 } });
-    s.addText(d, { x, y: 2.3, w: 1.95, h: 0.32, fontFace: BF, fontSize: 13, bold: true, color: C.navy, margin: 0, isTextBox: true });
-    s.addText(t, { x, y: 2.62, w: 1.9, h: 0.55, fontFace: BF, fontSize: 11, color: C.muted, margin: 0, valign: "top", isTextBox: true });
-  });
-  const demo = [
-    [I.search, "1  Discover & assess", "Maps the app, flags planted gaps: LRS storage, stale runbook step."],
-    [I.user, "2  Approve in Teams", "Agent proposes a DR test plan; a human approves with one click."],
-    [I.play, "3  Run the DR test live", "SQL failover group failover, Front Door switch to Region B, Chaos Studio zone-down."],
-    [I.warn, "4  Catch a real failure", "App breaks in Region B — secret missing from secondary Key Vault. Measured RTO/RPO shown."],
-    [I.undo, "5  Fail back, fix, re-test", "Fails back, raises a Bicep fix PR, re-runs the test: it now passes."],
-    [I.audit, "6  Prove it", "Publishes evidence pack & resilience score to Power BI."],
-  ];
-  demo.forEach(([ic, h, b], i) => {
     const col = i % 3, row = Math.floor(i / 3);
-    const x = 0.6 + col * 4.1, y = 3.5 + row * 1.75;
-    const hot = i === 2 || i === 3;
-    card(s, x, y, 3.85, 1.55, hot ? C.amberLight : C.card);
-    circ(s, ic, x + 0.25, y + 0.25, 0.55, hot ? C.amber : C.teal);
-    s.addText(h, { x: x + 0.95, y: y + 0.25, w: 2.8, h: 0.55, fontFace: BF, fontSize: 15, bold: true, color: C.navy, valign: "middle", margin: 0, isTextBox: true });
-    s.addText(b, { x: x + 0.25, y: y + 0.88, w: 3.4, h: 0.6, fontFace: BF, fontSize: 11.5, color: C.ink, margin: 0, valign: "top", isTextBox: true });
+    const x = 0.6 + col * 4.1, y = 1.75 + row * 2.0;
+    card(s, x, y, 3.85, 1.8);
+    circ(s, ic, x + 0.25, y + 0.25, 0.55, C.navy);
+    s.addText(h, { x: x + 0.95, y: y + 0.25, w: 2.75, h: 0.55, fontFace: BF, fontSize: 15, bold: true, color: C.navy, valign: "middle", margin: 0, isTextBox: true });
+    s.addText(b, { x: x + 0.25, y: y + 0.9, w: 3.4, h: 0.85, fontFace: BF, fontSize: 12, color: C.ink, valign: "top", margin: 0, isTextBox: true });
   });
-  footer(s, 8);
-  s.addNotes("The demo is a real DR test, not slides: the agent fails over a live two-region app, catches a planted gap through the test itself, fails back, fixes it via a Bicep PR, and re-tests to green.");
+  card(s, 0.6, 5.85, 12.1, 1.0, C.navy, false);
+  s.addText([
+    { text: "Proven in a chaos drill: ", options: { bold: true, color: C.white } },
+    { text: "we disabled the DR traffic endpoint mid-failover. The Validator diagnosed it from live probes, proposed the allowlisted fix, a human approved, and recovery completed in 57.4 s.", options: { color: "C9C3E6" } },
+  ], { x: 0.85, y: 5.85, w: 11.6, h: 1.0, fontFace: BF, fontSize: 14, valign: "middle", margin: 0, isTextBox: true });
+  footer(s);
+  s.addNotes("This is why it is safe for a bank. Models never touch Azure directly. The engine runs only allowlisted actions, in a mandatory order, with named human approvals at the risky points, a kill switch, rollback, and a fallback for every agent. We proved it with a surprise fault mid-drill: the Validator diagnosed it, proposed an allowlisted fix, a human approved, and the service recovered in 57.4 seconds.");
 
-  // ---------- 9. Benefits ----------
+  // ---------- 10. Architecture ----------
   s = add(); s.background = { color: C.white };
-  title(s, "Business benefits", "Recovery you can prove — continuously, safely and at a fraction of today's effort.");
-  const big = [["Once a year", "Every week", "DR testing frequency"], ["Weeks", "Hours", "Effort per DR test"], ["Assumed", "Measured", "RTO / RPO on every test"]];
-  big.forEach(([a, b, l], i) => {
+  title(s, "Architecture: 100% Azure, across an Azure paired region",
+    "East Asia (primary) and Southeast Asia (DR). The control plane runs outside both, in South India, so it survives the disaster it manages.");
+  s.addImage({ path: "docs/deck/architecture-deck.png", x: 0.6, y: 1.65, w: 12.1, h: 12.1 * 1264 / 3072 });
+  const chips = ["App Service ×2", "Azure SQL failover group", "Traffic Manager", "Site Recovery", "AI Foundry Agent Service", "Key Vault + managed identity", "Storage", "Monitor + App Insights", "Bicep: one-click up / down"];
+  chips.forEach((t, i) => {
+    const w = 1.28, x = 0.6 + i * (w + 0.075);
+    s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x, y: 6.72, w, h: 0.32, rectRadius: 0.06, fill: { color: C.tealLight }, line: { color: C.tealLight } });
+    s.addText(t, { x, y: 6.72, w, h: 0.32, fontFace: BF, fontSize: 8.5, bold: true, color: C.navy, align: "center", valign: "middle", margin: 0, isTextBox: true });
+  });
+  s.addNotes("Everything runs on Azure. Users reach Contoso Payments through Traffic Manager with priority routing. App Service runs in both regions; Azure SQL replicates through a failover group; the reports VM is protected by Azure Site Recovery. The DR console and engine sit in South India, outside both regions, and call the six agents in Azure AI Foundry. Secrets live in Key Vault with managed identities; the whole environment is Bicep with one-click up and down.");
+
+  // ---------- 11. Results ----------
+  s = add(); s.background = { color: C.white };
+  title(s, "Measured on live Azure, not assumed",
+    "Real failovers of the payments service, East Asia → Southeast Asia, 17–18 Oct 2026. Target: RTO 30 min, RPO 15 min.");
+  const kpi = [["34.35 s", "RTO, latest drill", "29.6–40.4 s across 8 drills (median 33.5 s)"], ["0 s", "RPO, every drill", "no confirmed payment lost (1 s heartbeat proof)"],
+    ["3 min 14 s", "Failback to primary", "planned, no data loss"], ["5 min 45 s", "VM recovered by Site Recovery", "proven by a command inside the VM"]];
+  kpi.forEach(([v, l, x0], i) => {
+    const x = 0.6 + i * 3.06;
+    card(s, x, 1.75, 2.88, 1.85);
+    s.addText(v, { x: x + 0.2, y: 1.9, w: 2.5, h: 0.75, fontFace: HF, fontSize: 30, bold: true, color: i < 2 ? C.teal : C.navy, margin: 0, isTextBox: true });
+    s.addText(l, { x: x + 0.2, y: 2.65, w: 2.5, h: 0.35, fontFace: BF, fontSize: 13, bold: true, color: C.navy, margin: 0, isTextBox: true });
+    s.addText(x0, { x: x + 0.2, y: 3.0, w: 2.55, h: 0.5, fontFace: BF, fontSize: 11, color: C.muted, valign: "top", margin: 0, isTextBox: true });
+  });
+  s.addText("Where the 34.35 s went (latest drill, one clock, segments add up exactly)", { x: 0.6, y: 3.9, w: 12.1, h: 0.35, fontFace: BF, fontSize: 14, bold: true, color: C.navy, margin: 0, isTextBox: true });
+  const segs = [["Outage injected", 0.519, "9F86FF"], ["SQL forced failover", 15.355, C.teal], ["Traffic Manager reroute", 5.916, "C105B2"], ["DNS + health checks reach DR", 11.619, "7C5CFF"], ["Engine bookkeeping", 0.944, "BDBDC7"]];
+  const total = 34.353; let bx = 0.6;
+  segs.forEach(([l, v, col]) => {
+    const w = 12.1 * v / total;
+    s.addShape(pres.shapes.RECTANGLE, { x: bx, y: 4.35, w, h: 0.5, fill: { color: col }, line: { color: C.white, width: 1 } });
+    if (w > 1.0) s.addText(`${v.toFixed(3)} s`, { x: bx, y: 4.35, w, h: 0.5, fontFace: BF, fontSize: 12, bold: true, color: C.white, align: "center", valign: "middle", margin: 0, isTextBox: true });
+    bx += w;
+  });
+  segs.forEach(([l, v, col], i) => {
+    const x = 0.6 + i * 2.42;
+    s.addShape(pres.shapes.RECTANGLE, { x, y: 5.05, w: 0.18, h: 0.18, fill: { color: col }, line: { color: col } });
+    s.addText(`${l}  ${v.toFixed(3)} s`, { x: x + 0.25, y: 4.97, w: 2.15, h: 0.4, fontFace: BF, fontSize: 10.5, color: C.ink, valign: "middle", margin: 0, isTextBox: true });
+  });
+  card(s, 0.6, 5.6, 12.1, 1.25, C.tealLight, false);
+  s.addText([
+    { text: "Why judges can trust the numbers: ", options: { bold: true, color: C.navy } },
+    { text: "RTO runs from the injected outage to the first healthy check through Traffic Manager (1 s probes; the previous failed check is shown as the precision window). RPO compares every confirmed heartbeat write with the rows that survived in the new primary. Chaos drill with a surprise fault: 57.4 s.", options: { color: C.ink } },
+  ], { x: 0.85, y: 5.6, w: 11.6, h: 1.25, fontFace: BF, fontSize: 12.5, valign: "middle", margin: 0, isTextBox: true });
+  footer(s);
+  s.addNotes("These are measured, not estimated. Eight drills without chaos: RTO between 29.6 and 40.4 seconds, median 33.5, against a 30-minute target; RPO zero every time. Failback about three minutes with no data loss. The reports VM was recovered by Site Recovery in under six minutes and proven by running a command inside it. And every second of RTO is accounted for: the latest 34.35 seconds split into 15.4 s SQL failover, 5.9 s Traffic Manager, 11.6 s DNS and health checks, and under a second each for the injection and our own bookkeeping.");
+
+  // ---------- 12. Cost ----------
+  s = add(); s.background = { color: C.white };
+  title(s, "What it costs to prove recovery",
+    "Actual Azure bills and list prices for what we built, compared with the cost of downtime.");
+  const cost = [["₹8.33", "all AI agent calls", "every Foundry agent run across 2 days of building and 9 drills (Azure Cost Management) [13]"],
+    ["₹234", "entire environment so far", "two regions, database, VM, console, monitoring: everything, 17–18 Oct 2026 [13]"],
+    ["$38.26", "per month for the DR set-up", "both regions + Traffic Manager at Azure list prices (Retail Prices API) [14]"]];
+  cost.forEach(([v, l, n], i) => {
     const x = 0.6 + i * 4.1;
-    card(s, x, 1.75, 3.85, 1.75, C.navy, false);
-    s.addText([{ text: a, options: { color: "8FA3BD", fontSize: 15, strike: "sngStrike" } }, { text: "  →", options: { color: "8FA3BD", fontSize: 15, breakLine: true } }, { text: b, options: { color: C.white, fontSize: 30, bold: true, fontFace: HF } }],
-      { x: x + 0.3, y: 1.9, w: 3.4, h: 0.95, fontFace: BF, valign: "middle", margin: 0, isTextBox: true });
-    s.addText(l, { x: x + 0.3, y: 2.85, w: 3.4, h: 0.45, fontFace: BF, fontSize: 13, color: "8FD6D3", margin: 0, isTextBox: true });
+    card(s, x, 1.75, 3.85, 2.55);
+    s.addText(v, { x: x + 0.3, y: 1.95, w: 3.3, h: 0.85, fontFace: HF, fontSize: 40, bold: true, color: C.teal, margin: 0, isTextBox: true });
+    s.addText(l, { x: x + 0.3, y: 2.8, w: 3.3, h: 0.4, fontFace: BF, fontSize: 15, bold: true, color: C.navy, margin: 0, isTextBox: true });
+    s.addText(n, { x: x + 0.3, y: 3.25, w: 3.3, h: 0.95, fontFace: BF, fontSize: 11.5, color: C.muted, valign: "top", margin: 0, isTextBox: true });
   });
-  const ben = [
-    [I.bolt, "Lower downtime risk", "Failover blockers found and fixed before a real outage — protecting revenue, SLAs and trust."],
-    [I.gavel, "Audit-ready compliance", "Auto-generated test evidence for RBI, SEBI, DORA, SOX, ISO 22301."],
-    [I.tools, "Self-healing posture", "Every gap becomes a ready-to-merge IaC fix, re-tested automatically."],
-    [I.book, "Living runbooks", "Runbooks always match the live architecture — less reliance on a few experts."],
-    [I.chart, "Data-driven decisions", "Leadership sees real recovery metrics per application to target investment."],
-    [I.hand, "Strategic for Virtusa", "Reusable \"Resilience-as-a-Service\" accelerator for BFSI and managed-services clients."],
-  ];
-  ben.forEach(([ic, h, b], i) => {
-    const col = i % 3, row = Math.floor(i / 3);
-    const x = 0.6 + col * 4.1, y = 3.85 + row * 1.6;
-    circ(s, ic, x, y, 0.6, C.teal);
-    s.addText(h, { x: x + 0.78, y: y - 0.02, w: 3.1, h: 0.36, fontFace: BF, fontSize: 15, bold: true, color: C.navy, margin: 0, isTextBox: true });
-    s.addText(b, { x: x + 0.78, y: y + 0.36, w: 3.1, h: 0.95, fontFace: BF, fontSize: 12, color: C.ink, margin: 0, valign: "top", isTextBox: true });
+  card(s, 0.6, 4.55, 12.1, 1.15, C.navy, false);
+  s.addText([
+    { text: "A month of this DR set-up costs less than half a second of downtime ", options: { bold: true, color: C.white } },
+    { text: "at the ITIC floor of $300,000 an hour ($38.26 ÷ $83.33 per second = 0.46 s). [1][14]", options: { color: "C9C3E6" } },
+  ], { x: 0.85, y: 4.55, w: 11.6, h: 1.15, fontFace: BF, fontSize: 16, valign: "middle", margin: 0, isTextBox: true });
+  s.addText([
+    { text: "Cost-aware by design: ", options: { bold: true, color: C.navy } },
+    { text: "the Architect prices every strategy from live Azure list prices and flags anything over budget; the whole environment is created and removed with one command (up.sh / down.sh), so nothing runs when it is not needed.", options: { color: C.ink } },
+  ], { x: 0.6, y: 5.95, w: 12.1, h: 0.9, fontFace: BF, fontSize: 13, valign: "top", margin: 0, isTextBox: true });
+  footer(s);
+  s.addNotes("Cost is where this gets compelling. Every AI agent call we made across two days and nine drills cost ₹8.33 in total, from Azure Cost Management. The entire environment so far cost ₹234. At Azure list prices the DR set-up itself is $38.26 a month. Compare that with ITIC's floor of $300,000 an hour: a month of DR costs less than half a second of downtime.");
+
+  // ---------- 13. Demo + roadmap ----------
+  s = add(); s.background = { color: C.white };
+  title(s, "Live demo, and where it goes next", "What you will see in the next minutes, on your own phone.");
+  const demo = ["Scan the QR code: Contoso Payments opens on your phone; make a payment",
+    "Readiness says NO-GO: Southeast Asia is missing a setting; one approved click fixes it",
+    "The Planner builds the drill; we approve it and inject the outage",
+    "Your phone goes red, then reconnects to Southeast Asia in ~30 s with the same balance",
+    "Failback, then the report: RTO, RPO and every second accounted for"];
+  s.addText("The demo", { x: 0.6, y: 1.7, w: 6, h: 0.4, fontFace: HF, fontSize: 18, bold: true, color: C.navy, margin: 0, isTextBox: true });
+  demo.forEach((t, i) => {
+    const y = 2.2 + i * 0.86;
+    s.addShape(pres.shapes.OVAL, { x: 0.6, y: y + 0.05, w: 0.45, h: 0.45, fill: { color: C.teal }, line: { color: C.teal } });
+    s.addText(String(i + 1), { x: 0.6, y: y + 0.05, w: 0.45, h: 0.45, fontFace: BF, fontSize: 14, bold: true, color: C.white, align: "center", valign: "middle", margin: 0, isTextBox: true });
+    s.addText(t, { x: 1.2, y, w: 5.6, h: 0.6, fontFace: BF, fontSize: 13.5, color: C.ink, valign: "middle", margin: 0, isTextBox: true });
   });
-  footer(s, 9);
-  s.addNotes("Headline value: continuous, measured DR testing at a fraction of today's effort, with compliance evidence produced automatically. For Virtusa it becomes a reusable accelerator.");
+  card(s, 7.2, 1.7, 5.5, 5.15, C.card, false);
+  s.addText("Roadmap (not in the demo)", { x: 7.5, y: 1.9, w: 5, h: 0.4, fontFace: HF, fontSize: 18, bold: true, color: C.navy, margin: 0, isTextBox: true });
+  const road = [["Scheduled drills", "weekly, and after every infrastructure change"], ["More services", "AKS, Cosmos DB, Storage, Service Bus as new allowlisted actions"],
+    ["Azure Chaos Studio", "standard fault library alongside our own faults"], ["Approvals where teams work", "Microsoft Teams approval cards"], ["Portfolio view", "resilience score across many applications"]];
+  road.forEach(([h, b], i) => {
+    const y = 2.45 + i * 0.85;
+    s.addText(h, { x: 7.5, y, w: 4.95, h: 0.32, fontFace: BF, fontSize: 13.5, bold: true, color: C.navy, margin: 0, isTextBox: true });
+    s.addText(b, { x: 7.5, y: y + 0.32, w: 4.95, h: 0.4, fontFace: BF, fontSize: 12, color: C.ink, margin: 0, isTextBox: true });
+  });
+  footer(s);
+  s.addNotes("Now the demo, on your own phone. Then the roadmap, which we keep clearly separate from what is built: scheduled drills, more Azure services as new allowlisted actions, Chaos Studio's fault library, Teams approval cards, and a resilience score across many applications.");
 
   // ---------- Sources ----------
   s = add(); s.background = { color: C.white };
@@ -505,22 +420,25 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
     "[10] Regulation (EU) 2022/2554 (DORA), Articles 11(6), 12, 35(7)–(8), 50, 51. eur-lex.europa.eu/eli/reg/2022/2554/oj",
     "[11] Cockroach Labs with Wakefield Research, The State of Resilience 2025 (1,000 executives, Aug–Sep 2024). cockroachlabs.com",
     "[12] Uptime Institute, Annual Outage Analysis 2025, press release 6 May 2025. uptimeinstitute.com",
+    "[13] Azure Cost Management, subscription actual cost by service, month to date, queried 18 Oct 2026 (our environment).",
+    "[14] Azure Retail Prices API (prices.azure.com), East Asia / Southeast Asia list prices for App Service B1 Linux, SQL Database Basic, Traffic Manager, 18 Oct 2026.",
+    "Our measurements: 9 drills recorded by the DR Agent (17–18 Oct 2026); each report keeps the raw timestamps, events and approvals.",
   ];
   s.addText(refs.map((r, i) => ({ text: r, options: { breakLine: i < refs.length - 1 } })),
-    { x: 0.6, y: 1.65, w: 12.1, h: 5.2, fontFace: BF, fontSize: 11, color: C.ink, valign: "top", paraSpaceAfter: 5, margin: 0, isTextBox: true });
+    { x: 0.6, y: 1.65, w: 12.1, h: 5.3, fontFace: BF, fontSize: 10.5, color: C.ink, valign: "top", paraSpaceAfter: 5, margin: 0, isTextBox: true });
   footer(s);
 
   // ---------- 10. Close ----------
   s = add(); s.background = { color: C.navy };
   circ(s, I.shield, 0.6, 0.8, 1.0, C.teal);
   s.addText("Don't assume you can recover.", { x: 0.6, y: 2.2, w: 12, h: 0.9, fontFace: HF, fontSize: 44, bold: true, color: C.white, margin: 0, isTextBox: true });
-  s.addText("Let the DR Agent validate it, and prove it, every week.", { x: 0.6, y: 3.1, w: 12, h: 0.8, fontFace: HF, fontSize: 30, color: "8FD6D3", margin: 0, isTextBox: true });
-  [["Real DR tests", "Failover, validate, failback — executed by agents"], ["Built 100% on Azure", "AI Foundry, Site Recovery, Chaos Studio, Monitor"], ["Safe by design", "Graduated autonomy, human approval, full audit trail"]].forEach(([h, b], i) => {
+  s.addText("Let the DR Agent test it for real, and prove it, whenever you need.", { x: 0.6, y: 3.1, w: 12, h: 0.8, fontFace: HF, fontSize: 30, color: "C9C3E6", margin: 0, isTextBox: true });
+  [["Real DR drills", "Fail over, measure, fail back: 9 live drills, RTO ~34 s, RPO 0"], ["Built 100% on Azure", "AI Foundry, SQL failover groups, Traffic Manager, Site Recovery, Monitor"], ["Safe by design", "Allowlisted actions, human approval, kill switch, full audit trail"]].forEach(([h, b], i) => {
     const x = 0.6 + i * 4.1;
-    s.addText([{ text: h, options: { bold: true, fontSize: 17, color: C.white, breakLine: true } }, { text: b, options: { fontSize: 13, color: "B8C7DA" } }],
+    s.addText([{ text: h, options: { bold: true, fontSize: 17, color: C.white, breakLine: true } }, { text: b, options: { fontSize: 13, color: "C9C3E6" } }],
       { x, y: 4.6, w: 3.8, h: 1.0, fontFace: BF, valign: "top", margin: 0, isTextBox: true });
   });
-  s.addText("Thank you  ·  Team Azure Armada", { x: 0.6, y: 6.5, w: 12.1, h: 0.45, fontFace: BF, fontSize: 15, color: "8FA3BD", margin: 0, isTextBox: true });
+  s.addText("Thank you  ·  Team Azure Armada", { x: 0.6, y: 6.5, w: 12.1, h: 0.45, fontFace: BF, fontSize: 15, color: "9C95BD", margin: 0, isTextBox: true });
 
   await pres.writeFile({ fileName: process.env.DECK_OUT || "docs/deck/DR-Agent-Azure-Day-2026.pptx" });
   console.log("written");
