@@ -30,16 +30,16 @@
     </div>
     
     <!-- Failback Time -->
-    <div class="kpi">
+    <div class="kpi" style="text-align: center;">
         <div class="l">Failback Time</div>
-        <div class="v">{{ failback_display or '—' }}</div>
+        <div class="v big kpi-hero">{{ failback_precise }}</div>
         <div class="x">Time to restore original state</div>
     </div>
     
     <!-- Overall Verdict -->
-    <div class="kpi {{ 'pass' if overall_pass else 'fail' }}">
+    <div class="kpi {{ 'pass' if overall_pass else 'fail' }}" style="text-align: center;">
         <div class="l">Overall Result</div>
-        <div class="v">{{ 'PASS' if overall_pass else 'FAIL' }}</div>
+        <div class="v big kpi-hero">{{ 'PASS' if overall_pass else 'FAIL' }}</div>
         <div class="x">Both targets {{ 'met' if overall_pass else 'NOT met' }}</div>
     </div>
 </div>

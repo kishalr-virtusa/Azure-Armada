@@ -263,6 +263,7 @@ textarea.form-input { height: auto; min-height: 72px; padding: 8px 12px; }
 /* vertical rhythm for stacked sections and forms */
 .stack { display: flex; flex-direction: column; gap: 16px; }
 .form-stack { display: flex; flex-direction: column; gap: 16px; }
+.form-stack .twin > div { display: flex; flex-direction: column; gap: 16px; }
 .check-row { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 20px; color: var(--ink); cursor: pointer; }
 .check-row input { margin: 3px 0 0; flex: 0 0 auto; accent-color: var(--accent); }
 

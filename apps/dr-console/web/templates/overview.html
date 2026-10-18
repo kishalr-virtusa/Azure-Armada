@@ -146,7 +146,10 @@
         Online: ['Online', 'pass'], CheckingEndpoint: ['Checking', 'info'], Degraded: ['Degraded', 'warn'],
         Disabled: ['Disabled', 'neutral'], Inactive: ['Inactive', 'neutral'], Stopped: ['Stopped', 'neutral'],
     };
-    const REPL = { CATCH_UP: 'Replicating', SEEDING: 'Seeding', PENDING: 'Pending', SUSPENDED: 'Suspended' };
+    // Azure's geo-replication states. CATCH_UP is the healthy steady state: the secondary is in sync and
+    // receives every committed change continuously (not a one-off job in progress).
+    const REPL = { CATCH_UP: r => `In sync · ${r} copy up to date`, SEEDING: r => `Initial copy to ${r} in progress`,
+                   PENDING: () => 'Replication starting', SUSPENDED: () => 'Replication suspended' };
 
     function setCard(card, statusEl, detailEl, value, detail, cls) {
         statusEl.textContent = value;
@@ -200,8 +203,9 @@
             return;
         }
         const state = data.replication_state;
+        const secondary = REGION_NAME[data.primary_region === 'A' ? 'B' : 'A'];
         setCard(card, status, detail, `Primary: ${REGION_NAME[data.primary_region] || data.primary_region}`,
-                REPL[state] || state || '', state === 'CATCH_UP' ? 'pass' : 'warn');
+                REPL[state] ? REPL[state](secondary) : (state || ''), state === 'CATCH_UP' ? 'pass' : 'warn');
     }
 
     function updateEndpointsTable(endpoints) {
@@ -245,7 +249,7 @@
                         <td><span class="st ${statusClass}">${ex.status}</span></td>
                         <td>${ex.t0 ? new Date(ex.t0).toLocaleString() : '—'}</td>
                         <td>${ex.rto_s ? formatDuration(ex.rto_s) : '—'}</td>
-                        <td>${ex.rpo_s !== undefined ? ex.rpo_s + 's' : '—'}</td>
+                        <td>${typeof ex.rpo_s === 'number' ? formatDuration(ex.rpo_s) : '—'}</td>
                         <td><a href="/exercise/${ex.PartitionKey}">View</a></td>
                     </tr>
                 `;
@@ -255,10 +259,10 @@
         }
     }
     
+    // measured seconds exactly as recorded (2 decimals), same format as the Results page
     function formatDuration(seconds) {
-        const m = Math.floor(seconds / 60);
-        const s = Math.floor(seconds % 60);
-        return `${m}m ${s}s`;
+        if (seconds < 60) return `${seconds.toFixed(2)}s`;
+        return `${Math.floor(seconds / 60)}m ${(seconds % 60).toFixed(2).padStart(5, '0')}s`;
     }
     
     // Initial load

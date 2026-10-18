@@ -311,7 +311,7 @@ def results_context(xid: Optional[str]) -> dict:
     return {
         "exercise_id": xid, "status": status,
         "status_class": {"completed": "pass", "rolled_back": "warn", "failed": "fail", "killed": "fail"}.get(status, "upd"),
-        "rto_display": fmt_duration(rto), "rto_precise": _precise(rto), "rpo_precise": _precise(rpo), "rto_met": rto_met, "rto_target_min": prof.rto_min, "rto_target_s": prof.rto_min * 60,
+        "rto_display": fmt_duration(rto), "rto_precise": _precise(rto), "rpo_precise": _precise(rpo), "failback_precise": _precise(fb), "rto_met": rto_met, "rto_target_min": prof.rto_min, "rto_target_s": prof.rto_min * 60,
         "rpo_s": None if rpo is None else round(rpo, 1), "rpo_met": rpo_met,
         "rpo_target_min": prof.rpo_min, "rpo_target_s": prof.rpo_min * 60,
         "failback_display": fmt_duration(fb) if fb is not None else None,
