@@ -46,12 +46,22 @@ def probe(url: str) -> dict[str, Any]:
                     "latency_ms": latency_ms,
                 }
         else:
-            return {
+            out = {
                 "ok": False,
                 "status_code": response.status_code,
                 "latency_ms": latency_ms,
                 "error": f"HTTP {response.status_code}",
             }
+            try:  # the app explains itself on 503 (e.g. config_error + missing settings, or a database error)
+                body = response.json()
+                if body.get("missing"):
+                    out["reason"] = f"configuration missing: {', '.join(body['missing'])}"
+                elif body.get("db_error") or body.get("status"):
+                    out["reason"] = (body.get("db_error") or body.get("status"))[:200]
+                out["region"] = body.get("region")
+            except Exception:  # noqa: BLE001 - not JSON (e.g. App Service's own error page)
+                pass
+            return out
     except Exception as e:
         latency_ms = int((time.monotonic() - start) * 1000)
         return {

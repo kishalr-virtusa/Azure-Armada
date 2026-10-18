@@ -10,34 +10,60 @@
     </div>
 </header>
 
+<!-- Verdict: can we recover right now? -->
+<div class="card verdict" id="verdict">
+    <div class="verdict-row">
+        <span class="verdict-dot"></span>
+        <div style="flex: 1; min-width: 0;">
+            <div class="verdict-title" id="verdictTitle">Running live checks…</div>
+            <div class="verdict-sub" id="verdictSub">Checking both regions, routing, database replication, settings, Site Recovery and Key Vault.</div>
+            <ul class="verdict-list hide" id="verdictList"></ul>
+        </div>
+        <div class="verdict-actions" id="verdictActions"></div>
+    </div>
+    <div class="verdict-meta" id="verdictMeta"></div>
+</div>
+
 <!-- KPI Cards -->
 <div class="kpis" id="statusCards">
-    <!-- Region A -->
     <div class="kpi" id="cardRegionA">
         <div class="l">Region A · East Asia</div>
         <div class="v" id="statusA">—</div>
-        <div class="x" id="detailA">Loading...</div>
+        <div class="x" id="detailA">Loading…</div>
     </div>
-    
-    <!-- Region B -->
     <div class="kpi region-b" id="cardRegionB">
         <div class="l">Region B · Southeast Asia</div>
         <div class="v" id="statusB">—</div>
-        <div class="x" id="detailB">Loading...</div>
+        <div class="x" id="detailB">Loading…</div>
     </div>
-    
-    <!-- Traffic Manager -->
     <div class="kpi" id="cardTM">
         <div class="l">Traffic Manager</div>
         <div class="v" id="statusTM">—</div>
-        <div class="x" id="detailTM">Loading...</div>
+        <div class="x" id="detailTM">Loading…</div>
     </div>
-    
-    <!-- Failover Group -->
     <div class="kpi" id="cardFOG">
-        <div class="l">SQL Failover Group</div>
+        <div class="l">Database (SQL failover group)</div>
         <div class="v" id="statusFOG">—</div>
-        <div class="x" id="detailFOG">Loading...</div>
+        <div class="x" id="detailFOG">Loading…</div>
+    </div>
+</div>
+
+<!-- Proven recovery + system -->
+<div class="twin">
+    <div class="card">
+        <div class="card-head-row">
+            <div>
+                <h2>Proven recovery</h2>
+                <p class="sub" style="margin-top: 4px;">Measured in live drills, not assumed</p>
+            </div>
+            <a id="lastReport" class="link-btn hide" href="#">Latest report →</a>
+        </div>
+        <div class="proof-grid" id="proofGrid"><div class="empty-note">Loading drill history…</div></div>
+    </div>
+    <div class="card">
+        <h2>System</h2>
+        <p class="sub" style="margin-top: 4px;">What the DR Agent depends on</p>
+        <dl class="sys" id="sysList"><dt>Loading…</dt><dd></dd></dl>
     </div>
 </div>
 
@@ -83,8 +109,13 @@
 
 <!-- Recent Exercises -->
 <div class="card">
-    <h2>Recent Exercises</h2>
-    <p class="sub">Latest DR exercise runs</p>
+    <div class="card-head-row">
+        <div>
+            <h2>Drills</h2>
+            <p class="sub" style="margin-top: 4px;">Every DR drill run by the agent, newest first</p>
+        </div>
+        <button class="link-btn hide" id="showAllDrills" type="button">Show all</button>
+    </div>
     <div class="scroll" style="margin-top: 12px;">
         <table>
             <thead>
@@ -92,18 +123,19 @@
                     <th>ID</th>
                     <th>Status</th>
                     <th>Started</th>
-                    <th>RTO</th>
-                    <th>RPO</th>
+                    <th style="text-align:right">RTO</th>
+                    <th style="text-align:right">RPO</th>
+                    <th>Targets</th>
                     <th></th>
                 </tr>
             </thead>
             <tbody id="exercisesTable">
-                <tr><td colspan="6" style="text-align:center;color:var(--ink-3);">No exercises yet</td></tr>
+                <tr><td colspan="7" style="text-align:center;color:var(--ink-3);">No drills yet</td></tr>
             </tbody>
         </table>
     </div>
     <div style="margin-top: 16px;">
-        <a href="/phase1" class="btn btn-primary">Start New Exercise</a>
+        <a href="/phase1" class="btn btn-secondary">Start a new drill</a>
     </div>
 </div>
 {% endblock %}
@@ -115,11 +147,10 @@
             const res = await fetch('/api/status');
             const data = await res.json();
             
-            // Update Region A
-            updateCard('cardRegionA', 'statusA', 'detailA', data.region_a);
-            
-            // Update Region B
-            updateCard('cardRegionB', 'statusB', 'detailB', data.region_b);
+            lastStatus = data;
+            // Region tiles combine the app's state (every 2 s) with its live health check (overview summary)
+            updateRegion('A', data);
+            updateRegion('B', data);
             
             // Update Traffic Manager
             updateTMCard(data.traffic_manager);
@@ -174,12 +205,26 @@
         return true;
     }
 
-    function updateCard(cardId, statusId, detailId, data) {
-        const card = document.getElementById(cardId), status = document.getElementById(statusId),
-              detail = document.getElementById(detailId);
-        if (!guard(card, status, detail, data)) return;
-        const healthy = data.state === 'Running';
-        setCard(card, status, detail, data.state, data.location || '', healthy ? 'pass' : 'fail');
+    let lastStatus = null, summary = null;
+
+    // "Running" only means the server is switched on. A region is Healthy only if its /health check passes
+    // (app answers and can write to the database); otherwise we show why it fails.
+    function updateRegion(r, data) {
+        const card = document.getElementById('cardRegion' + r), status = document.getElementById('status' + r),
+              detail = document.getElementById('detail' + r);
+        const app = data && data['region_' + r.toLowerCase()];
+        if (!guard(card, status, detail, app)) return;
+        const primary = data.failover_group?.primary_region;
+        const role = data.routing?.active_region?.startsWith(r) ? 'Serving customers' : 'Standby';
+        if (app.state !== 'Running') { setCard(card, status, detail, app.state, `${role} · app is not running`, 'fail'); return; }
+        const h = summary?.health?.[r];
+        if (!h) { setCard(card, status, detail, 'Running', `${role} · health check pending`, 'neutral'); return; }
+        if (h.ok) {
+            setCard(card, status, detail, 'Healthy', `${role}${h.latency_ms ? ` · /health ${h.latency_ms} ms` : ''}${primary === r ? ' · database primary' : ''}`, 'pass');
+        } else {
+            setCard(card, status, detail, 'Unhealthy', `${role} · ${h.reason || 'health check failing'}`, 'fail');
+            detail.title = h.reason || '';
+        }
     }
 
     function updateTMCard(data) {
@@ -191,7 +236,11 @@
         const checking = eps.some(e => e.endpoint_monitor_status === 'CheckingEndpoint');
         setCard(card, status, detail, `${online} of ${eps.length} online`,
                 `${checking ? 'Health checks starting · ' : ''}Priority routing · TTL ${data.dns_config?.ttl ?? '?'}s`,
-                online > 0 ? 'pass' : (checking ? 'neutral' : 'fail'));
+                online === eps.length && eps.length ? 'pass' : online > 0 ? 'warn' : (checking ? 'neutral' : 'fail'));
+        if (online < eps.length && !checking) {
+            const bad = eps.filter(e => e.endpoint_monitor_status !== 'Online').map(e => e.name === 'endpoint-b' ? 'Southeast Asia' : e.name === 'endpoint-a' ? 'East Asia' : e.name);
+            detail.textContent = `${bad.join(', ')} failing health checks · TTL ${data.dns_config?.ttl ?? '?'}s`;
+        }
     }
 
     function updateFOGCard(data) {
@@ -239,26 +288,114 @@
                 return;
             }
             
-            tbody.innerHTML = exercises.map(ex => {
-                const statusClass = ex.status === 'completed' ? 'pass' :
-                                   ex.status === 'failed' ? 'fail' :
-                                   ex.status === 'running' ? 'info' : 'neutral';
-                return `
-                    <tr>
-                        <td class="f">${ex.PartitionKey}</td>
-                        <td><span class="st ${statusClass}">${ex.status}</span></td>
-                        <td>${ex.t0 ? new Date(ex.t0).toLocaleString() : '—'}</td>
-                        <td>${ex.rto_s ? formatDuration(ex.rto_s) : '—'}</td>
-                        <td>${typeof ex.rpo_s === 'number' ? formatDuration(ex.rpo_s) : '—'}</td>
-                        <td><a href="/exercise/${ex.PartitionKey}">View</a></td>
-                    </tr>
-                `;
-            }).join('');
+            allDrills = exercises;
+            renderDrills();
         } catch (e) {
             console.error('Failed to load exercises:', e);
         }
     }
     
+    let allDrills = [], showAll = false;
+    function renderDrills() {
+        const tbody = document.getElementById('exercisesTable');
+        const chaos = new Set(summary?.drills?.chaos_ids || []);
+        const rtoT = (summary?.drills?.rto_target_min || 30) * 60, rpoT = (summary?.drills?.rpo_target_min || 15) * 60;
+        const rows = showAll ? allDrills : allDrills.slice(0, 5);
+        const more = document.getElementById('showAllDrills');
+        more.classList.toggle('hide', allDrills.length <= 5);
+        more.textContent = showAll ? 'Show latest 5' : `Show all ${allDrills.length}`;
+        more.onclick = () => { showAll = !showAll; renderDrills(); };
+        tbody.innerHTML = rows.map(ex => {
+            const statusClass = ex.status === 'completed' ? 'pass' : ex.status === 'failed' ? 'fail' :
+                                ex.status === 'running' ? 'info' : 'neutral';
+            const met = typeof ex.rto_s === 'number' && typeof ex.rpo_s === 'number'
+                ? (ex.rto_s <= rtoT && ex.rpo_s <= rpoT ? '<span class="st pass">Met</span>' : '<span class="st fail">Missed</span>') : '—';
+            return `
+                <tr>
+                    <td class="f">${ex.PartitionKey}${chaos.has(ex.PartitionKey) ? ' <span class="st warn" title="A surprise fault was injected mid-drill">chaos</span>' : ''}</td>
+                    <td><span class="st ${statusClass}">${ex.status}</span></td>
+                    <td>${ex.t0 ? new Date(ex.t0).toLocaleString() : '—'}</td>
+                    <td class="num">${typeof ex.rto_s === 'number' ? formatDuration(ex.rto_s) : '—'}</td>
+                    <td class="num">${typeof ex.rpo_s === 'number' ? formatDuration(ex.rpo_s) : '—'}</td>
+                    <td>${met}</td>
+                    <td><a href="/results/${ex.PartitionKey}">Report</a></td>
+                </tr>`;
+        }).join('');
+    }
+
+    // ---------------------------------------------------------------- overview summary
+    const esc = (v) => AgentUI.esc(v);
+    const when = (iso) => iso ? new Date(iso).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+
+    async function loadOverview() {
+        try {
+            const res = await fetch('/api/overview', { cache: 'no-store' });
+            const data = await res.json();
+            if (data.pending) { setTimeout(loadOverview, 2500); return; }
+            summary = data;
+            renderVerdict(data);
+            renderProof(data.drills);
+            renderSystem(data);
+            if (lastStatus) { updateRegion('A', lastStatus); updateRegion('B', lastStatus); }
+            renderDrills();
+        } catch (e) { console.error('overview failed', e); }
+    }
+
+    function renderVerdict(d) {
+        const v = document.getElementById('verdict'), list = document.getElementById('verdictList');
+        const dr = d.drills || {}, last = dr.latest;
+        v.classList.remove('go', 'nogo');
+        v.classList.add(d.go ? 'go' : 'nogo');
+        const proven = last ? `Last proven ${when(last.t0)}: RTO ${formatDuration(last.rto_s)} against a ${dr.rto_target_min}-minute target, RPO ${formatDuration(last.rpo_s ?? 0)}.` : 'No drill has proven recovery yet.';
+        if (d.go) {
+            document.getElementById('verdictTitle').textContent = 'Ready to recover';
+            document.getElementById('verdictSub').textContent = `All ${d.checks.length} live checks pass. ${proven}`;
+            list.classList.add('hide');
+            document.getElementById('verdictActions').innerHTML = '<a href="/plan" class="btn btn-primary">Run a drill</a>';
+        } else {
+            document.getElementById('verdictTitle').textContent = 'Not ready: recovery would fail right now';
+            document.getElementById('verdictSub').textContent = `${d.blocking.length} of ${d.checks.length} live checks fail. If East Asia went down now, customers would not be served correctly. ${proven}`;
+            list.innerHTML = d.blocking.map(b => `<li><b>${esc(b.name)}</b>: ${esc(b.detail)}</li>`).join('');
+            list.classList.remove('hide');
+            document.getElementById('verdictActions').innerHTML = '<a href="/phase1" class="btn btn-primary">Review and fix →</a>';
+        }
+        document.getElementById('verdictMeta').textContent =
+            `Live checks (no AI): checked ${Math.max(0, Math.round(d.age_s || 0))} s ago${d.refreshing ? ' · refreshing' : ''} · refreshes every 45 s`;
+    }
+
+    function renderProof(dr) {
+        const g = document.getElementById('proofGrid');
+        if (!dr || dr.error || !dr.latest) { g.innerHTML = '<div class="empty-note">No completed drill yet. Run one to prove recovery.</div>'; return; }
+        const last = dr.latest;
+        const rtoOk = last.rto_s <= dr.rto_target_min * 60, rpoOk = (last.rpo_s ?? 0) <= dr.rpo_target_min * 60;
+        const tile = (label, value, note, ok) => `<div class="proof"><div class="proof-l">${label}</div>
+            <div class="proof-v ${ok === true ? 'ok' : ok === false ? 'bad' : ''}">${value}</div><div class="proof-n">${note}</div></div>`;
+        g.innerHTML = [
+            tile('RTO, latest drill', formatDuration(last.rto_s), `target ${dr.rto_target_min} min · ${when(last.t0)}`, rtoOk),
+            tile('RPO, latest drill', formatDuration(last.rpo_s ?? 0), `target ${dr.rpo_target_min} min · no confirmed payment lost`, rpoOk),
+            tile('Median RTO', dr.median_rto_s != null ? formatDuration(dr.median_rto_s) : '—', `${dr.count_plain} drills · best ${dr.best_rto_s != null ? formatDuration(dr.best_rto_s) : '—'}${dr.chaos_ids?.length ? ` · ${dr.chaos_ids.length} chaos drill excluded` : ''}`),
+            tile('Failback, latest', last.failback_s != null ? formatDuration(last.failback_s) : '—', 'back to East Asia, no data loss'),
+            tile('VM recovery (Site Recovery)', dr.latest_iaas_s != null ? formatDuration(dr.latest_iaas_s) : '—', 'reports VM, proven inside the VM'),
+            tile('Worst RPO, all drills', dr.max_rpo_s != null ? formatDuration(dr.max_rpo_s) : '—', `across ${dr.count} drills`, dr.max_rpo_s === 0 ? true : null),
+        ].join('');
+        const a = document.getElementById('lastReport');
+        a.href = `/results/${last.id}`; a.classList.remove('hide');
+    }
+
+    function renderSystem(d) {
+        const asr = d.asr || {};
+        const asrOk = asr.protected && /normal/i.test(asr.health || asr.state || '');
+        const pill = (ok, text) => `<span class="st ${ok === true ? 'pass' : ok === false ? 'fail' : 'neutral'}">${esc(text)}</span>`;
+        const acc = d.access;
+        const items = [
+            ['Site Recovery (reports VM)', asr.protected ? `${pill(asrOk, asr.health || asr.state || 'protected')} ${asr.rpo_s != null ? `<span class="sys-n">replication RPO ${esc(asr.rpo_s)} s</span>` : ''}` : pill(false, asr.state || 'not protected')],
+            ['AI agents', `${pill(d.agents?.connected, d.agents?.connected ? '6 registered' : 'not configured')} <span class="sys-n">${esc(d.agents?.platform || '')}</span>`],
+            ['Demo app (Contoso)', acc ? pill(null, acc.public ? 'Public' : 'Private') + (acc.public && acc.public_until ? ` <span class="sys-n">until ${when(acc.public_until)}</span>` : ' <span class="sys-n">team access link only</span>') : '—'],
+            ['Live checks', `${pill(d.go, d.go ? 'GO' : 'NO-GO')} <span class="sys-n">${d.checks.filter(c => c.status === 'pass').length} of ${d.checks.length} pass</span>`],
+        ];
+        document.getElementById('sysList').innerHTML = items.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+    }
+
     // measured seconds exactly as recorded (2 decimals), same format as the Results page
     function formatDuration(seconds) {
         if (seconds < 60) return `${seconds.toFixed(2)}s`;
@@ -268,6 +405,8 @@
     // Initial load
     loadStatus();
     loadExercises();
+    loadOverview();
+    setInterval(loadOverview, 15000);
     
     // Poll every 2 seconds
     setInterval(loadStatus, 2000);

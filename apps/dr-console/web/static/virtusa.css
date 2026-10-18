@@ -344,6 +344,37 @@ textarea.form-input { height: auto; min-height: 72px; padding: 8px 12px; }
 .md-body table { margin: 0 0 12px; font-size: 13px; }
 .md-body hr { border: 0; border-top: 1px solid var(--hairline); margin: 20px 0; }
 
+/* ---------------------------------------------------------------- overview */
+.verdict { gap: 10px; }
+.verdict-row { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.verdict-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 7px; background: var(--hairline-strong); flex: 0 0 auto; }
+.verdict.go { box-shadow: 0 0 0 1px color-mix(in srgb, var(--success) 35%, transparent); background: color-mix(in srgb, var(--success-soft) 55%, var(--canvas)); }
+.verdict.go .verdict-dot { background: var(--success); }
+.verdict.nogo { box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 35%, transparent); background: color-mix(in srgb, var(--danger-soft) 55%, var(--canvas)); }
+.verdict.nogo .verdict-dot { background: var(--danger); animation: pulse-red 1.6s infinite; }
+@keyframes pulse-red { 0%, 100% { box-shadow: 0 0 0 0 rgba(208, 2, 27, .35); } 50% { box-shadow: 0 0 0 6px rgba(208, 2, 27, 0); } }
+.verdict-title { font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.4px; color: var(--ink); }
+.verdict.go .verdict-title { color: var(--success); }
+.verdict.nogo .verdict-title { color: var(--danger); }
+.verdict-sub { font-size: 14px; line-height: 20px; color: var(--body); margin-top: 2px; }
+.verdict-list { margin: 10px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; line-height: 20px; color: var(--ink); }
+.verdict-actions { flex: 0 0 auto; align-self: center; }
+.verdict-meta { font-family: var(--mono); font-size: 11.5px; color: var(--mute); padding-left: 26px; }
+.card-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.proof-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1100px) { .proof-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.proof { padding: 12px 14px; border-radius: 8px; background: var(--canvas-soft); box-shadow: var(--ring); min-width: 0; }
+.proof-l { font-size: 12px; color: var(--mute); }
+.proof-v { font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -0.6px; font-variant-numeric: tabular-nums; color: var(--ink); margin-top: 2px; }
+.proof-v.ok { color: var(--success); } .proof-v.bad { color: var(--danger); }
+.proof-n { font-size: 12px; line-height: 16px; color: var(--body); margin-top: 2px; }
+.sys { display: grid; grid-template-columns: minmax(150px, max-content) minmax(0, 1fr); gap: 12px 16px; margin: 0; font-size: 13.5px; align-items: center; }
+.sys dt { color: var(--mute); }
+.sys dd { margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sys-n { font-size: 12.5px; color: var(--body); }
+.empty-note { font-size: 13px; color: var(--mute); padding: 8px 0; grid-column: 1 / -1; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
 /* short laptop screens: keep the sidebar compact (must come after the base rules) */
 @media (max-height: 760px) and (min-width: 961px) {
     .nav { gap: 12px; padding-top: 14px; }

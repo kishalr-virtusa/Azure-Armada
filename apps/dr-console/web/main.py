@@ -221,6 +221,12 @@ def api_me(request: Request):
     return {"user": auth.current_user(request), "auth": "entra" if auth.entra_enabled() else "passcode"}
 
 
+@app.get("/api/overview", dependencies=[api])
+def api_overview():
+    """Readiness verdict from live checks, region health with reasons, proven-recovery stats, system info."""
+    return JSONResponse(service.overview_summary(), headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/status", dependencies=[api])
 async def api_status():
     return await run_in_threadpool(service.get_status)

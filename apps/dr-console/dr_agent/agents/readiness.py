@@ -64,7 +64,18 @@ def probe_check(name: str, probe: dict, expect_region: str) -> Check:
     region_ok = probe.get("region_key", expect_region) == expect_region
     ok = bool(probe.get("ok")) and probe.get("db_ok") is not False and region_ok
     return Check(name=name, status="pass" if ok else "fail",
-                 detail="healthy" if ok else f"unhealthy: {probe.get('error') or probe}", evidence=probe)
+                 detail="healthy" if ok else f"unhealthy: {probe.get('error') or probe}"
+                 + (f" ({probe['reason']})" if probe.get("reason") else ""), evidence=probe)
+
+
+ENDPOINT_REGION = {"endpoint-a": "East Asia (A)", "endpoint-b": "Southeast Asia (B)"}
+
+
+def _endpoint_problem(e: dict) -> str:
+    where = f"{ENDPOINT_REGION.get(e.get('name'), e.get('name'))} endpoint"
+    if not e.get("enabled"):
+        return f"{where} is disabled, so Traffic Manager will not send users there"
+    return f"{where} is {e.get('monitor_status')}: failing Traffic Manager health checks"
 
 
 def tm_check(endpoints: list[dict]) -> Check:
@@ -74,7 +85,7 @@ def tm_check(endpoints: list[dict]) -> Check:
         return Check(name="Traffic Manager endpoints", status="fail", detail="no endpoints found", evidence={})
     if bad:
         return Check(name="Traffic Manager endpoints", status="fail",
-                     detail="; ".join(f"{e.get('name')}: enabled={e.get('enabled')} status={e.get('monitor_status')}" for e in bad),
+                     detail="; ".join(_endpoint_problem(e) for e in bad),
                      evidence={"endpoints": endpoints})
     return Check(name="Traffic Manager endpoints", status="pass", detail="both endpoints enabled and Online",
                  evidence={"endpoints": endpoints})

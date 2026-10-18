@@ -124,3 +124,18 @@ def test_results_page_gets_the_same_remediation_items_as_the_report(monkeypatch)
     monkeypatch.setattr(service.store, "get_events", lambda xid, after=0: [])
     ctx = service.results_context("ex-20261018-000000")
     assert ctx["remediation_items"] == items
+
+
+def test_overview_drill_stats_median_excludes_chaos(monkeypatch):
+    from dr_agent import service
+    rows = {"ex-20261018-000003": {"status": "completed", "rto_s": "34.35", "rpo_s": "0", "iaas_recovered_s": "345"},
+            "ex-20261018-000002": {"status": "completed", "rto_s": "57.36", "rpo_s": "0", "chaos_injected": "endpoint-b"},
+            "ex-20261018-000001": {"status": "completed", "rto_s": "29.76", "rpo_s": "0"},
+            "ex-20261017-000001": {"status": "completed", "rto_s": "40.43", "rpo_s": "0"},
+            "ex-20261017-000000": {"status": "failed", "rto_s": ""}}
+    monkeypatch.setattr(service, "list_exercises", lambda: [{"PartitionKey": k} for k in sorted(rows, reverse=True)])
+    monkeypatch.setattr(service.store, "get_exercise", lambda k: rows.get(k))
+    st = service._drill_stats()
+    assert st["count"] == 4 and st["count_plain"] == 3 and st["median_rto_s"] == 34.35
+    assert st["best_rto_s"] == 29.76 and st["chaos_ids"] == ["ex-20261018-000002"] and st["latest_iaas_s"] == 345
+    assert st["latest"]["id"] == "ex-20261018-000003"

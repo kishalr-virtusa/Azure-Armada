@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -75,6 +76,82 @@ def get_status(max_age_s: float = 5.0) -> dict:
     }
     _status_cache.update(t=time.monotonic(), v=v)
     return v
+
+
+# One-glance answer to "can we recover right now, and when did we last prove it?" for the Overview.
+# The live checks are the deterministic readiness checks (no AI call); they take several seconds, so they run in
+# the background and the page shows the last result with its age.
+_summary: dict[str, Any] = {"t": 0.0, "v": None, "busy": False}
+_summary_lock = threading.Lock()
+SUMMARY_MAX_AGE_S = 45.0
+
+
+def _drill_stats() -> dict:
+    prof = get_profile()
+    rows = []
+    for e in list_exercises()[:20]:
+        m = store.get_exercise(e["PartitionKey"]) or {}
+        if m.get("status") != "completed" or _num(m.get("rto_s")) is None:
+            continue
+        rows.append({"id": e["PartitionKey"], "t0": m.get("t0"), "rto_s": _num(m.get("rto_s")),
+                     "rpo_s": _num(m.get("rpo_s")), "failback_s": _num(m.get("failback_s")),
+                     "iaas_s": _num(m.get("iaas_recovered_s")), "chaos": bool(m.get("chaos_injected"))})
+    plain = sorted(r["rto_s"] for r in rows if not r["chaos"])
+    median = None
+    if plain:
+        mid = len(plain) // 2
+        median = plain[mid] if len(plain) % 2 else round((plain[mid - 1] + plain[mid]) / 2, 3)
+    return {"latest": rows[0] if rows else None, "count": len(rows), "count_plain": len(plain),
+            "median_rto_s": median, "best_rto_s": plain[0] if plain else None, "worst_rto_s": plain[-1] if plain else None,
+            "max_rpo_s": max((r["rpo_s"] for r in rows if r["rpo_s"] is not None), default=None),
+            "latest_iaas_s": next((r["iaas_s"] for r in rows if r["iaas_s"] is not None), None),
+            "chaos_ids": [r["id"] for r in rows if r["chaos"]],
+            "rto_target_min": prof.rto_min, "rpo_target_min": prof.rpo_min}
+
+
+def _compute_summary() -> dict:
+    from dr_agent.agents import readiness
+    facts = gather_readiness_facts()
+    checks = readiness.build_checks(facts)
+    failing = [c for c in checks if c.status == "fail"]
+    access = _safe(get_access)
+    agents = _safe(lambda: __import__("dr_agent.foundry", fromlist=["x"]).get_agents())
+    return {
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "go": not failing,
+        "checks": [{"name": c.name, "status": c.status, "detail": c.detail} for c in checks],
+        "blocking": [{"name": c.name, "detail": c.detail} for c in failing],
+        "health": {k: {"ok": bool(v.get("ok")) and v.get("db_ok") is not False, "status_code": v.get("status_code"),
+                       "reason": v.get("reason") or v.get("error"), "latency_ms": v.get("latency_ms")}
+                   for k, v in (("A", facts.get("probe_a") or {}), ("B", facts.get("probe_b") or {}))},
+        "asr": facts.get("asr"),
+        "drills": _safe(_drill_stats),
+        "access": {"public": access.get("public"), "public_until": access.get("public_until")} if isinstance(access, dict) and "error" not in access else None,
+        "agents": {"platform": "Azure AI Foundry Agent Service", "count": 6,
+                   "connected": agents is not None and not (isinstance(agents, dict) and "error" in agents)},
+    }
+
+
+def _refresh_summary() -> None:
+    try:
+        v = _compute_summary()
+        _summary.update(t=time.monotonic(), v=v)
+    except Exception as e:  # noqa: BLE001
+        log.warning("overview summary failed: %s", e)
+    finally:
+        _summary["busy"] = False
+
+
+def overview_summary() -> dict:
+    """Returns the latest summary immediately; refreshes it in the background when it is older than 45 s."""
+    with _summary_lock:
+        stale = not _summary["v"] or time.monotonic() - _summary["t"] > SUMMARY_MAX_AGE_S
+        if stale and not _summary["busy"]:
+            _summary["busy"] = True
+            threading.Thread(target=_refresh_summary, daemon=True).start()
+    if not _summary["v"]:
+        return {"pending": True}
+    return {**_summary["v"], "age_s": round(time.monotonic() - _summary["t"], 1), "refreshing": _summary["busy"]}
 
 
 def probe_tm() -> dict:
