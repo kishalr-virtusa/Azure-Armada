@@ -88,8 +88,11 @@ def get_workload_inventory() -> dict[str, Any]:
     # Get SQL FOG status (import here to avoid circular imports)
     if config.sql_fog_name:
         try:
-            from dr_agent.tools import azure_sql
-            inventory["sql_failover_group"] = azure_sql.get_fog_status()
+            from dr_agent.engine.runner import _fog
+            # failover groups are child resources of the SQL server, so Resource Graph does not list them
+            inventory["sql_failover_group"] = {"name": config.sql_fog_name, "database": "paymentsdb",
+                                               "servers": {"A": config.sql_server_a, "B": config.sql_server_b},
+                                               **_fog().status()}
         except Exception as e:
             logger.error(f"Failed to get FOG status: {e}")
             inventory["sql_failover_group"] = {"error": str(e)}

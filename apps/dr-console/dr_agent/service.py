@@ -107,7 +107,10 @@ def recommend_strategy() -> dict:
                data=prof.model_dump())
     res = architect.run(prof, _inventory_summary())
     store.upsert_exercise(PHASE1, {"strategy_json": res.output.model_dump_json()})
-    return {**res.output.model_dump(), "source": res.source, "via": res.via}
+    from dr_agent.tools.pricing import deployed_monthly_usd
+    deployed = _safe(deployed_monthly_usd)
+    return {**res.output.model_dump(), "source": res.source, "via": res.via,
+            "deployed_cost": deployed if "error" not in deployed else None}
 
 
 def gather_readiness_facts() -> dict:

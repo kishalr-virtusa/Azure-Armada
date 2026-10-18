@@ -87,6 +87,7 @@
                 <tbody id="strategyTable"></tbody>
             </table>
         </div>
+        <p id="strategyCostNote" class="sub" style="margin: 12px 0 0; line-height: 20px;"></p>
         <div class="box" style="margin-top: 16px;">
             <h4 style="margin-bottom: 8px;">Recommendation</h4>
             <div id="strategyRationale"></div>
@@ -151,9 +152,9 @@
                 <thead>
                     <tr>
                         <th>Step</th>
-                        <th>Description</th>
+                        <th>Original step</th>
                         <th>Verdict</th>
-                        <th>Issue</th>
+                        <th>Issue and correction</th>
                     </tr>
                 </thead>
                 <tbody id="runbookTable"></tbody>
@@ -258,6 +259,13 @@
                 </tr>
             `).join('');
             
+            const dc = data.deployed_cost;
+            document.getElementById('strategyCostNote').innerHTML = dc ? `
+                <b>What our deployment actually costs:</b> $${dc.total_usd.toFixed(2)}/month at Azure list prices
+                (East Asia $${dc.region_a_usd.toFixed(2)} + Southeast Asia $${dc.region_b_usd.toFixed(2)} + Traffic Manager $${dc.traffic_manager_usd.toFixed(2)}),
+                ${dc.multiplier}× one region. The comparison above uses typical multipliers for every strategy so they are compared
+                on the same basis; our standby runs at full size, which is why the real figure is higher than the $${(data.options.find(o => o.name === 'warm-standby')?.est_monthly_usd || 0).toFixed(2)} estimate.
+                Payments workload only (excludes the DR console, monitoring and the reports VM).` : '';
             document.getElementById('strategyRationale').innerHTML = `
                 <p><strong>${esc(data.recommended)}</strong></p>
                 <p style="color: var(--ink-2);">${esc(data.rationale)}</p>
@@ -390,7 +398,8 @@
                     <td class="f">${esc(step.step_no)}</td>
                     <td class="md-inline">${AgentUI.renderMarkdown(step.text)}</td>
                     <td><span class="st ${step.verdict === 'valid' ? 'pass' : step.verdict === 'stale' ? 'warn' : 'fail'}">${esc(step.verdict)}</span></td>
-                    <td style="color: var(--ink-2);">${esc(step.reason || '—')}</td>
+                    <td style="color: var(--ink-2);">${esc(step.reason || '—')}
+                        ${step.suggested ? `<div class="md-inline" style="margin-top: 6px; color: var(--ink);"><span style="font-size: 12px; color: var(--success); font-weight: 500;">Corrected step</span>${AgentUI.renderMarkdown(step.suggested)}</div>` : ''}</td>
                 </tr>
             `).join('');
             

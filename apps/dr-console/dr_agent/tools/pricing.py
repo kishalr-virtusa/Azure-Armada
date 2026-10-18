@@ -49,3 +49,16 @@ def region_monthly_usd(region: str = "eastasia", timeout_s: float = 8.0) -> dict
            "source": source}
     _cache[region] = (time.monotonic(), out)
     return out
+
+
+TM_ENDPOINT_CHECK_USD = 0.36  # per Azure endpoint health check per month (Azure Retail Prices, Traffic Manager)
+
+
+def deployed_monthly_usd(region_a: str = "eastasia", region_b: str = "southeastasia") -> dict:
+    """What the deployed warm standby costs at list prices: both regions at full size + 2 Traffic Manager endpoints."""
+    a, b = region_monthly_usd(region_a), region_monthly_usd(region_b)
+    tm = round(2 * TM_ENDPOINT_CHECK_USD, 2)
+    total = round(a["total_usd"] + b["total_usd"] + tm, 2)
+    return {"total_usd": total, "region_a_usd": a["total_usd"], "region_b_usd": b["total_usd"], "traffic_manager_usd": tm,
+            "multiplier": round(total / a["total_usd"], 2) if a["total_usd"] else None,
+            "source": "fallback" if "fallback" in (a["source"], b["source"]) else "azure-retail-prices"}
