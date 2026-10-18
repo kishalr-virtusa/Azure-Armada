@@ -313,7 +313,7 @@ def results_context(xid: Optional[str]) -> dict:
         "t_failback_done": m.get("t_failback_done"),
         "last_hb_seq": ev.get("last_acked_seq"), "last_hb_ts": ev.get("last_acked_ts"),
         "dr_hb_seq": None, "dr_hb_ts": ev.get("newest_present_ts"),
-        "remediation": json.loads(m.get("remediation_json") or "[]"),
+        "remediation_items": json.loads(m.get("remediation_json") or "[]"),  # same items as the report
         **_rto_accounting(xid, m, rto),
         "report_url": f"/reports/{xid}" if m.get("report_url") else None,
     }

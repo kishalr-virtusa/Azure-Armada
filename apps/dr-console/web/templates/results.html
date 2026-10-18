@@ -125,7 +125,7 @@
                 {% for item in remediation_items %}
                 <tr>
                     <td>
-                        <span class="pr {{ item.priority }}">{{ item.priority }}</span>
+                        <span class="st {{ {'high': 'fail', 'medium': 'warn'}.get(item.priority, 'neutral') }}">{{ item.priority | capitalize }}</span>
                     </td>
                     <td>{{ item.item }}</td>
                     <td><span class="chip">{{ item.owner }}</span></td>

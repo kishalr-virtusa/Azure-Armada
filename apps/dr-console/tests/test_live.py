@@ -114,3 +114,13 @@ def test_runner_sleep_never_negative(monkeypatch):
     r = ExerciseRunner("ex-test")
     monkeypatch.setattr(r, "check_kill", lambda: _t.sleep(0.05))  # slow kill check outlasts the remaining time
     r.sleep(0.01)
+
+
+def test_results_page_gets_the_same_remediation_items_as_the_report(monkeypatch):
+    import json
+    from dr_agent import service
+    items = [{"item": "Update runbook", "owner": "app", "priority": "high"}]
+    monkeypatch.setattr(service.store, "get_exercise", lambda xid: {"status": "completed", "remediation_json": json.dumps(items)})
+    monkeypatch.setattr(service.store, "get_events", lambda xid, after=0: [])
+    ctx = service.results_context("ex-20261018-000000")
+    assert ctx["remediation_items"] == items
