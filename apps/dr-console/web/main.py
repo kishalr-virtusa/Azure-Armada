@@ -305,6 +305,11 @@ async def api_readiness_fix(request: Request, data: dict = Body(...)):
         return {"success": False, "error": f"{type(e).__name__}: {e}"[:300]}
 
 
+@app.get("/api/readiness/fix-progress", dependencies=[api])
+def api_fix_progress():
+    return JSONResponse(service.fix_progress(), headers={"Cache-Control": "no-store"})
+
+
 @app.post("/api/runbook", dependencies=[api])
 async def api_runbook(request: Request):
     return await run_in_threadpool(_run_saving_trace, request, service.PHASE1, "runbook_trace_json", service.review_runbook)

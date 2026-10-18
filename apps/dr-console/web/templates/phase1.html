@@ -371,14 +371,8 @@
             fixResult.classList.remove('hide');
             
             if (result.success && !result.error) {
-                fixResult.innerHTML = `
-                    <div class="box" style="border-color: var(--have); background: var(--have-bg); display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                        <span class="st pass">Fix applied</span>
-                        <span style="flex: 1; min-width: 240px;">${AgentUI.esc(result.message || 'Settings updated successfully')}</span>
-                        <button class="btn btn-secondary" onclick="checkReadiness()">Re-run Readiness</button>
-                    </div>
-                `;
                 document.getElementById('fixableSection').classList.add('hide');
+                watchFix(result.message || 'Settings updated');
             } else {
                 fixResult.innerHTML = `
                     <div class="box" style="border-color: var(--add); background: var(--add-bg);">
@@ -438,6 +432,38 @@
             checkProceed();
     }
     
+    // After a fix, Azure restarts the Southeast Asia app (~1 min) and Traffic Manager needs a few 10 s probes to trust it
+    // again. Re-checking too early looks like a failed fix, so watch both and re-run Readiness only once they are green.
+    async function watchFix(message) {
+        const box = document.getElementById('fixResult');
+        box.classList.remove('hide');
+        const started = Date.now();
+        const line = (ok, label, detail) => `<div style="display: flex; align-items: center; gap: 10px;">
+            ${ok ? '<span class="st pass">Done</span>' : '<span class="spin"></span>'}
+            <span><b>${label}</b> <span style="color: var(--body);">${AgentUI.esc(detail)}</span></span></div>`;
+        const draw = (p) => {
+            box.innerHTML = `<div class="box" style="border-color: var(--have); background: var(--have-bg); display: flex; flex-direction: column; gap: 10px;">
+                <div><span class="st pass">Fix applied</span> <span style="margin-left: 8px;">${AgentUI.esc(message.split(' The app restarts')[0])}</span></div>
+                ${line(p && p.app_ok, 'Southeast Asia app', p ? (p.app_ok ? 'healthy again' : `restarting to load the setting (${p.app_detail})`) : 'restarting to load the setting')}
+                ${line(p && p.tm_ok, 'Traffic Manager', p ? (p.tm_ok ? 'trusts Southeast Asia again (Online)' : `re-checking the region (${p.tm_detail})`) : 're-checking the region')}
+                <div style="font-size: 12px; color: var(--mute); font-family: var(--mono);">${Math.round((Date.now() - started) / 1000)} s · Readiness re-runs automatically when both are done</div></div>`;
+        };
+        draw(null);
+        while (Date.now() - started < 5 * 60 * 1000) {
+            await new Promise(r => setTimeout(r, 4000));
+            let p = null;
+            try { p = await (await fetch('/api/readiness/fix-progress', { cache: 'no-store' })).json(); } catch (e) { /* retry */ }
+            draw(p);
+            if (p && p.done) {
+                await new Promise(r => setTimeout(r, 1000));
+                box.classList.add('hide');
+                checkReadiness();
+                return;
+            }
+        }
+        box.insertAdjacentHTML('beforeend', '<p class="sub" style="margin-top: 8px;">Still not healthy after 5 minutes. Run the checks to see what is wrong.</p>');
+    }
+
     // "Last run 18 Oct, 10:42 · Azure AI Foundry Agent": results are saved on the server, so they survive leaving the page
     function savedNote(key, data) {
         const el = document.getElementById(key + 'Saved');

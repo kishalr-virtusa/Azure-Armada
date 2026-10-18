@@ -240,6 +240,20 @@ def check_readiness() -> dict:
     return {**res.output.model_dump(mode="json"), **meta, "fixable": _fixable(res.output)}
 
 
+def fix_progress() -> dict:
+    """After a fix: is Southeast Asia serving again, and does Traffic Manager trust it again? (cheap, polled)"""
+    from dr_agent.tools.azure_trafficmanager import get_profile_status
+    probe = _safe(runner._probe, "B")
+    tm = _safe(get_profile_status)
+    ep = next((e for e in (tm.get("endpoints") or []) if e.get("name") == "endpoint-b"), {}) if isinstance(tm, dict) else {}
+    app_ok = bool(probe.get("ok")) and probe.get("db_ok") is not False
+    tm_ok = ep.get("endpoint_monitor_status") == "Online"
+    if app_ok and tm_ok:
+        _summary.update(t=0.0)
+    return {"app_ok": app_ok, "app_detail": "healthy" if app_ok else (probe.get("reason") or probe.get("error") or "restarting"),
+            "tm_ok": tm_ok, "tm_detail": ep.get("endpoint_monitor_status") or "unknown", "done": app_ok and tm_ok}
+
+
 def _fixable(report: ReadinessReport) -> list[str]:
     parity = next((c for c in report.checks if c.name.startswith("App settings parity")), None)
     return parity.evidence.get("missing_in_region_b", []) if parity and parity.status == "fail" else []
@@ -293,6 +307,7 @@ def apply_parity_fix(keys: list[str], approver: str) -> dict:
     notify("success", "Configuration drift fixed",
            f"Copied {', '.join(copied) or 'nothing'} to Region B (approved by {approver}).", link="/phase1", send_email=False)
     store.upsert_exercise(PHASE1, {"fix_json": json.dumps({"copied": copied, "approved_by": approver, "at": _now_iso()})})
+    _summary.update(t=0.0)  # the Overview verdict re-checks now instead of within 45 s
     return {"success": True, "copied": copied, "approved_by": approver,
             "message": (f"Copied {', '.join(copied)} to Southeast Asia (approved by {approver})." if copied
                         else "Nothing to copy: Southeast Asia already has these settings.")
