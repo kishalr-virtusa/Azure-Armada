@@ -272,3 +272,10 @@ textarea.form-input { height: auto; min-height: 72px; padding: 8px 12px; }
 
 /* plan tables: step ids and dependencies never break across lines */
 .plan-table td:nth-child(1), .plan-table td:nth-child(6), .plan-table td:nth-child(5) { white-space: nowrap; }
+
+/* RTO accounting bar */
+.rto-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; gap: 2px; background: var(--canvas-soft-2); }
+.rto-bar .seg { background: var(--accent); min-width: 2px; }
+.rto-bar .seg:nth-child(4n+2) { background: color-mix(in srgb, var(--accent) 70%, var(--canvas)); }
+.rto-bar .seg:nth-child(4n+3) { background: var(--region-b); }
+.rto-bar .seg.gap { background: var(--hairline-strong); }

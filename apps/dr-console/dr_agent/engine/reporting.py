@@ -41,6 +41,10 @@ td{padding:6px;border-bottom:1px solid var(--line);vertical-align:top;color:var(
  <div class="kpi"><div class="l">Strategy</div><div class="v" style="font-size:22px">{{ strategy }}</div><div class="x">tier {{ profile.tier }}</div></div>
 </div>
 <div class="card"><h2>Executive summary</h2><p style="margin:0">{{ n.executive_summary }}</p></div>
+{% if segs %}<div class="card"><h2>Where the {{ rto }} went</h2>
+<p style="margin:0 0 8px;color:#666">From the engine's own step timestamps (one clock); segments add up to the RTO.{% if precision %} Recovery proven by a health check through Traffic Manager; the previous check {{ precision }} s earlier still failed.{% endif %}</p>
+<table><tr><th>Segment</th><th style="text-align:right">Seconds</th></tr>{% for s in segs %}<tr><td>{{ s.label }}</td><td style="text-align:right">{{ '%.1f' % s.seconds }}</td></tr>{% endfor %}
+<tr><td><b>Total (RTO)</b></td><td style="text-align:right"><b>{{ '%.1f' % segs_total }}</b></td></tr></table></div>{% endif %}
 <div class="card" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
  <div><h2>What went well</h2><ul>{% for x in n.what_went_well %}<li>{{ x }}</li>{% else %}<li>-</li>{% endfor %}</ul></div>
  <div><h2>Issues</h2><ul>{% for x in n.issues %}<li>{{ x }}</li>{% else %}<li>None observed</li>{% endfor %}</ul></div>
@@ -76,6 +80,15 @@ def build_report(xid: str) -> str:
     runbook = json.loads(m["runbook_json"]) if m.get("runbook_json") else {}
     open_findings = list(readiness.get("risks", [])) + [f"Runbook step {s['step_no']}: {s['reason']}" for s in runbook.get("steps", [])
                                                         if s.get("verdict") in ("stale", "missing")]
+    from dr_agent.engine.measurements import rto_breakdown
+    def _p(v):
+        try:
+            d = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+            return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+        except (TypeError, ValueError):
+            return None
+    segs = rto_breakdown(_p(m.get("t0")), _p(m.get("t_recovered")), events) if rto else []
+    precision = json.loads(m.get("rto_evidence_json") or "{}").get("precision_s")
     iaas_s = num("iaas_recovered_s")
     iaas = {"tier": "reports VM (Azure Site Recovery test failover, isolated network)",
             "recovered_in": fmt_duration(iaas_s) if iaas_s is not None else None,
@@ -83,6 +96,7 @@ def build_report(xid: str) -> str:
             "status": "validated" if iaas_s is not None else ("not run" if not m.get("iaas_started") else "failed")}
     facts = {
         "profile": prof.model_dump(), "strategy": strategy, "iaas": iaas,
+        "rto_breakdown_s": [(s["label"], s["seconds"]) for s in segs], "rto_precision_s": precision,
         "results": {"rto": fmt_duration(rto), "rto_target": f"{prof.rto_min} min", "rto_met": rto_met,
                     "rpo": fmt_duration(rpo), "rpo_target": f"{prof.rpo_min} min", "rpo_met": rpo_met,
                     "failback": fmt_duration(fb) if fb is not None else None},
@@ -96,6 +110,7 @@ def build_report(xid: str) -> str:
         xid=xid, profile=prof, n=narrative, m=m, ev=ev, events=events, strategy=strategy,
         rto=fmt_duration(rto), rpo=fmt_duration(rpo), failback=fmt_duration(fb),
         rto_met=rto_met, rpo_met=rpo_met, overall=rto_met and rpo_met, iaas=iaas,
+        segs=segs, segs_total=round(sum(s["seconds"] for s in segs), 3), precision=precision,
         generated=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         approvals=m.get("approvals_json", ""))
     url = store.upload_report(xid, html)

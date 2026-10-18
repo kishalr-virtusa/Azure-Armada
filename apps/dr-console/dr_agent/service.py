@@ -314,6 +314,7 @@ def results_context(xid: Optional[str]) -> dict:
         "last_hb_seq": ev.get("last_acked_seq"), "last_hb_ts": ev.get("last_acked_ts"),
         "dr_hb_seq": None, "dr_hb_ts": ev.get("newest_present_ts"),
         "remediation": json.loads(m.get("remediation_json") or "[]"),
+        **_rto_accounting(xid, m, rto),
         "report_url": f"/reports/{xid}" if m.get("report_url") else None,
     }
 
@@ -492,3 +493,19 @@ def team_link() -> str:
     base = os.environ.get("PUBLIC_URL") or "/pay"
     code = os.environ.get("APP_ACCESS_CODE", "")
     return f"{base}?code={code}" if code else base
+
+
+def _rto_accounting(xid: str, m: dict, rto: Optional[float]) -> dict:
+    """Every second of the RTO, from the engine's own step timestamps (same clock as t0), plus the measurement
+    precision and the RPO write-by-write evidence. Nothing here is estimated."""
+    from dr_agent.engine.measurements import rto_breakdown
+    segs = rto_breakdown(_dt(m.get("t0")), _dt(m.get("t_recovered")), store.get_events(xid)) if rto else []
+    ev = json.loads(m.get("rto_evidence_json") or "{}")
+    total = round(sum(s["seconds"] for s in segs), 3)
+    for s in segs:
+        s["pct"] = round(100 * s["seconds"] / total, 1) if total else 0
+    rpo_ev = json.loads(m.get("rpo_evidence_json") or "{}")
+    return {"rto_segments": segs, "rto_accounted_s": total, "rto_precision_s": ev.get("precision_s"),
+            "rto_probe_interval_s": ev.get("probe_interval_s"),
+            "rto_window": (ev.get("last_unhealthy_probe_end"), ev.get("first_healthy_probe_end")),
+            "rpo_lost_writes": rpo_ev.get("lost_writes"), "rpo_note": rpo_ev.get("note")}

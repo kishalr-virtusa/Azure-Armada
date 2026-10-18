@@ -50,6 +50,31 @@
     </div>
 </div>
 
+<!-- Where every second of the RTO went -->
+{% if rto_segments %}
+<div class="card">
+    <div>
+        <h2>Where the {{ rto_display }} went</h2>
+        <p class="sub">From the engine's own step timestamps (one clock). The segments add up to {{ rto_accounted_s }} s.
+        {% if rto_precision_s %}Recovery was proven by a health check through Traffic Manager; the previous check
+        {{ rto_precision_s }} s earlier still failed, so the true recovery moment lies inside that window.{% endif %}</p>
+    </div>
+    <div class="rto-bar">
+        {% for s in rto_segments %}<span class="seg{% if 'Engine' in s.label %} gap{% endif %}" style="flex: {{ s.seconds }} 0 0;" title="{{ s.label }}: {{ s.seconds }} s"></span>{% endfor %}
+    </div>
+    <table>
+        <thead><tr><th>Segment</th><th style="text-align:right">Seconds</th><th style="text-align:right">Share</th></tr></thead>
+        <tbody>
+        {% for s in rto_segments %}
+            <tr><td>{{ s.label }}</td><td class="f" style="text-align:right">{{ '%.1f' % s.seconds }}</td><td class="f" style="text-align:right">{{ s.pct }}%</td></tr>
+        {% endfor %}
+            <tr><td><b>Total (RTO)</b></td><td class="f" style="text-align:right"><b>{{ '%.1f' % rto_accounted_s }}</b></td><td class="f" style="text-align:right">100%</td></tr>
+        </tbody>
+    </table>
+    {% if rpo_note %}<p class="sub">RPO evidence: {{ rpo_note }}{% if rpo_lost_writes is not none %} ({{ rpo_lost_writes }} confirmed writes missing in the new primary){% endif %}.</p>{% endif %}
+</div>
+{% endif %}
+
 <!-- Evidence Section -->
 <div class="twin">
     <div class="card">

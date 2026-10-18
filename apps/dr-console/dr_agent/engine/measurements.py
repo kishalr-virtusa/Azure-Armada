@@ -12,7 +12,7 @@ Definitions (requirements R6):
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Iterable, Optional
 
 
@@ -101,3 +101,63 @@ def fmt_duration(seconds: Optional[float]) -> str:
     if m:
         return f"{m}m {sec:02d}s"
     return f"{sec}s"
+
+
+# ---------------------------------------------------------------- RTO accounting
+ACTION_LABELS = {
+    "inject_outage": "Outage injected: East Asia app stopped",
+    "sql_failover": "SQL forced failover to Southeast Asia",
+    "tm_set_endpoint": "Traffic Manager stops routing to East Asia",
+    "wait_healthy": "DNS and health checks until users reach Southeast Asia",
+    "assert": "Checks",
+}
+GAP_LABEL = "Engine between steps (bookkeeping, status writes)"
+
+
+def rto_breakdown(t0: Optional[datetime], t_recovered: Optional[datetime], events: list[dict]) -> list[dict]:
+    """Account for every second of the RTO window [t0, t_recovered] using the engine's step timestamps.
+
+    events: exercise events with kind step_start/step_end, ts (ISO, same clock as t0), step_id and data.action.
+    Returns ordered segments {label, start, end, seconds}; consecutive, non-overlapping, and their seconds sum to
+    exactly t_recovered - t0 (gaps between steps are listed as their own segment, never hidden).
+    """
+    if not t0 or not t_recovered or t_recovered <= t0:
+        return []
+
+    def ts(e):
+        d = datetime.fromisoformat(str(e["ts"]).replace("Z", "+00:00"))
+        return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+
+    t0 = t0 if t0.tzinfo else t0.replace(tzinfo=timezone.utc)
+    t_recovered = t_recovered if t_recovered.tzinfo else t_recovered.replace(tzinfo=timezone.utc)
+    starts: dict[str, tuple[datetime, str]] = {}
+    spans: list[tuple[datetime, datetime, str]] = []
+    for e in events:
+        sid = e.get("step_id")
+        if not sid:
+            continue
+        if e.get("kind") == "step_start":
+            action = ((e.get("data") or {}).get("action")) or ""
+            starts[sid] = (ts(e), ACTION_LABELS.get(action, e.get("message") or action or sid))
+        elif e.get("kind") == "step_end" and sid in starts:
+            s, label = starts.pop(sid)
+            spans.append((s, ts(e), label))
+    # clip to the window, order by start, drop empties
+    clipped = sorted(((max(s, t0), min(en, t_recovered), lb) for s, en, lb in spans if en > t0 and s < t_recovered),
+                     key=lambda x: x[0])
+    out: list[dict] = []
+    cursor = t0
+    for s, en, lb in clipped:
+        s = max(s, cursor)
+        if en <= s:
+            continue
+        if s > cursor:
+            out.append({"label": GAP_LABEL, "start": cursor, "end": s})
+        out.append({"label": lb, "start": s, "end": en})
+        cursor = en
+    if cursor < t_recovered:  # the measuring step ends after recovery is proven; anything left is still a gap
+        out.append({"label": GAP_LABEL, "start": cursor, "end": t_recovered})
+    for seg in out:
+        seg["seconds"] = round((seg["end"] - seg["start"]).total_seconds(), 3)
+        seg["start"], seg["end"] = seg["start"].isoformat(), seg["end"].isoformat()
+    return out

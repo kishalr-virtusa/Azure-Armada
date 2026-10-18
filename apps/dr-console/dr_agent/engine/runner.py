@@ -353,24 +353,36 @@ class ExerciseRunner(threading.Thread):
     def wait_healthy(self, target: str, expect: str, timeout_s: int, phase: str) -> dict:
         deadline = time.monotonic() + timeout_s
         attempts, last = 0, {}
+        measuring = target == "tm" and phase in ("validation", "failback")
+        interval = PROBE_INTERVAL_MEASURING_S if measuring else 5
+        last_bad_end: Optional[datetime] = None  # end of the last probe that proved the service NOT yet recovered
         while time.monotonic() < deadline:
             self.check_kill()
             self.maybe_chaos(phase)
             attempts += 1
             if target == "tm":
                 self.assert_endpoint_enabled(expect)
+            p_start = utcnow()
             last = _probe(target)
+            p_end = utcnow()
             if last.get("ok") and last.get("db_ok") and last.get("region_key") == expect:
-                t = utcnow()
+                # recovery happened after last_bad_end and is PROVEN by p_end (the healthy response arrived)
+                evidence = {"probe_interval_s": interval, "attempts": attempts,
+                            "last_unhealthy_probe_end": iso(last_bad_end), "first_healthy_probe_start": iso(p_start),
+                            "first_healthy_probe_end": iso(p_end), "served_by": last.get("region"),
+                            "db_server": last.get("db_server"),
+                            "precision_s": round((p_end - last_bad_end).total_seconds(), 2) if last_bad_end else None}
                 if target == "tm" and phase == "validation" and expect == "B":
-                    self.record_recovery(t)
+                    self.record_recovery(p_end, evidence)
                 if target == "tm" and phase == "failback" and expect == "A":
-                    self.record_failback_done(t)
-                return {"attempts": attempts, "served_by": last.get("region"), "db_server": last.get("db_server")}
+                    self.record_failback_done(p_end)
+                return {"attempts": attempts, "served_by": last.get("region"), "db_server": last.get("db_server"),
+                        "precision_s": evidence["precision_s"]}
+            last_bad_end = p_end
             if attempts % 6 == 1:
                 self.event("info", f"waiting for {target} to serve from Region {expect} "
                                    f"(now: {last.get('region') or last.get('error') or last.get('status_code')})")
-            self.sleep(5)
+            self.sleep(interval)
         raise StepFailed(f"{target} not healthy from Region {expect} within {timeout_s}s; last probe: {last}")
 
     def assert_endpoint_enabled(self, region: str) -> None:
@@ -417,13 +429,13 @@ class ExerciseRunner(threading.Thread):
         self.update(diagnosis_json="")
         self.event("remediation", f"Approved fix applied: {diag.fix_action} {params}", step.id, _jsonable(res))
 
-    def record_recovery(self, t: datetime) -> None:
+    def record_recovery(self, t: datetime, evidence: Optional[dict] = None) -> None:
         m = self.meta()
         t0 = parse_dt(m.get("t0"))
         rto = M.compute_rto(t0, t)
         prof = self.profile()
         ev = M.evaluate(rto, _num(m.get("rpo_s")), prof.rto_min, prof.rpo_min)
-        self.update(t_recovered=t, rto_s=rto, rto_met=ev["rto_met"])
+        self.update(t_recovered=t, rto_s=rto, rto_met=ev["rto_met"], rto_evidence_json=json.dumps(evidence or {}))
         self.event("measurement", f"Recovered in {M.fmt_duration(rto)} (target {prof.rto_min} min): "
                                   f"{'MET' if ev['rto_met'] else 'MISSED'}", data={"rto_s": rto, "t0": iso(t0), "t_recovered": iso(t)})
         self.notify("success" if ev["rto_met"] else "failure", "Application recovered in Region B",
@@ -463,7 +475,7 @@ class ExerciseRunner(threading.Thread):
                 store.record_heartbeat(seq, ts, acked, error)
             except Exception:  # noqa: BLE001
                 pass
-        self.hb_writer = HeartbeatWriter(connect, on_result, interval=2.0)
+        self.hb_writer = HeartbeatWriter(connect, on_result, interval=HEARTBEAT_INTERVAL_S)
         self.hb_writer.start()
         self.sleep(5)
         acked = sum(1 for h in self.heartbeats if h.acked)
@@ -528,6 +540,8 @@ class ExerciseRunner(threading.Thread):
 
 
 ENDPOINTS = {"A": "endpoint-a", "B": "endpoint-b"}
+PROBE_INTERVAL_MEASURING_S = 1    # RTO is measured to about one probe interval
+HEARTBEAT_INTERVAL_S = 1.0        # RPO resolution: one confirmed write per second
 FIX_PARAMS = {"tm_set_endpoint": {"region", "enabled"}, "start_webapp": {"region"}}
 
 

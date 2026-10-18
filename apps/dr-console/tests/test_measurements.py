@@ -63,3 +63,28 @@ def test_evaluate_and_format():
     assert fmt_duration(6) == "6s"
     assert fmt_duration(3720) == "1h 02m"
     assert fmt_duration(None) == "n/a"
+
+
+def test_rto_breakdown_accounts_for_every_second():
+    from datetime import datetime, timedelta, timezone
+    from dr_agent.engine.measurements import rto_breakdown, GAP_LABEL
+    t0 = datetime(2026, 10, 18, 10, 0, 0, tzinfo=timezone.utc)
+    at = lambda s: (t0 + timedelta(seconds=s)).isoformat()
+    ev = [
+        {"kind": "step_start", "step_id": "out-1", "ts": at(-0.4), "data": {"action": "inject_outage"}},
+        {"kind": "step_end", "step_id": "out-1", "ts": at(1.0)},
+        {"kind": "step_start", "step_id": "fo-1", "ts": at(1.5), "data": {"action": "sql_failover"}},
+        {"kind": "step_end", "step_id": "fo-1", "ts": at(14.0)},
+        {"kind": "step_start", "step_id": "fo-2", "ts": at(14.2), "data": {"action": "tm_set_endpoint"}},
+        {"kind": "step_end", "step_id": "fo-2", "ts": at(18.0)},
+        {"kind": "step_start", "step_id": "val-1", "ts": at(18.3), "data": {"action": "wait_healthy"}},
+        {"kind": "step_end", "step_id": "val-1", "ts": at(33.0)},   # ends after recovery is proven
+    ]
+    t_rec = t0 + timedelta(seconds=32.4)
+    segs = rto_breakdown(t0, t_rec, ev)
+    assert abs(sum(s["seconds"] for s in segs) - 32.4) < 1e-6           # every second accounted
+    assert segs[0]["label"].startswith("Outage injected") and segs[0]["seconds"] == 1.0   # clipped at t0
+    assert [s["label"] for s in segs].count(GAP_LABEL) == 3            # gaps 1.0-1.5, 14.0-14.2, 18.0-18.3
+    assert segs[-1]["label"].startswith("DNS") and abs(segs[-1]["seconds"] - 14.1) < 1e-6
+    for a, b in zip(segs, segs[1:]):
+        assert a["end"] == b["start"]                                 # contiguous, no overlaps

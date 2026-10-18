@@ -95,7 +95,10 @@ def _cached_health() -> dict:
         if _health_cache["v"] is not None and time.monotonic() - _health_cache["t"] < HEALTH_CACHE_S:
             return _health_cache["v"]
         v = db.health_check()
-        _health_cache.update(t=time.monotonic(), v=v)
+        if v.get("db_ok"):  # only successes are cached: a stale failure would delay recovery detection (RTO)
+            _health_cache.update(t=time.monotonic(), v=v)
+        else:
+            _health_cache.update(t=0.0, v=None)
         return v
 
 
