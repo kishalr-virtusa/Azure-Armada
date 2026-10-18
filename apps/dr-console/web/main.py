@@ -266,6 +266,12 @@ def api_trace(run_id: str):
     return JSONResponse(trace.get(run_id), headers={"Cache-Control": "no-store"})
 
 
+@app.get("/api/phase1", dependencies=[api])
+def api_phase1_state():
+    """Saved phase 1 results (profile, strategy, readiness, runbook) so the page restores them on return."""
+    return JSONResponse(service.get_phase1_state(), headers={"Cache-Control": "no-store"})
+
+
 @app.post("/api/strategy", dependencies=[api])
 async def api_strategy(request: Request):
     from dr_agent import trace

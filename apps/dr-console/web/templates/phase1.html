@@ -65,6 +65,7 @@
     <div id="strategyContent">
         <button id="getStrategyBtn" class="btn btn-secondary" onclick="getStrategy()">Get Recommendation</button>
     </div>
+    <p class="saved-note hide" id="strategySaved"></p>
 
     <div id="strategyTrace" class="trace hide"></div>
 
@@ -103,6 +104,7 @@
     <div id="readinessContent">
         <button id="checkReadinessBtn" class="btn btn-secondary" onclick="checkReadiness()">Run Checks</button>
     </div>
+    <p class="saved-note hide" id="readinessSaved"></p>
 
     <div id="readinessTrace" class="trace hide"></div>
 
@@ -141,6 +143,7 @@
     <div id="runbookContent">
         <button id="reviewRunbookBtn" class="btn btn-secondary" onclick="reviewRunbook()">Review Runbook</button>
     </div>
+    <p class="saved-note hide" id="runbookSaved"></p>
 
     <div id="runbookTrace" class="trace hide"></div>
 
@@ -240,7 +243,16 @@
 
         try {
             const data = await AgentUI.runWithTrace('/api/strategy', document.getElementById('strategyTrace'));
-            
+            renderStrategy(data);
+        } catch (e) {
+            alert('Failed to get strategy: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Get recommendation again';
+        }
+    }
+
+    function renderStrategy(data) {
             // Show source badge
             document.getElementById('strategySourceBadge').innerHTML = renderSourceBadge(data.source, data.via);
             
@@ -275,14 +287,9 @@
             
             document.getElementById('strategyResult').classList.remove('hide');
             strategyDone = true;
+            savedNote('strategy', data);
+            document.getElementById('getStrategyBtn').textContent = 'Get recommendation again';
             checkProceed();
-            
-        } catch (e) {
-            alert('Failed to get strategy: ' + e.message);
-        } finally {
-            btn.disabled = false;
-            btn.textContent = 'Get Recommendation again';
-        }
     }
     
     async function checkReadiness() {
@@ -292,6 +299,17 @@
 
         try {
             const data = await AgentUI.runWithTrace('/api/readiness', document.getElementById('readinessTrace'));
+            document.getElementById('fixResult').classList.add('hide');
+            renderReadiness(data);
+        } catch (e) {
+            alert('Failed to check readiness: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Run checks again';
+        }
+    }
+
+    function renderReadiness(data) {
             const esc = AgentUI.esc;
             const label = { pass: 'Pass', warn: 'Warn', fail: 'Fail' };
             const checksDiv = document.getElementById('readinessChecks');
@@ -322,14 +340,9 @@
             
             document.getElementById('readinessResult').classList.remove('hide');
             readinessDone = true;
+            savedNote('readiness', data);
+            document.getElementById('checkReadinessBtn').textContent = 'Run checks again';
             checkProceed();
-            
-        } catch (e) {
-            alert('Failed to check readiness: ' + e.message);
-        } finally {
-            btn.disabled = false;
-            btn.textContent = 'Run Checks';
-        }
     }
     
     async function applyFix() {
@@ -389,6 +402,16 @@
         
         try {
             const data = await AgentUI.runWithTrace('/api/runbook', document.getElementById('runbookTrace'));
+            renderRunbook(data);
+        } catch (e) {
+            alert('Failed to review runbook: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Review runbook again';
+        }
+    }
+
+    function renderRunbook(data) {
             const esc = AgentUI.esc;
             
             // Show source badge
@@ -410,16 +433,52 @@
             
             document.getElementById('runbookResult').classList.remove('hide');
             runbookDone = true;
+            savedNote('runbook', data);
+            document.getElementById('reviewRunbookBtn').textContent = 'Review runbook again';
             checkProceed();
-            
-        } catch (e) {
-            alert('Failed to review runbook: ' + e.message);
-        } finally {
-            btn.disabled = false;
-            btn.textContent = 'Review Runbook';
-        }
     }
     
+    // "Last run 18 Oct, 10:42 · Azure AI Foundry Agent": results are saved on the server, so they survive leaving the page
+    function savedNote(key, data) {
+        const el = document.getElementById(key + 'Saved');
+        if (!el || !data.at) return;
+        const by = data.via === 'foundry-agent' ? 'Azure AI Foundry Agent' : data.via === 'azure-openai' ? 'Azure OpenAI (direct)' : data.via === 'fallback' ? 'rules fallback' : '';
+        el.textContent = `Last run ${new Date(data.at).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}${by ? ' · ' + by : ''}`;
+        el.classList.remove('hide');
+    }
+
+    async function restorePhase1() {
+        let st;
+        try {
+            const res = await fetch('/api/phase1', { cache: 'no-store' });
+            if (!res.ok) return;
+            st = await res.json();
+        } catch (e) { return; }
+        if (st.profile) {
+            const f = document.getElementById('profileForm');
+            for (const [k, v] of Object.entries(st.profile)) { if (f.elements[k] && v !== null && v !== undefined) f.elements[k].value = v; }
+            profile = st.profile;
+            document.getElementById('profileResult').classList.remove('hide');
+            document.getElementById('profileResult').innerHTML = `<span class="st pass">Profile saved</span>
+                <span style="margin-left: 8px;">Tier ${profile.tier}, RTO ${profile.rto_min} min, RPO ${profile.rpo_min} min</span>`;
+        }
+        if (st.strategy) renderStrategy(st.strategy);
+        if (st.readiness) {
+            renderReadiness(st.readiness);
+            // a fix applied after this readiness run makes the run out of date: say so instead of offering the fix again
+            if (st.last_fix && st.readiness.at && st.last_fix.at > st.readiness.at) {
+                document.getElementById('fixableSection').classList.add('hide');
+                const fr = document.getElementById('fixResult');
+                fr.classList.remove('hide');
+                fr.innerHTML = `<div class="box" style="border-color: var(--have); background: var(--have-bg); display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <span class="st pass">Fix applied</span>
+                    <span style="flex: 1; min-width: 240px;">${AgentUI.esc((st.last_fix.copied || []).join(', ') || 'Settings')} copied to Southeast Asia by ${AgentUI.esc(st.last_fix.approved_by)}. The checks above were run before the fix.</span>
+                    <button class="btn btn-secondary" onclick="checkReadiness()">Re-run Readiness</button></div>`;
+            }
+        }
+        if (st.runbook) renderRunbook(st.runbook);
+    }
+
     function checkProceed() {
         if (profile && strategyDone && readinessDone) {
             document.getElementById('proceedBar').classList.remove('hide');
@@ -438,5 +497,6 @@
         document.querySelectorAll('.tab[data-md]').forEach(t => t.classList.toggle('active', t.dataset.md === which));
         document.getElementById('runbookMd').innerHTML = AgentUI.renderMarkdown(runbookMd[which] || '_No runbook content._');
     }
+    restorePhase1();
 </script>
 {% endblock %}

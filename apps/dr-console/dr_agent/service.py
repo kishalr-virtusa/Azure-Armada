@@ -183,11 +183,11 @@ def recommend_strategy() -> dict:
     trace.emit("input", "Application profile", f"{prof.name}: tier {prof.tier}, RTO {prof.rto_min} min, RPO {prof.rpo_min} min",
                data=prof.model_dump())
     res = architect.run(prof, _inventory_summary())
-    store.upsert_exercise(PHASE1, {"strategy_json": res.output.model_dump_json()})
     from dr_agent.tools.pricing import deployed_monthly_usd
     deployed = _safe(deployed_monthly_usd)
-    return {**res.output.model_dump(), "source": res.source, "via": res.via,
-            "deployed_cost": deployed if "error" not in deployed else None}
+    meta = {"source": res.source, "via": res.via, "at": _now_iso(), "deployed_cost": deployed if "error" not in deployed else None}
+    store.upsert_exercise(PHASE1, {"strategy_json": res.output.model_dump_json(), "strategy_meta_json": json.dumps(meta)})
+    return {**res.output.model_dump(), **meta}
 
 
 def gather_readiness_facts() -> dict:
@@ -235,11 +235,40 @@ def check_readiness() -> dict:
                + (" (any fail forces NO-GO, whatever the agent says)" if n_fail else ""),
                status="fail" if n_fail else "ok")
     res = readiness.run(checks)
-    store.upsert_exercise(PHASE1, {"readiness_json": res.output.model_dump_json()})
-    out = res.output.model_dump(mode="json")
-    out["via"] = res.via
-    parity = next((c for c in res.output.checks if c.name.startswith("App settings parity")), None)
-    out["fixable"] = parity.evidence.get("missing_in_region_b", []) if parity and parity.status == "fail" else []
+    meta = {"source": res.source, "via": res.via, "at": _now_iso()}
+    store.upsert_exercise(PHASE1, {"readiness_json": res.output.model_dump_json(), "readiness_meta_json": json.dumps(meta)})
+    return {**res.output.model_dump(mode="json"), **meta, "fixable": _fixable(res.output)}
+
+
+def _fixable(report: ReadinessReport) -> list[str]:
+    parity = next((c for c in report.checks if c.name.startswith("App settings parity")), None)
+    return parity.evidence.get("missing_in_region_b", []) if parity and parity.status == "fail" else []
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def get_phase1_state() -> dict:
+    """Everything phase 1 has produced so far, so the page can be left and reopened without losing results."""
+    p1 = _phase1()
+    out: dict[str, Any] = {"profile": json.loads(p1["profile_json"]) if p1.get("profile_json") else None,
+                           "profile_saved": bool(p1.get("profile_json")), "strategy": None, "readiness": None, "runbook": None}
+    meta = lambda k: json.loads(p1[k]) if p1.get(k) else {}  # noqa: E731
+    if p1.get("strategy_json"):
+        out["strategy"] = {**json.loads(p1["strategy_json"]), **meta("strategy_meta_json")}
+    if p1.get("readiness_json"):
+        rep_ = ReadinessReport.model_validate_json(p1["readiness_json"])
+        out["readiness"] = {**rep_.model_dump(mode="json"), **meta("readiness_meta_json"), "fixable": _fixable(rep_)}
+    if p1.get("runbook_json"):
+        try:
+            rb = json.loads(p1["runbook_json"])
+            md = RUNBOOK_PATH.read_text(encoding="utf-8") if RUNBOOK_PATH.exists() else ""
+            out["runbook"] = {**rb, **meta("runbook_meta_json"), "original_md": md}
+        except ValueError:
+            out["runbook"] = None  # an older, truncated save
+    if p1.get("fix_json"):
+        out["last_fix"] = json.loads(p1["fix_json"])
     return out
 
 
@@ -260,6 +289,7 @@ def apply_parity_fix(keys: list[str], approver: str) -> dict:
     from dr_agent.tools.notify import notify
     notify("success", "Configuration drift fixed",
            f"Copied {', '.join(copied) or 'nothing'} to Region B (approved by {approver}).", link="/phase1", send_email=False)
+    store.upsert_exercise(PHASE1, {"fix_json": json.dumps({"copied": copied, "approved_by": approver, "at": _now_iso()})})
     return {"success": True, "copied": copied, "approved_by": approver,
             "message": (f"Copied {', '.join(copied)} to Southeast Asia (approved by {approver})." if copied
                         else "Nothing to copy: Southeast Asia already has these settings.")
@@ -272,8 +302,15 @@ def review_runbook() -> dict:
     trace.emit("input", f"Runbook {RUNBOOK_PATH.name}", f"{len(md.splitlines())} lines of markdown")
     inv = _inventory_summary()
     res = runbook.run(md, inv)
-    store.upsert_exercise(PHASE1, {"runbook_json": res.output.model_dump_json()[:60000]})
-    return {**res.output.model_dump(), "source": res.source, "via": res.via, "original_md": md}
+    meta = {"source": res.source, "via": res.via, "at": _now_iso()}
+    saved = res.output.model_dump()
+    raw = json.dumps(saved)
+    if len(raw) > 30000:  # Azure Table string properties hold ~32K characters; keep valid JSON by shortening the long text
+        over = len(raw) - 30000
+        saved["updated_runbook_md"] = saved["updated_runbook_md"][:max(0, len(saved["updated_runbook_md"]) - over - 200)] + "\n\n…(shortened for storage)"
+        raw = json.dumps(saved)
+    store.upsert_exercise(PHASE1, {"runbook_json": raw, "runbook_meta_json": json.dumps(meta)})
+    return {**res.output.model_dump(), **meta, "original_md": md}
 
 
 # ------------------------------------------------------------------ plan
