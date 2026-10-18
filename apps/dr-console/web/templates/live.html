@@ -424,119 +424,120 @@
     .eta-display { font-size: 16px; }
     /* nothing to time while idle: hide the empty stopwatch and RTO/RPO tiles until a drill starts */
     body:not(.drill-active) .big-kpis { display: none; }
+
+    /* ---- presenter layout v2 (DESIGN.md) ---- */
+    .pv-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+    @media (max-width: 1100px) { .pv-grid { grid-template-columns: 1fr; } }
+    .pv-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+    .pv-side { position: sticky; top: 24px; }
+    .pv-join { flex-direction: row; align-items: center; gap: 24px; text-align: left; padding: 20px; }
+    .pv-join .qr-code { width: 172px; height: 172px; flex: 0 0 172px; padding: 8px; background: #fff; border-radius: 8px; box-shadow: var(--ring); display: grid; place-items: center; margin: 0; }
+    .pv-join .qr-code img, .pv-join .qr-code canvas, .pv-join .qr-code svg { width: 100% !important; height: auto !important; }
+    .pv-join-text { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; min-width: 0; }
+    .pv-join .qr-url { font-size: 15px !important; color: var(--ink); margin: 0 !important; overflow-wrap: anywhere; }
+    body.drill-active .pv-join .qr-code { display: none !important; }
+    body.drill-active .pv-join { padding: 14px 20px; }
+    body.drill-active .pv-join h2 { display: block !important; font-size: 14px !important; }
+    .state-banner { text-align: left !important; font-size: 15px !important; font-weight: 500 !important; padding: 14px 16px !important; border-radius: 8px; box-shadow: var(--ring); }
+    .big-kpis { display: grid !important; grid-template-columns: 2fr 1fr 1fr !important; gap: 16px !important; }
+    @media (max-width: 700px) { .big-kpis { grid-template-columns: 1fr !important; } }
+    .big-kpi { background: var(--canvas) !important; border-radius: 8px !important; box-shadow: var(--ring) !important; border: 0 !important; padding: 16px !important; text-align: left !important; }
+    .big-kpi .label { font-size: 12px !important; font-weight: 500 !important; color: var(--mute) !important; margin: 0 0 6px !important; }
+    .big-kpi .value { font-size: 40px !important; line-height: 44px !important; font-weight: 600 !important; letter-spacing: -1.6px; }
+    .big-kpi .sub { font-size: 12px !important; margin-top: 4px !important; }
+    .stopwatch-tile { grid-column: auto !important; }
+    .stopwatch-value { font-size: 56px !important; line-height: 60px !important; font-weight: 600 !important; letter-spacing: -2.4px !important; font-variant-numeric: tabular-nums; }
+    .eta-display { font-size: 13px !important; margin-top: 4px !important; color: var(--body) !important; }
+    .pv-progress { display: flex; flex-direction: column; gap: 8px; }
+    .pv-progress .current-step { font-size: 13px !important; color: var(--body); background: none !important; padding: 0 !important; text-align: left !important; }
+    body:not(.drill-active) .pv-progress { display: none; }
+    .pv-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .pv-card-head h2 { font-size: 16px !important; margin: 0 !important; }
+    .pv-empty { color: var(--mute); font-size: 13px; padding: 12px 0; }
+    .pv-phone { align-items: stretch; text-align: left; padding-bottom: 24px; }
+    .pv-phone .phone-frame-container { margin-top: 8px; }
+    .chaos-btn { background: var(--canvas) !important; color: var(--danger) !important; box-shadow: var(--ring) !important; border: 0 !important; font-size: 13px !important; height: 32px !important; padding: 0 12px !important; border-radius: 6px !important; }
+    .chaos-btn:disabled { color: var(--mute) !important; }
+    body:not(.drill-active) .big-kpis { display: none !important; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 {% endblock %}
 
 {% block content %}
-<!-- Presenter header with branding -->
-<div class="presenter-header" style="display:none">
-    <div class="presenter-brand">
-        <img src="/static/brand/virtusa.svg" alt="Virtusa" class="brand-logo-light">
-        <img src="/static/brand/virtusa-white.svg" alt="Virtusa" class="brand-logo-dark" style="display: none;">
-    </div>
-    <div class="azure-badge-presenter">
-        <img src="/static/brand/azure.svg" alt="Azure">
-        <span>Microsoft Azure</span>
-    </div>
-</div>
-
 <header>
     <div>
-        <span class="eyebrow">Presenter View</span>
-        <h1>Live Demo</h1>
+        <span class="eyebrow">Presenter view</span>
+        <h1>Live demo</h1>
+        <p class="lede">What customers see on their phones, and what the DR Agent is doing behind the scenes.</p>
     </div>
-    <div>
-        <span class="st" id="stateTag">Loading...</span>
-    </div>
+    <span class="st" id="stateTag">Loading</span>
 </header>
 
-<div class="presenter-wrap">
-    <!-- Left: QR + KPIs -->
-    <div class="left-panel">
-        <!-- QR Code - L7: larger with white quiet zone and copy button -->
-        <div class="card qr-section">
-            <h2 style="margin-bottom: 20px; font-size: 22px;">Scan to Open Contoso Payments</h2>
+<div class="pv-grid">
+    <div class="pv-main">
+        <div class="card pv-join qr-section">
             <div class="qr-code" id="qrCode"></div>
-            <div class="qr-url" id="qrUrl">Loading...</div>
-            <div class="qr-caption">Team Azure Armada</div>
-            <button class="copy-link-btn" id="copyLinkBtn" onclick="copyLink()">
-                <span id="copyBtnIcon"></span>
-                <span id="copyBtnText">Copy link</span>
-            </button>
+            <div class="pv-join-text">
+                <h2>Scan to open Contoso Payments</h2>
+                <div class="qr-url mono" id="qrUrl">Loading...</div>
+                <p class="sub qr-caption">Team Azure Armada · works on any phone</p>
+                <button class="btn btn-secondary" id="copyLinkBtn" onclick="copyLink()">
+                    <span id="copyBtnIcon"></span><span id="copyBtnText">Copy link</span>
+                </button>
+            </div>
         </div>
 
-        <!-- State banner -->
         <div class="state-banner normal" id="stateBanner">All systems normal</div>
 
-        <!-- Big KPI tiles -->
         <div class="big-kpis">
-            <!-- Stopwatch -->
             <div class="big-kpi stopwatch-tile" id="stopwatchTile">
-                <div class="label">Elapsed Time</div>
+                <div class="label">Time since the outage</div>
                 <div class="stopwatch-value normal" id="stopwatchValue">00:00.0</div>
                 <div class="eta-display" id="etaDisplay"></div>
             </div>
-
-            <!-- RTO -->
             <div class="big-kpi" id="rtoTile">
-                <div class="label">RTO</div>
+                <div class="label">Recovery time (RTO)</div>
                 <div class="value" id="rtoValue">—</div>
                 <div class="sub" id="rtoTarget">target —</div>
             </div>
-
-            <!-- RPO -->
             <div class="big-kpi" id="rpoTile">
-                <div class="label">RPO</div>
+                <div class="label">Data loss (RPO)</div>
                 <div class="value" id="rpoValue">—</div>
                 <div class="sub" id="rpoTarget">target —</div>
             </div>
         </div>
 
-        <!-- Current step + progress -->
-        <div class="current-step" id="currentStep">Waiting for exercise...</div>
-        <div class="progress-bar">
-            <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+        <div class="pv-progress">
+            <div class="current-step" id="currentStep">Waiting for a drill</div>
+            <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width: 0%"></div></div>
+        </div>
+
+        <div class="card timeline-card">
+            <div class="pv-card-head">
+                <div>
+                    <h2>Agent timeline</h2>
+                    <p class="sub">Decisions and actions of the DR Agent, newest last</p>
+                </div>
+                <button class="btn btn-secondary chaos-btn" id="chaosBtn" onclick="injectChaos()" disabled
+                        title="Disables the Southeast Asia traffic endpoint mid-failover to test the Validator agent">Inject surprise fault</button>
+            </div>
+            <div id="timelineList"><div class="pv-empty">No drill running</div></div>
         </div>
     </div>
 
-    <!-- Right: Phone frame + Timeline -->
-    <div class="right-panel">
-        <!-- Phone frame with L7 haptic visualization -->
-        <div class="card" style="text-align: center; padding-bottom: 60px;">
-            <h2 style="margin-bottom: 20px; font-size: 22px;">User View</h2>
+    <aside class="pv-side">
+        <div class="card pv-phone">
+            <div class="pv-card-head"><h2>Customer view</h2><span class="sub">Contoso Payments</span></div>
             <div class="phone-frame-container">
                 <div class="phone-frame" id="phoneFrame">
                     <div class="phone-notch"></div>
-                    <div class="phone-screen">
-                        <iframe id="phoneIframe" src="about:blank"></iframe>
-                    </div>
+                    <div class="phone-screen"><iframe id="phoneIframe" src="about:blank" title="Contoso Payments"></iframe></div>
                 </div>
-                <!-- L7: Ripple rings for haptic visualization -->
                 <div class="haptic-ripple" id="hapticRipple"></div>
-                <!-- L7: Haptic label -->
-                <div class="haptic-label" id="hapticLabel"> haptic</div>
+                <div class="haptic-label" id="hapticLabel">Haptic</div>
             </div>
         </div>
-
-        <!-- Timeline -->
-        <div class="card timeline-card">
-            <h2 style="margin-bottom: 14px; font-size: 20px;">Agent Timeline</h2>
-            <div id="timelineList">
-                <div style="color: var(--ink-2); text-align: center; padding: 20px; font-size: 16px;">Waiting for events...</div>
-            </div>
-        </div>
-
-        <!-- Chaos button -->
-        <div class="card chaos-section">
-            <button class="chaos-btn" id="chaosBtn" onclick="injectChaos()" disabled>
-                Inject Surprise Fault
-            </button>
-            <div style="font-size: 14px; color: var(--ink-2); margin-top: 10px;">
-                Tests the Validator agent's ability to handle unexpected failures
-            </div>
-        </div>
-    </div>
+    </aside>
 </div>
 {% endblock %}
 

@@ -9,7 +9,7 @@
     <title>Contoso Payments</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="manifest" href="/static/manifest.webmanifest">
     <style>
         :root {
@@ -432,6 +432,20 @@
         .hide { display: none !important; }
 
         /* ---- presentation polish ---- */
+        /* Mercury-inspired fintech pass (docs/design/DESIGN.md) */
+        body { font-family: "Geist", "Inter", system-ui, sans-serif !important; background: #fbfcfd !important; letter-spacing: -0.1px; }
+        .card { border: 0 !important; border-radius: 16px !important; box-shadow: 0 0 0 1px rgba(23, 23, 33, .07), 0 1px 2px rgba(23, 23, 33, .04) !important; background: #fff !important; }
+        .brand-name { font-weight: 600 !important; letter-spacing: -0.4px; }
+        .balance-card { background: #171721 !important; border-radius: 20px !important; box-shadow: 0 12px 24px -12px rgba(23, 23, 33, .45); }
+        .balance-label { font-size: 12px !important; letter-spacing: .06em !important; color: #b9b6d3 !important; font-weight: 500 !important; }
+        .balance-amount { font-weight: 600 !important; letter-spacing: -1.6px !important; font-variant-numeric: tabular-nums; }
+        .pay-btn { background: #5e2cfe !important; color: #fff !important; border-radius: 999px !important; height: 48px !important; min-height: 48px !important; font-size: 15px !important; font-weight: 600 !important; box-shadow: none !important; }
+        .pay-btn:disabled { background: #2b2840 !important; color: #b9b6d3 !important; }
+        .unlock-btn { border-radius: 999px !important; background: #edecfb !important; color: #3d2bb3 !important; font-weight: 600 !important; }
+        .region-chip { font-weight: 500 !important; }
+        .live-card.outage { background: #fff7f7 !important; box-shadow: 0 0 0 1px rgba(208, 2, 27, .25) !important; }
+        .live-card.recovered { background: #f4fbf6 !important; box-shadow: 0 0 0 1px rgba(15, 123, 63, .25) !important; }
+        .live-card.normal { box-shadow: 0 0 0 1px rgba(23, 23, 33, .07) !important; }
         * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--accent) 35%, transparent) transparent; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 6px; }
