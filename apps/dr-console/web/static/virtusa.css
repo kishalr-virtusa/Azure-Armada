@@ -281,7 +281,10 @@ textarea.form-input { height: auto; min-height: 72px; padding: 8px 12px; }
 .md-inline p { margin: 0 0 4px; } .md-inline pre { margin: 4px 0; padding: 6px 8px; border-radius: 6px; background: var(--canvas-soft-2); white-space: pre-wrap; font-size: 12px; } .md-inline code { font-family: var(--mono); font-size: 12px; }
 .trace-live { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.4s infinite; }
 .trace-live.done { background: var(--success); animation: none; }
-.trace-list { list-style: none; margin: 0; padding: 4px 0; }
+.trace { position: relative; }
+.trace-list { list-style: none; margin: 0; padding: 4px 0; height: 340px; overflow-y: auto; overscroll-behavior: contain; }
+.trace:has(.trace-live.done) .trace-list { height: auto; max-height: 340px; }
+.trace-jump { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); border: 0; border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 12px; font-weight: 500; color: #fff; background: var(--accent); box-shadow: var(--raised); cursor: pointer; }
 .trace.collapsed .trace-list { display: none; }
 .trace.collapsed .trace-head { border-bottom: 0; }
 .trace + div, .trace + .hide + div { margin-top: 4px; }

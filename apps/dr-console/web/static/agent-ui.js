@@ -46,7 +46,7 @@
             <div class="trace-head">
                 <span class="trace-live ${done ? 'done' : ''}"></span>
                 <span class="trace-h">Agent activity</span>
-                <span class="trace-sub">${done ? `Finished in ${(elapsed / 1000).toFixed(1)}s` : `Working · ${(elapsed / 1000).toFixed(1)}s`}</span>
+                <span class="trace-sub">${done ? `Finished in ${(elapsed / 1000).toFixed(1)}s` : `Working · ${(elapsed / 1000).toFixed(1)}s`} · ${events.length} step${events.length === 1 ? '' : 's'}</span>
                 <span class="trace-note">Live: real Azure calls and agent steps</span>
                 ${done ? `<button class="link-btn trace-toggle" type="button">${panel.classList.contains('collapsed') ? 'Show steps' : 'Hide steps'}</button>` : ''}
             </div>
@@ -61,7 +61,8 @@
                     <span class="trace-ms">${e.status === 'running' ? '<span class="spin"></span>' : (e.ms != null ? (e.ms / 1000).toFixed(2) + 's' : '+' + (e.t_ms / 1000).toFixed(1) + 's')}</span>
                 </li>`).join('')}
                 ${!done && !events.length ? '<li class="trace-item running"><span class="trace-ic"><span class="spin"></span></span><div class="trace-main"><div class="trace-title">Starting…</div></div></li>' : ''}
-            </ol>`;
+            </ol>
+            <button class="trace-jump hide" type="button">New steps below ↓</button>`;
     }
 
     /** POST to an agent endpoint and show its live activity in `panel` while it runs. Returns the JSON reply. */
@@ -73,10 +74,26 @@
         let finished = false;
         const open = new Set();
         const keepOpen = () => panel.querySelectorAll('details.trace-data[open]').forEach((d) => open.add(d.dataset.i));
+        // The list is a fixed-height window: it follows the newest step unless the reader has scrolled up to
+        // read older ones, in which case their position is kept and a "new steps" button appears.
+        let follow = true;
+        let seen = 0;
         const draw = () => {
             keepOpen();
+            const prev = panel.querySelector('.trace-list');
+            const prevTop = prev ? prev.scrollTop : 0;
             renderTrace(panel, last, performance.now() - started, finished);
             panel.querySelectorAll('details.trace-data').forEach((d) => { if (open.has(d.dataset.i)) d.open = true; });
+            const list = panel.querySelector('.trace-list');
+            const jump = panel.querySelector('.trace-jump');
+            const count = (last.events || []).length;
+            if (follow) { list.scrollTop = list.scrollHeight; seen = count; } else { list.scrollTop = prevTop; }
+            jump.classList.toggle('hide', follow || count <= seen);
+            list.onscroll = () => {
+                follow = list.scrollTop + list.clientHeight >= list.scrollHeight - 24;
+                if (follow) { seen = count; jump.classList.add('hide'); }
+            };
+            jump.onclick = () => { follow = true; draw(); };
             const t = panel.querySelector('.trace-toggle');
             if (t) t.onclick = () => { panel.classList.toggle('collapsed'); draw(); };
         };
