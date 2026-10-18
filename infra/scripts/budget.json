@@ -1,73 +1,58 @@
 {
- "properties": {
-  "category": "Cost",
-  "amount": 150,
-  "timeGrain": "Monthly",
-  "timePeriod": {
-   "startDate": "2026-10-01T00:00:00Z",
-   "endDate": "2027-10-01T00:00:00Z"
-  },
-  "notifications": {
-   "a25": {
-    "enabled": true,
-    "operator": "GreaterThan",
-    "threshold": 16.67,
-    "thresholdType": "Actual",
-    "contactRoles": [
-     "Owner"
-    ],
-    "contactEmails": [
-     "__ALERT_EMAIL__"
-    ]
-   },
-   "a50": {
-    "enabled": true,
-    "operator": "GreaterThan",
-    "threshold": 33.33,
-    "thresholdType": "Actual",
-    "contactRoles": [
-     "Owner"
-    ],
-    "contactEmails": [
-     "__ALERT_EMAIL__"
-    ]
-   },
-   "a100": {
-    "enabled": true,
-    "operator": "GreaterThan",
-    "threshold": 66.67,
-    "thresholdType": "Actual",
-    "contactRoles": [
-     "Owner"
-    ],
-    "contactEmails": [
-     "__ALERT_EMAIL__"
-    ]
-   },
-   "a150": {
-    "enabled": true,
-    "operator": "GreaterThan",
-    "threshold": 100,
-    "thresholdType": "Actual",
-    "contactRoles": [
-     "Owner"
-    ],
-    "contactEmails": [
-     "__ALERT_EMAIL__"
-    ]
-   },
-   "f150": {
-    "enabled": true,
-    "operator": "GreaterThan",
-    "threshold": 100,
-    "thresholdType": "Forecasted",
-    "contactRoles": [
-     "Owner"
-    ],
-    "contactEmails": [
-     "__ALERT_EMAIL__"
-    ]
-   }
+  "properties": {
+    "category": "Cost",
+    "amount": __AMOUNT__,
+    "timeGrain": "Monthly",
+    "timePeriod": {
+      "startDate": "2026-10-01T00:00:00Z",
+      "endDate": "2027-10-01T00:00:00Z"
+    },
+    "notifications": {
+      "actual20": {
+        "enabled": true,
+        "operator": "GreaterThan",
+        "threshold": 20,
+        "thresholdType": "Actual",
+        "contactEmails": [
+          "__ALERT_EMAIL__"
+        ]
+      },
+      "actual40": {
+        "enabled": true,
+        "operator": "GreaterThan",
+        "threshold": 40,
+        "thresholdType": "Actual",
+        "contactEmails": [
+          "__ALERT_EMAIL__"
+        ]
+      },
+      "actual80": {
+        "enabled": true,
+        "operator": "GreaterThan",
+        "threshold": 80,
+        "thresholdType": "Actual",
+        "contactEmails": [
+          "__ALERT_EMAIL__"
+        ]
+      },
+      "actual100": {
+        "enabled": true,
+        "operator": "GreaterThan",
+        "threshold": 100,
+        "thresholdType": "Actual",
+        "contactEmails": [
+          "__ALERT_EMAIL__"
+        ]
+      },
+      "forecast100": {
+        "enabled": true,
+        "operator": "GreaterThan",
+        "threshold": 100,
+        "thresholdType": "Forecasted",
+        "contactEmails": [
+          "__ALERT_EMAIL__"
+        ]
+      }
+    }
   }
- }
 }
