@@ -102,3 +102,21 @@ def test_architect_rejects_option_that_misses_targets_and_fixes_numbers():
         assert pl.note == "llm"
     finally:
         A.run_agent = orig
+
+
+def test_architect_costs_in_dollars_and_budget_never_overrides_targets():
+    prof = AppProfile(rto_min=30, rpo_min=15, monthly_budget_usd=25)
+    opts = {o.name: o for o in architect.options_for(prof, 19.5)}
+    assert opts["warm-standby"].est_monthly_usd == 31.2 and not opts["warm-standby"].within_budget
+    assert opts["backup-restore"].within_budget and not opts["backup-restore"].meets_targets  # $21.45, 8h RTO
+    # cheap-but-too-slow is never recommended because of budget
+    assert architect.fallback(prof, 19.5).recommended == "warm-standby"
+
+
+def test_pricing_falls_back_when_api_unreachable(monkeypatch):
+    from dr_agent.tools import pricing
+    monkeypatch.setattr(pricing, "API", "http://127.0.0.1:9/none")
+    pricing._cache.clear()
+    p = pricing.region_monthly_usd(timeout_s=0.5)
+    assert p["source"] == "fallback" and p["total_usd"] == 19.5
+    pricing._cache.clear()

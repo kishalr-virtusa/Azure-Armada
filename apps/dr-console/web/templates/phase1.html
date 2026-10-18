@@ -80,7 +80,7 @@
                         <th>Strategy</th>
                         <th>Expected RTO</th>
                         <th>Expected RPO</th>
-                        <th>Relative Cost</th>
+                        <th>Est. cost / month</th>
                         <th>Meets Targets</th>
                     </tr>
                 </thead>
@@ -251,7 +251,9 @@
                     </td>
                     <td>${opt.expected_rto_min}min</td>
                     <td>${opt.expected_rpo_min}min</td>
-                    <td>${(opt.relative_cost * 100).toFixed(0)}%</td>
+                    <td class="f">${opt.est_monthly_usd ? '$' + opt.est_monthly_usd.toFixed(2) : (opt.relative_cost + '×')}
+                        ${opt.est_monthly_usd && !opt.within_budget ? '<span class="st warn" style="margin-left: 6px;">Over budget</span>' : ''}
+                        <span style="color: var(--mute); font-size: 12px; margin-left: 4px;">${opt.relative_cost}×</span></td>
                     <td><span class="st ${opt.meets_targets ? 'pass' : 'fail'}">${opt.meets_targets ? 'Yes' : 'No'}</span></td>
                 </tr>
             `).join('');

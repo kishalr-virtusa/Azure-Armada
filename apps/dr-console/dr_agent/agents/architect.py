@@ -25,14 +25,19 @@ DESIGN_MAPPING = {
 }
 
 
-def options_for(profile: AppProfile) -> list[StrategyOption]:
-    return [StrategyOption(name=n, expected_rto_min=rto, expected_rpo_min=rpo, relative_cost=cost,
-                           meets_targets=rto <= profile.rto_min and rpo <= profile.rpo_min, note=note)
-            for n, rto, rpo, cost, note in STRATEGY_GUIDE]
+def options_for(profile: AppProfile, region_usd: float = 0.0) -> list[StrategyOption]:
+    """region_usd: monthly cost of one region at list prices; 0 = unknown (budget not evaluated)."""
+    out = []
+    for n, rto, rpo, cost, note in STRATEGY_GUIDE:
+        usd = round(region_usd * cost, 2)
+        out.append(StrategyOption(name=n, expected_rto_min=rto, expected_rpo_min=rpo, relative_cost=cost,
+                                  meets_targets=rto <= profile.rto_min and rpo <= profile.rpo_min, note=note,
+                                  est_monthly_usd=usd, within_budget=not region_usd or usd <= profile.monthly_budget_usd))
+    return out
 
 
-def fallback(profile: AppProfile) -> StrategyRec:
-    opts = options_for(profile)
+def fallback(profile: AppProfile, region_usd: float = 0.0) -> StrategyRec:
+    opts = options_for(profile, region_usd)
     fitting = [o for o in opts if o.meets_targets]
     best = min(fitting, key=lambda o: o.relative_cost) if fitting else min(opts, key=lambda o: o.expected_rto_min)
     why = (f"{best.name} is the cheapest strategy meeting RTO {profile.rto_min} min and RPO {profile.rpo_min} min "
@@ -43,14 +48,25 @@ def fallback(profile: AppProfile) -> StrategyRec:
 
 
 def run(profile: AppProfile, inventory_summary: dict) -> AgentResult[StrategyRec]:
-    payload = {"profile": profile.model_dump(), "inventory": inventory_summary,
-               "cost_guide": [dict(zip(("name", "rto_min", "rpo_min", "relative_cost", "note"), s)) for s in STRATEGY_GUIDE]}
-
-    facts = {o.name: o for o in options_for(profile)}
     from dr_agent import trace
-    trace.emit("input", "Strategy cost guide", "5 DR strategies with RTO, RPO and relative cost (the numbers the answer is checked against)",
-               data=payload["cost_guide"])
-    expected = fallback(profile).recommended  # cheapest strategy whose numbers really meet RTO and RPO
+    from dr_agent.tools.pricing import region_monthly_usd
+    price = trace.step("tool", "Azure Retail Prices API: monthly cost of one region (our SKUs)", region_monthly_usd,
+                       summary=lambda p: " + ".join(f"{c['name']} ${c['monthly_usd']:.2f}" for c in p["components"])
+                       + f" = ${p['total_usd']:.2f}/month" + (" (fallback prices)" if p["source"] == "fallback" else ""))
+    region_usd = price["total_usd"]
+    opts = options_for(profile, region_usd)
+    facts = {o.name: o for o in opts}
+    # everything numeric is computed here, so the agent compares facts instead of guessing units
+    cost_guide = [{"name": o.name, "rto_min": o.expected_rto_min, "rpo_min": o.expected_rpo_min,
+                   "relative_cost": o.relative_cost, "est_monthly_usd": o.est_monthly_usd,
+                   "meets_rto": o.expected_rto_min <= profile.rto_min, "meets_rpo": o.expected_rpo_min <= profile.rpo_min,
+                   "within_budget": o.within_budget, "note": o.note} for o in opts]
+    payload = {"profile": profile.model_dump(), "inventory": inventory_summary,
+               "single_region_monthly_usd": region_usd, "cost_guide": cost_guide}
+    trace.emit("input", "Strategy cost guide in dollars",
+               f"5 strategies: RTO, RPO and estimated monthly cost (multiplier x ${region_usd:.2f}), checked against the "
+               f"${profile.monthly_budget_usd}/month budget", data=cost_guide)
+    expected = fallback(profile, region_usd).recommended  # cheapest strategy whose numbers really meet RTO and RPO
 
     def validate(rec: StrategyRec) -> None:
         if {o.name for o in rec.options} != set(facts):
@@ -61,4 +77,5 @@ def run(profile: AppProfile, inventory_summary: dict) -> AgentResult[StrategyRec
         # numbers and target checks are facts from the guide, never the model's estimate; keep the model's notes
         rec.options = [facts[o.name].model_copy(update={"note": o.note or facts[o.name].note}) for o in rec.options]
 
-    return run_agent("architect", prompt("architect"), payload, StrategyRec, lambda: fallback(profile), validate=validate)
+    return run_agent("architect", prompt("architect"), payload, StrategyRec, lambda: fallback(profile, region_usd),
+                     validate=validate)

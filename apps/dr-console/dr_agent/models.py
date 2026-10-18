@@ -34,6 +34,8 @@ class StrategyOption(BaseModel):
     relative_cost: float  # 1.0 = single region
     meets_targets: bool
     note: str
+    est_monthly_usd: float = 0.0  # relative_cost x one region at Azure list prices
+    within_budget: bool = True
 
 
 class StrategyRec(BaseModel):
