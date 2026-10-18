@@ -23,7 +23,7 @@
     --oth-bg: #DCE7FA;
 }
 
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: dark) and (min-width: 100000px) /* Contoso is light-only */ {
     :root:not([data-theme="light"]) {
         color-scheme: dark;
         --bg: #0C0E15;

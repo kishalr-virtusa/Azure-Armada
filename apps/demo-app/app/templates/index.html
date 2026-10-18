@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="color-scheme" content="light">
     <meta name="theme-color" content="#5E2CFE">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -38,7 +39,7 @@
             --safe-left: env(safe-area-inset-left, 0px);
             --safe-right: env(safe-area-inset-right, 0px);
         }
-        @media (prefers-color-scheme: dark) {
+        @media (prefers-color-scheme: dark) and (min-width: 100000px) /* Contoso is light-only */ {
             :root {
                 color-scheme: dark;
                 --bg: #0C0E15;
@@ -410,7 +411,7 @@
         }
         .footer-logo-light { display: inline; }
         .footer-logo-dark { display: none; }
-        @media (prefers-color-scheme: dark) {
+        @media (prefers-color-scheme: dark) and (min-width: 100000px) /* Contoso is light-only */ {
             .footer-logo-light { display: none; }
             .footer-logo-dark { display: inline; }
         }

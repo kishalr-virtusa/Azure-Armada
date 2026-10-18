@@ -9,6 +9,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/virtusa.css">
+    <script>
+        (function () {  /* theme: system (default) | light | dark, remembered per browser */
+            try { var t = localStorage.getItem('dra-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+        })();
+    </script>
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -49,6 +54,7 @@
                         <div id="notifList"><div style="padding: 16px; color: var(--mute); text-align: center;">No notifications</div></div>
                     </div>
                 </div>
+                <button class="theme-toggle" id="themeToggle" type="button" title="Theme" aria-label="Theme">System</button>
                 <a href="/logout" class="btn btn-secondary" style="height: 30px; font-size: 13px;">Sign out</a>
             </div>
         </div>
@@ -63,16 +69,26 @@
     </footer>
 
     <script>
-        // Dark mode logo swap
-        (function() {
-            const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
-            function updateLogos(dark) {
+        // Theme toggle: System -> Light -> Dark
+        (function () {
+            const order = ['system', 'light', 'dark'], label = { system: 'System', light: 'Light', dark: 'Dark' };
+            const btn = document.getElementById('themeToggle');
+            let cur = 'system';
+            try { cur = localStorage.getItem('dra-theme') || 'system'; } catch (e) {}
+            function apply(t) {
+                cur = t;
+                if (t === 'system') document.documentElement.removeAttribute('data-theme');
+                else document.documentElement.setAttribute('data-theme', t);
+                try { localStorage.setItem('dra-theme', t); } catch (e) {}
+                if (btn) btn.textContent = label[t];
+                const dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
                 document.querySelectorAll('.brand-logo').forEach(el => el.style.display = dark ? 'none' : 'inline');
                 document.querySelectorAll('.brand-logo-dark').forEach(el => el.style.display = dark ? 'inline' : 'none');
             }
-            updateLogos(darkQuery.matches);
-            darkQuery.addEventListener('change', e => updateLogos(e.matches));
+            if (btn) btn.addEventListener('click', () => apply(order[(order.indexOf(cur) + 1) % order.length]));
+            apply(cur);
         })();
+
         
         // Notification handling
         let lastNotifId = null;

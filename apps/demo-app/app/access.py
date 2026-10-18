@@ -84,10 +84,10 @@ def _grant(resp, request: Request):
 
 GATE_HTML = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#5E2CFE"><title>Contoso Payments · Private preview</title>
+<meta name="color-scheme" content="light"><meta name="theme-color" content="#5E2CFE"><title>Contoso Payments · Private preview</title>
 <link rel="stylesheet" href="/static/virtusa.css"><style>
-body{{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg,#F7F7F9);font-family:Montserrat,system-ui,sans-serif;padding:16px}}
-.g{{max-width:380px;width:100%;background:var(--card,#fff);border:1px solid var(--line,#E3E3E8);border-radius:14px;padding:28px;text-align:center}}
+body{{margin:0;min-height:100vh;display:grid;place-items:center;background:#fbfcfd;color:#171721;font-family:Montserrat,system-ui,sans-serif;padding:16px}}
+.g{{max-width:380px;width:100%;background:#fff;border:1px solid var(--line,#E3E3E8);border-radius:14px;padding:28px;text-align:center}}
 h1{{font-size:22px;margin:8px 0 4px}}p{{color:#5B6170;font-size:14px;line-height:1.5}}
 input{{width:100%;box-sizing:border-box;font-size:18px;padding:12px;border:1px solid #CFCFD8;border-radius:10px;margin:12px 0;text-align:center;letter-spacing:.08em}}
 button{{width:100%;min-height:48px;font-size:16px;font-weight:600;color:#fff;background:#5E2CFE;border:0;border-radius:10px}}

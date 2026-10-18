@@ -102,7 +102,9 @@ code, .mono { font-family: var(--mono); font-size: 12px; }
     position: fixed; inset: 0 auto 0 0; width: var(--sidebar); z-index: 100;
     display: flex; flex-direction: column; gap: 24px;
     padding: 20px 12px 16px; background: var(--canvas); border-right: 1px solid var(--hairline);
+    overflow-y: auto; overscroll-behavior: contain;   /* short screens: the sidebar scrolls, never the layout */
 }
+
 .nav-brand { display: flex; align-items: center; gap: 10px; padding: 0 8px; color: var(--ink); font-weight: 600; white-space: nowrap; }
 .nav-brand:hover { text-decoration: none; }
 .nav-brand .product { font-size: 13px; color: var(--body); font-weight: 500; padding-left: 10px; border-left: 1px solid var(--hairline-strong); }
@@ -256,3 +258,14 @@ textarea.form-input { height: auto; min-height: 72px; padding: 8px 12px; }
 
 /* card header: title and its subtitle read as one unit */
 .card > h2 + .sub, .card > h3 + .sub, .card > div > h2 + .sub { margin-top: -10px; }
+
+/* theme toggle */
+.theme-toggle { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 6px; border: 0; background: var(--canvas); box-shadow: var(--ring); color: var(--body); font-family: inherit; font-size: 12px; cursor: pointer; }
+.theme-toggle:hover { color: var(--ink); background: var(--canvas-soft-2); }
+
+/* short laptop screens: keep the sidebar compact (must come after the base rules) */
+@media (max-height: 760px) and (min-width: 961px) {
+    .nav { gap: 12px; padding-top: 14px; }
+    .env-card { display: none; }
+    .nav-section { padding-top: 8px; }
+}

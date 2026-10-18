@@ -207,21 +207,22 @@
         height: 604px;
         margin: 0 auto;
         background: #1a1a1a;
-        border-radius: 40px;
-        padding: 12px;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        border-radius: 36px;
+        padding: 6px;
+        box-shadow: 0 0 0 1px rgba(0,0,0,.2), 0 16px 40px -12px rgba(0,0,0,0.35);
     }
     .phone-screen {
         width: 100%;
         height: 100%;
-        border-radius: 28px;
+        border-radius: 30px;
         overflow: hidden;
-        background: var(--bg);
+        background: #fbfcfd;
+        padding-top: 24px;   /* status-bar area: app content starts below the island */
     }
     .phone-screen iframe {
         width: 390px;
-        height: 844px;
-        transform: scale(0.655);
+        height: 826px;
+        transform: scale(0.6872);
         transform-origin: top left;
         border: none;
     }
@@ -230,21 +231,21 @@
         top: 12px;
         left: 50%;
         transform: translateX(-50%);
-        width: 100px;
-        height: 28px;
-        background: #1a1a1a;
-        border-radius: 0 0 16px 16px;
+        width: 64px;
+        height: 16px;
+        background: #0a0a0a;
+        border-radius: 10px;
         z-index: 10;
     }
 
     /* L7: Phone shake animation for haptic visualization */
     @keyframes phone-shake {
         0%, 100% { transform: translateX(0); }
-        10%, 30%, 50%, 70%, 90% { transform: translateX(-4px) rotate(-0.5deg); }
-        20%, 40%, 60%, 80% { transform: translateX(4px) rotate(0.5deg); }
+        20%, 60% { transform: translateX(-1.5px); }
+        40%, 80% { transform: translateX(1.5px); }
     }
     .phone-frame.shaking {
-        animation: phone-shake 0.4s ease-in-out;
+        animation: phone-shake 0.28s linear;
     }
 
     /* L7: Ripple rings effect for haptic visualization */
