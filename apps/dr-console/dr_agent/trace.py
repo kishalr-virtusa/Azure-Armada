@@ -102,3 +102,20 @@ def get(run_id: str) -> dict:
         if tr is None:
             return {"events": [], "done": False, "known": False}
         return {"events": [dict(e) for e in tr["events"]], "done": tr["done"], "known": True}
+
+
+def snapshot(run_id: str, limit: int = 30000) -> Optional[str]:
+    """The finished trace as compact JSON for saving next to the agent's result (Azure Table text fields hold
+    ~32K characters, so the largest 'details' payloads are dropped first if needed)."""
+    tr = get(run_id)
+    if not tr.get("known"):
+        return None
+    events = tr["events"]
+    out = {"events": events, "elapsed_ms": max((e["t_ms"] + (e.get("ms") or 0) for e in events), default=0)}
+    raw = json.dumps(out, default=str)
+    for e in sorted((e for e in events if e.get("data") is not None), key=lambda e: -len(json.dumps(e["data"], default=str))):
+        if len(raw) <= limit:
+            break
+        e["data"] = None
+        raw = json.dumps(out, default=str)
+    return raw if len(raw) <= limit else None

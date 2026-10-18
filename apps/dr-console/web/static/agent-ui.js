@@ -40,14 +40,14 @@
     };
     const KIND_LABEL = { input: 'Input', tool: 'Azure read', agent: 'AI agent', check: 'Code check', fallback: 'Fallback', result: 'Result' };
 
-    function renderTrace(panel, tr, elapsed, done) {
+    function renderTrace(panel, tr, elapsed, done, savedAt) {
         const events = tr.events || [];
         panel.innerHTML = `
             <div class="trace-head">
                 <span class="trace-live ${done ? 'done' : ''}"></span>
                 <span class="trace-h">Agent activity</span>
-                <span class="trace-sub">${done ? `Finished in ${(elapsed / 1000).toFixed(1)}s` : `Working · ${(elapsed / 1000).toFixed(1)}s`} · ${events.length} step${events.length === 1 ? '' : 's'}</span>
-                <span class="trace-note">Live: real Azure calls and agent steps</span>
+                <span class="trace-sub">${savedAt ? `Last run ${new Date(savedAt).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ` : ''}${done ? `Finished in ${(elapsed / 1000).toFixed(1)}s` : `Working · ${(elapsed / 1000).toFixed(1)}s`} · ${events.length} step${events.length === 1 ? '' : 's'}</span>
+                <span class="trace-note">${savedAt ? 'Recorded' : 'Live'}: real Azure calls and agent steps</span>
                 ${done ? `<button class="link-btn trace-toggle" type="button">${panel.classList.contains('collapsed') ? 'Show steps' : 'Hide steps'}</button>` : ''}
             </div>
             <ol class="trace-list">${events.map((e, i) => `
@@ -118,6 +118,27 @@
         }
     }
 
+    /** Show the saved activity of the last run (restored after navigation), collapsed until opened. */
+    function showSaved(panel, trace, savedAt) {
+        if (!panel || !trace || !(trace.events || []).length) return;
+        panel.classList.remove('hide');
+        panel.classList.add('collapsed');
+        const draw = () => {
+            renderTrace(panel, trace, trace.elapsed_ms || 0, true, savedAt);
+            panel.querySelector('.trace-jump')?.remove();
+            const t = panel.querySelector('.trace-toggle');
+            if (t) t.onclick = () => { panel.classList.toggle('collapsed'); draw(); };
+        };
+        draw();
+    }
+
+    /** Remember the approver's name in this browser so it is not retyped at every approval (convenience only). */
+    function rememberName(input) {
+        if (!input) return;
+        try { if (!input.value) input.value = localStorage.getItem('dra-approver') || ''; } catch (e) { /* storage blocked */ }
+        input.addEventListener('change', () => { try { localStorage.setItem('dra-approver', input.value.trim()); } catch (e) { /* ignore */ } });
+    }
+
     // ------------------------------------------------------------- markdown preview
     function renderMarkdown(md) {
         if (window.marked && window.DOMPurify) {
@@ -126,5 +147,5 @@
         return `<pre class="kv-pre">${esc(md)}</pre>`;
     }
 
-    window.AgentUI = { esc, renderData, runWithTrace, renderMarkdown };
+    window.AgentUI = { esc, renderData, runWithTrace, renderMarkdown, showSaved, rememberName };
 })();

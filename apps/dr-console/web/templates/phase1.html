@@ -462,9 +462,10 @@
             document.getElementById('profileResult').innerHTML = `<span class="st pass">Profile saved</span>
                 <span style="margin-left: 8px;">Tier ${profile.tier}, RTO ${profile.rto_min} min, RPO ${profile.rpo_min} min</span>`;
         }
-        if (st.strategy) renderStrategy(st.strategy);
+        if (st.strategy) { renderStrategy(st.strategy); AgentUI.showSaved(document.getElementById('strategyTrace'), st.strategy.trace, st.strategy.at); }
         if (st.readiness) {
             renderReadiness(st.readiness);
+            AgentUI.showSaved(document.getElementById('readinessTrace'), st.readiness.trace, st.readiness.at);
             // a fix applied after this readiness run makes the run out of date: say so instead of offering the fix again
             if (st.last_fix && st.readiness.at && st.last_fix.at > st.readiness.at) {
                 document.getElementById('fixableSection').classList.add('hide');
@@ -476,7 +477,7 @@
                     <button class="btn btn-secondary" onclick="checkReadiness()">Re-run Readiness</button></div>`;
             }
         }
-        if (st.runbook) renderRunbook(st.runbook);
+        if (st.runbook) { renderRunbook(st.runbook); AgentUI.showSaved(document.getElementById('runbookTrace'), st.runbook.trace, st.runbook.at); }
     }
 
     function checkProceed() {
@@ -497,6 +498,7 @@
         document.querySelectorAll('.tab[data-md]').forEach(t => t.classList.toggle('active', t.dataset.md === which));
         document.getElementById('runbookMd').innerHTML = AgentUI.renderMarkdown(runbookMd[which] || '_No runbook content._');
     }
+    AgentUI.rememberName(document.getElementById('fixApproverName'));
     restorePhase1();
 </script>
 {% endblock %}

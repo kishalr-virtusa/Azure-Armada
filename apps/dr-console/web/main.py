@@ -266,6 +266,21 @@ def api_trace(run_id: str):
     return JSONResponse(trace.get(run_id), headers={"Cache-Control": "no-store"})
 
 
+def _run_saving_trace(request: Request, record: str, field: str, fn, *args):
+    """Run an agent call with live tracing, then save its activity next to the result so it survives navigation."""
+    from dr_agent import trace
+    from dr_agent.tools import store
+    tid = _trace_id(request)
+    out = trace.run(tid, fn, *args)
+    snap = trace.snapshot(tid) if tid else None
+    if snap:
+        try:
+            store.upsert_exercise(record, {field: snap})
+        except Exception as e:  # noqa: BLE001 - the result itself is already saved; the trace is a nice-to-have
+            log.warning("could not save trace %s: %s", field, e)
+    return out
+
+
 @app.get("/api/phase1", dependencies=[api])
 def api_phase1_state():
     """Saved phase 1 results (profile, strategy, readiness, runbook) so the page restores them on return."""
@@ -274,14 +289,12 @@ def api_phase1_state():
 
 @app.post("/api/strategy", dependencies=[api])
 async def api_strategy(request: Request):
-    from dr_agent import trace
-    return await run_in_threadpool(trace.run, _trace_id(request), service.recommend_strategy)
+    return await run_in_threadpool(_run_saving_trace, request, service.PHASE1, "strategy_trace_json", service.recommend_strategy)
 
 
 @app.post("/api/readiness", dependencies=[api])
 async def api_readiness(request: Request):
-    from dr_agent import trace
-    return await run_in_threadpool(trace.run, _trace_id(request), service.check_readiness)
+    return await run_in_threadpool(_run_saving_trace, request, service.PHASE1, "readiness_trace_json", service.check_readiness)
 
 
 @app.post("/api/readiness/fix", dependencies=[api])
@@ -294,8 +307,7 @@ async def api_readiness_fix(request: Request, data: dict = Body(...)):
 
 @app.post("/api/runbook", dependencies=[api])
 async def api_runbook(request: Request):
-    from dr_agent import trace
-    return await run_in_threadpool(trace.run, _trace_id(request), service.review_runbook)
+    return await run_in_threadpool(_run_saving_trace, request, service.PHASE1, "runbook_trace_json", service.review_runbook)
 
 
 @app.get("/api/plan", dependencies=[api])
@@ -305,8 +317,7 @@ def api_get_plan():
 
 @app.post("/api/plan", dependencies=[api])
 async def api_generate_plan(request: Request):
-    from dr_agent import trace
-    return await run_in_threadpool(trace.run, _trace_id(request), service.generate_plan)
+    return await run_in_threadpool(_run_saving_trace, request, service.DRAFT, "plan_trace_json", service.generate_plan)
 
 
 @app.post("/api/plan/approve", dependencies=[api])

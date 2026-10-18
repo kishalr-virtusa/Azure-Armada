@@ -31,3 +31,16 @@ def test_agent_run_shows_call_check_and_fallback():
 
 def test_unknown_run_is_empty():
     assert trace.get("nope-0000") == {"events": [], "done": False, "known": False}
+
+
+def test_snapshot_drops_biggest_details_to_fit_storage():
+    import json
+    def run():
+        trace.emit("input", "small", data={"a": 1})
+        trace.emit("check", "huge", data={"blob": "x" * 5000})
+        trace.emit("check", "huger", data={"blob": "y" * 5900})
+    trace.run("run-0003", run)
+    snap = json.loads(trace.snapshot("run-0003", limit=7000))
+    by = {e["title"]: e for e in snap["events"]}
+    assert by["huger"]["data"] is None and by["small"]["data"] == {"a": 1} and len(snap["events"]) == 3
+    assert trace.get("run-0003")["events"][2]["data"] is not None   # the live trace itself is untouched

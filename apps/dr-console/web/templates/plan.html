@@ -209,6 +209,7 @@
                 currentPlan = data;
                 renderPlan(data);
                 document.getElementById('planSection').classList.remove('hide');
+                AgentUI.showSaved(document.getElementById('planTrace'), data.trace, data.at);
                 const btn = document.getElementById('generateBtn');
                 btn.textContent = 'Regenerate plan';
                 btn.className = 'btn btn-secondary';
@@ -217,5 +218,6 @@
             // No existing plan, show generate button
         }
     })();
+    AgentUI.rememberName(document.getElementById('approverName'));
 </script>
 {% endblock %}

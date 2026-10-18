@@ -269,6 +269,9 @@ def get_phase1_state() -> dict:
             out["runbook"] = None  # an older, truncated save
     if p1.get("fix_json"):
         out["last_fix"] = json.loads(p1["fix_json"])
+    for k in ("strategy", "readiness", "runbook"):
+        if out.get(k) and p1.get(f"{k}_trace_json"):
+            out[k]["trace"] = json.loads(p1[f"{k}_trace_json"])
     return out
 
 
@@ -323,14 +326,18 @@ def generate_plan() -> dict:
     trace.emit("input", "Inputs from phase 1", f"strategy {strategy.recommended if strategy else 'warm-standby (default)'}; "
                f"{len(readiness.risks) if readiness else 0} readiness risks; allowlisted actions and the mandatory safe sequence")
     res = planner.run(prof, strategy, readiness, _inventory_summary())
-    store.upsert_exercise(DRAFT, {"plan_json": res.output.model_dump_json(), "source": res.source, "via": res.via})
+    store.upsert_exercise(DRAFT, {"plan_json": res.output.model_dump_json(), "source": res.source, "via": res.via,
+                                  "plan_at": _now_iso()})
     return {**res.output.model_dump(), "source": res.source, "via": res.via}
 
 
 def get_draft_plan() -> dict:
     row = store.get_exercise(DRAFT) or {}
     raw = row.get("plan_json")
-    return {**json.loads(raw), "source": row.get("source"), "via": row.get("via")} if raw else {}
+    if not raw:
+        return {}
+    return {**json.loads(raw), "source": row.get("source"), "via": row.get("via"),
+            "at": row.get("plan_at"), "trace": json.loads(row["plan_trace_json"]) if row.get("plan_trace_json") else None}
 
 
 def approve_and_start(approver: str, plan_data: Optional[dict] = None, chaos: bool = False) -> dict:
