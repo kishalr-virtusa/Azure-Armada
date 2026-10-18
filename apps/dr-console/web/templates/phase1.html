@@ -62,15 +62,13 @@
     <h2>2. DR Strategy Recommendation</h2>
     <p class="sub">AI-recommended strategy based on your profile</p>
     
-    <div id="strategyLoading" class="hide" style="padding: 24px; text-align: center; color: var(--ink-3);">
-        Analyzing requirements...
-    </div>
-    
-    <div id="strategyContent" style="margin-top: 16px;">
+    <div id="strategyContent">
         <button id="getStrategyBtn" class="btn btn-secondary" onclick="getStrategy()">Get Recommendation</button>
     </div>
-    
-    <div id="strategyResult" class="hide" style="margin-top: 16px;">
+
+    <div id="strategyTrace" class="trace hide"></div>
+
+    <div id="strategyResult" class="hide">
         <h3 style="margin-bottom: 12px;">
             Strategy Comparison
             <span id="strategySourceBadge" class="badge" style="margin-left: 8px; font-size: 9px;"></span>
@@ -101,11 +99,13 @@
     <h2>3. Readiness Checks</h2>
     <p class="sub">Verify the DR environment is prepared</p>
     
-    <div id="readinessContent" style="margin-top: 16px;">
+    <div id="readinessContent">
         <button id="checkReadinessBtn" class="btn btn-secondary" onclick="checkReadiness()">Run Checks</button>
     </div>
-    
-    <div id="readinessResult" class="hide" style="margin-top: 16px;">
+
+    <div id="readinessTrace" class="trace hide"></div>
+
+    <div id="readinessResult" class="hide">
         <div id="readinessChecks"></div>
         <div class="box" style="margin-top: 16px;">
             <h4 id="readinessVerdict" style="margin-bottom: 8px;"></h4>
@@ -135,11 +135,13 @@
     <h2>4. Runbook Review</h2>
     <p class="sub">Validate the DR runbook against current infrastructure</p>
     
-    <div id="runbookContent" style="margin-top: 16px;">
+    <div id="runbookContent">
         <button id="reviewRunbookBtn" class="btn btn-secondary" onclick="reviewRunbook()">Review Runbook</button>
     </div>
-    
-    <div id="runbookResult" class="hide" style="margin-top: 16px;">
+
+    <div id="runbookTrace" class="trace hide"></div>
+
+    <div id="runbookResult" class="hide">
         <h3 style="margin-bottom: 12px;">
             Step Review
             <span id="runbookSourceBadge" class="badge" style="margin-left: 8px; font-size: 9px;"></span>
@@ -157,22 +159,32 @@
                 <tbody id="runbookTable"></tbody>
             </table>
         </div>
-        <details style="margin-top: 16px;">
-            <summary>View Updated Runbook</summary>
-            <pre id="updatedRunbook" style="margin-top: 8px; padding: 12px; background: var(--surface-2); border-radius: 8px; overflow-x: auto; font-size: 12px;"></pre>
-        </details>
+        <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+                <h3 style="margin: 0;">Runbook</h3>
+                <div class="tabs" role="tablist">
+                    <button class="tab active" role="tab" data-md="updated" onclick="showRunbook('updated')">Corrected by the agent</button>
+                    <button class="tab" role="tab" data-md="original" onclick="showRunbook('original')">Original</button>
+                </div>
+            </div>
+            <div id="runbookMd" class="md-body"></div>
+        </div>
     </div>
 </div>
 
 <!-- Proceed Button -->
-<div style="text-align: center; margin-top: 24px;">
-    <a href="/plan" class="btn btn-primary" id="proceedBtn" style="display: none;">
-        Proceed to Plan Generation →
-    </a>
+<div id="proceedBar" class="card hide" style="flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+    <div>
+        <h2 style="margin: 0;">Ready for phase 2</h2>
+        <p class="sub" style="margin-top: 4px;">Profile saved, strategy chosen and readiness checked. The Planner agent builds the drill plan next.</p>
+    </div>
+    <a href="/plan" class="btn btn-primary btn-lg" id="proceedBtn">Proceed to plan generation →</a>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script src="/static/vendor/marked.min.js"></script>
+<script src="/static/vendor/purify.min.js"></script>
 <script>
     let profile = null;
     let strategyDone = false;
@@ -182,7 +194,7 @@
     
     function renderSourceBadge(source, via) {
         const isAI = source === 'llm' || source === 'ai';
-        const label = via === 'foundry-agent' ? 'Azure AI Foundry Agent' : 'AI';
+        const label = via === 'foundry-agent' ? 'Azure AI Foundry Agent' : 'Azure OpenAI (direct)';
         return isAI
             ? `<span class="badge" style="background: var(--accent); color: white; border-color: var(--accent);" title="${via || ''}">${label}</span>`
             : '<span class="badge" title="deterministic fallback">Rules</span>';
@@ -219,23 +231,22 @@
     
     async function getStrategy() {
         const btn = document.getElementById('getStrategyBtn');
-        const loading = document.getElementById('strategyLoading');
         
         btn.disabled = true;
-        loading.classList.remove('hide');
-        
+        btn.textContent = 'Agent working…';
+
         try {
-            const res = await fetch('/api/strategy', { method: 'POST' });
-            const data = await res.json();
+            const data = await AgentUI.runWithTrace('/api/strategy', document.getElementById('strategyTrace'));
             
             // Show source badge
             document.getElementById('strategySourceBadge').innerHTML = renderSourceBadge(data.source, data.via);
             
             const table = document.getElementById('strategyTable');
+            const esc = AgentUI.esc;
             table.innerHTML = data.options.map(opt => `
                 <tr>
                     <td class="f">
-                        ${opt.name}
+                        ${esc(opt.name)}
                         ${opt.name === data.recommended ? '<span class="badge recommended" style="margin-left: 8px;">Recommended</span>' : ''}
                     </td>
                     <td>${opt.expected_rto_min}min</td>
@@ -246,8 +257,8 @@
             `).join('');
             
             document.getElementById('strategyRationale').innerHTML = `
-                <p><strong>${data.recommended}</strong></p>
-                <p style="color: var(--ink-2);">${data.rationale}</p>
+                <p><strong>${esc(data.recommended)}</strong></p>
+                <p style="color: var(--ink-2);">${esc(data.rationale)}</p>
             `;
             
             document.getElementById('strategyResult').classList.remove('hide');
@@ -258,30 +269,28 @@
             alert('Failed to get strategy: ' + e.message);
         } finally {
             btn.disabled = false;
-            loading.classList.add('hide');
+            btn.textContent = 'Get Recommendation again';
         }
     }
     
     async function checkReadiness() {
         const btn = document.getElementById('checkReadinessBtn');
         btn.disabled = true;
-        btn.textContent = 'Running checks...';
-        
+        btn.textContent = 'Running checks…';
+
         try {
-            const res = await fetch('/api/readiness', { method: 'POST' });
-            const data = await res.json();
-            
+            const data = await AgentUI.runWithTrace('/api/readiness', document.getElementById('readinessTrace'));
+            const esc = AgentUI.esc;
+            const label = { pass: 'Pass', warn: 'Warn', fail: 'Fail' };
             const checksDiv = document.getElementById('readinessChecks');
-            checksDiv.innerHTML = data.checks.map(check => `
-                <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line);">
-                    <span class="st ${check.status}">${check.status.toUpperCase()}</span>
-                    <span class="f">${check.name}</span>
-                    <span style="color: var(--ink-3); flex: 1;">${check.detail}</span>
-                    <details style="font-size: 12px;">
-                        <summary>Evidence</summary>
-                        <pre style="margin-top: 4px; font-size: 11px;">${JSON.stringify(check.evidence, null, 2)}</pre>
-                    </details>
+            checksDiv.innerHTML = data.checks.map((check, i) => `
+                <div class="check-row-item">
+                    <span class="st ${esc(check.status)}">${label[check.status] || esc(check.status)}</span>
+                    <span class="f" style="font-weight: 500;">${esc(check.name)}</span>
+                    <span class="check-detail" style="color: var(--body);">${esc(check.detail)}</span>
+                    <button class="link-btn" onclick="toggleEvidence(${i}, this)" aria-expanded="false">Evidence</button>
                 </div>
+                <div id="evidence-${i}" class="evidence-row hide"><div class="evidence-box">${AgentUI.renderData(check.evidence)}</div></div>
             `).join('');
             
             document.getElementById('readinessVerdict').innerHTML = data.go 
@@ -364,11 +373,11 @@
     async function reviewRunbook() {
         const btn = document.getElementById('reviewRunbookBtn');
         btn.disabled = true;
-        btn.textContent = 'Reviewing...';
+        btn.textContent = 'Agent working…';
         
         try {
-            const res = await fetch('/api/runbook', { method: 'POST' });
-            const data = await res.json();
+            const data = await AgentUI.runWithTrace('/api/runbook', document.getElementById('runbookTrace'));
+            const esc = AgentUI.esc;
             
             // Show source badge
             document.getElementById('runbookSourceBadge').innerHTML = renderSourceBadge(data.source, data.via);
@@ -376,14 +385,15 @@
             const table = document.getElementById('runbookTable');
             table.innerHTML = data.steps.map(step => `
                 <tr>
-                    <td class="f">${step.step_no}</td>
-                    <td>${step.text}</td>
-                    <td><span class="st ${step.verdict === 'valid' ? 'pass' : step.verdict === 'stale' ? 'warn' : 'fail'}">${step.verdict}</span></td>
-                    <td style="color: var(--ink-2);">${step.reason || '—'}</td>
+                    <td class="f">${esc(step.step_no)}</td>
+                    <td class="md-inline">${AgentUI.renderMarkdown(step.text)}</td>
+                    <td><span class="st ${step.verdict === 'valid' ? 'pass' : step.verdict === 'stale' ? 'warn' : 'fail'}">${esc(step.verdict)}</span></td>
+                    <td style="color: var(--ink-2);">${esc(step.reason || '—')}</td>
                 </tr>
             `).join('');
             
-            document.getElementById('updatedRunbook').textContent = data.updated_runbook_md || 'No updates needed';
+            runbookMd = { updated: data.updated_runbook_md || data.original_md || '', original: data.original_md || '' };
+            showRunbook('updated');
             
             document.getElementById('runbookResult').classList.remove('hide');
             runbookDone = true;
@@ -398,10 +408,22 @@
     }
     
     function checkProceed() {
-        const btn = document.getElementById('proceedBtn');
         if (profile && strategyDone && readinessDone) {
-            btn.style.display = 'inline-block';
+            document.getElementById('proceedBar').classList.remove('hide');
         }
+    }
+
+    function toggleEvidence(i, btn) {
+        const row = document.getElementById('evidence-' + i);
+        const open = row.classList.toggle('hide') === false;
+        btn.textContent = open ? 'Hide evidence' : 'Evidence';
+        btn.setAttribute('aria-expanded', open);
+    }
+
+    let runbookMd = { updated: '', original: '' };
+    function showRunbook(which) {
+        document.querySelectorAll('.tab[data-md]').forEach(t => t.classList.toggle('active', t.dataset.md === which));
+        document.getElementById('runbookMd').innerHTML = AgentUI.renderMarkdown(runbookMd[which] || '_No runbook content._');
     }
 </script>
 {% endblock %}

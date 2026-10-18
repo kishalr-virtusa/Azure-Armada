@@ -16,10 +16,13 @@ import json
 import logging
 import os
 import threading
+import time
 from typing import Optional, Type, TypeVar
 
 import httpx
 from pydantic import BaseModel
+
+from dr_agent import trace
 
 log = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
@@ -63,6 +66,7 @@ class FoundryAgents:
         self._cred = DefaultAzureCredential()
         self._http = httpx.Client(timeout=timeout_s)
         self._ready: dict[str, str] = {}  # agent id -> spec hash registered in this process
+        self._versions: dict[str, str] = {}  # agent id -> Foundry version in use
         self._lock = threading.Lock()
 
     def _headers(self) -> dict:
@@ -95,6 +99,7 @@ class FoundryAgents:
                 return aid
             r = self._req("GET", f"/agents/{aid}", params={"api-version": API_VERSION})
             latest = (r.json().get("versions") or {}).get("latest") or {} if r.status_code == 200 else {}
+            self._versions[aid] = str(latest.get("version") or "")
             if (latest.get("metadata") or {}).get("spec_hash") != spec_hash:
                 base = aid.removeprefix(PREFIX)
                 body = {"definition": definition, "metadata": {"spec_hash": spec_hash, "system": "dr-agent"},
@@ -102,7 +107,10 @@ class FoundryAgents:
                 r = self._req("POST", f"/agents/{aid}/versions", body, params={"api-version": API_VERSION})
                 if r.status_code >= 300:
                     raise RuntimeError(f"register {aid} failed: HTTP {r.status_code} {r.text[:300]}")
-                log.info("foundry agent %s registered version %s", aid, r.json().get("version"))
+                self._versions[aid] = str(r.json().get("version") or "")
+                log.info("foundry agent %s registered version %s", aid, self._versions[aid])
+                trace.emit("agent", f"Registered new version {self._versions[aid]} of {aid}",
+                           "Instructions or output schema changed, so Foundry got a new agent version")
             self._ready[aid] = spec_hash
         return aid
 
@@ -112,10 +120,25 @@ class FoundryAgents:
         aid = self.ensure(name, instructions, schema)
         user = payload if isinstance(payload, str) else json.dumps(payload, default=str, ensure_ascii=False)
         body = {"agent_reference": {"name": aid, "type": "agent_reference"}, "input": user}
+        model = self.reasoning_model if aid.removeprefix(PREFIX) in REASONING_AGENTS and self.reasoning_model else self.model
+        idx = trace.emit("agent", f"Azure AI Foundry agent {aid} (version {self._versions.get(aid) or '?'})",
+                         f"Model {model} · output must match the {schema.__name__} JSON schema", status="running",
+                         data={"agent": aid, "version": self._versions.get(aid), "model": model,
+                               "api": "POST {project}/openai/v1/responses (agent_reference)",
+                               "input_chars": len(user), "output_schema": schema.__name__})
+        started = time.monotonic()
         r = self._req("POST", "/openai/v1/responses", body)
+        ms = int((time.monotonic() - started) * 1000)
         if r.status_code >= 300:
+            trace.update(idx, "fail", f"HTTP {r.status_code}", ms=ms)
             raise RuntimeError(f"agent {aid} run failed: HTTP {r.status_code} {r.text[:300]}")
         data = r.json()
+        usage = data.get("usage") or {}
+        reasoning = (usage.get("output_tokens_details") or {}).get("reasoning_tokens")
+        trace.update(idx, "ok", f"Answered in {ms / 1000:.1f}s · {usage.get('input_tokens', '?')} tokens in, "
+                                f"{usage.get('output_tokens', '?')} out" + (f" ({reasoning} reasoning)" if reasoning else ""),
+                     data={"agent": aid, "version": self._versions.get(aid), "model": data.get("model") or model,
+                           "response_id": data.get("id"), "status": data.get("status"), "usage": usage}, ms=ms)
         text = "".join(c.get("text", "") for item in data.get("output", []) if item.get("type") == "message"
                        for c in item.get("content", []) if c.get("type") == "output_text")
         if not text:

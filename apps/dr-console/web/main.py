@@ -248,14 +248,28 @@ def api_save_profile(data: dict = Body(...)):
     return service.save_profile(data).model_dump()
 
 
+def _trace_id(request: Request) -> str:
+    t = request.headers.get("x-trace-id", "")
+    return t if 8 <= len(t) <= 64 and all(c.isalnum() or c == "-" for c in t) else ""
+
+
+@app.get("/api/trace/{run_id}", dependencies=[api])
+def api_trace(run_id: str):
+    """Live activity of one agent run (polled by the page while the agent works)."""
+    from dr_agent import trace
+    return JSONResponse(trace.get(run_id), headers={"Cache-Control": "no-store"})
+
+
 @app.post("/api/strategy", dependencies=[api])
-async def api_strategy():
-    return await run_in_threadpool(service.recommend_strategy)
+async def api_strategy(request: Request):
+    from dr_agent import trace
+    return await run_in_threadpool(trace.run, _trace_id(request), service.recommend_strategy)
 
 
 @app.post("/api/readiness", dependencies=[api])
-async def api_readiness():
-    return await run_in_threadpool(service.check_readiness)
+async def api_readiness(request: Request):
+    from dr_agent import trace
+    return await run_in_threadpool(trace.run, _trace_id(request), service.check_readiness)
 
 
 @app.post("/api/readiness/fix", dependencies=[api])
@@ -264,8 +278,9 @@ async def api_readiness_fix(request: Request, data: dict = Body(...)):
 
 
 @app.post("/api/runbook", dependencies=[api])
-async def api_runbook():
-    return await run_in_threadpool(service.review_runbook)
+async def api_runbook(request: Request):
+    from dr_agent import trace
+    return await run_in_threadpool(trace.run, _trace_id(request), service.review_runbook)
 
 
 @app.get("/api/plan", dependencies=[api])
@@ -274,8 +289,9 @@ def api_get_plan():
 
 
 @app.post("/api/plan", dependencies=[api])
-async def api_generate_plan():
-    return await run_in_threadpool(service.generate_plan)
+async def api_generate_plan(request: Request):
+    from dr_agent import trace
+    return await run_in_threadpool(trace.run, _trace_id(request), service.generate_plan)
 
 
 @app.post("/api/plan/approve", dependencies=[api])

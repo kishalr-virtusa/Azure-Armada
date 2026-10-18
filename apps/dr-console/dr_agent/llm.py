@@ -17,6 +17,8 @@ from typing import Callable, Generic, Optional, Type, TypeVar
 
 from pydantic import BaseModel
 
+from dr_agent import trace
+
 log = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
@@ -94,8 +96,17 @@ def run_agent(name: str, system_prompt: str, payload: dict | str, schema: Type[T
     errors: list[str] = []
 
     def _accept(out: T, via: str) -> AgentResult[T]:
-        if validate:
-            validate(out)
+        idx = trace.emit("check", "Code checks the answer",
+                         f"Parsed into {schema.__name__}" + ("; now applying this agent's business rules" if validate else ""),
+                         status="running")
+        try:
+            if validate:
+                validate(out)
+        except Exception as e:  # noqa: BLE001
+            trace.update(idx, "fail", f"Rejected: {e}"[:300])
+            raise
+        trace.update(idx, "ok", f"Valid {schema.__name__}" + (" and passes the business rules" if validate else ""),
+                     data=out.model_dump(mode="json"))
         ms = int((time.monotonic() - started) * 1000)
         log.info("agent=%s source=llm via=%s latency_ms=%d", name, via, ms)
         return AgentResult(out, "llm", ms, "; ".join(errors) or None, via)
@@ -110,16 +121,21 @@ def run_agent(name: str, system_prompt: str, payload: dict | str, schema: Type[T
             except Exception as e:  # noqa: BLE001
                 errors.append(f"foundry-agent {type(e).__name__}: {e}"[:400])
                 log.warning("agent=%s foundry agent failed, trying direct model: %s", name, errors[-1])
+                trace.emit("fallback", "Falling back to the model deployment directly", errors[-1][:300], status="warn")
     # 2) Direct structured call to the model deployment.
     client = llm or get_llm()
     if client is not None:
         try:
-            return _accept(client.structured(system_prompt, payload, schema), "azure-openai")
+            out = trace.step("agent", f"Azure OpenAI deployment {getattr(client, 'deployment', 'model')} (direct)", client.structured,
+                             system_prompt, payload, schema)
+            return _accept(out, "azure-openai")
         except Exception as e:  # noqa: BLE001
             errors.append(f"{type(e).__name__}: {e}"[:500])
             log.warning("agent=%s llm failed, using fallback: %s", name, errors[-1])
     else:
         errors.append("LLM not configured")
     # 3) Deterministic fallback.
+    trace.emit("fallback", "Using the deterministic rules fallback", (errors[-1] if errors else "")[:300], status="warn")
     out = fallback()
+    trace.emit("result", f"Rules-based {schema.__name__} produced", data=out.model_dump(mode="json"))
     return AgentResult(out, "fallback", int((time.monotonic() - started) * 1000), "; ".join(errors), "fallback")

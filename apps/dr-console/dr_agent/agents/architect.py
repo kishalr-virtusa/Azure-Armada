@@ -47,6 +47,9 @@ def run(profile: AppProfile, inventory_summary: dict) -> AgentResult[StrategyRec
                "cost_guide": [dict(zip(("name", "rto_min", "rpo_min", "relative_cost", "note"), s)) for s in STRATEGY_GUIDE]}
 
     facts = {o.name: o for o in options_for(profile)}
+    from dr_agent import trace
+    trace.emit("input", "Strategy cost guide", "5 DR strategies with RTO, RPO and relative cost (the numbers the answer is checked against)",
+               data=payload["cost_guide"])
     expected = fallback(profile).recommended  # cheapest strategy whose numbers really meet RTO and RPO
 
     def validate(rec: StrategyRec) -> None:

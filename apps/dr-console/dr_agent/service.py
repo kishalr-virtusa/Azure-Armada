@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
+from dr_agent import trace
 from dr_agent.config import config
 from dr_agent.engine import runner
 from dr_agent.engine.measurements import fmt_duration
@@ -94,13 +95,17 @@ def save_profile(data: dict) -> AppProfile:
 
 def _inventory_summary() -> dict:
     from dr_agent.tools.inventory import get_workload_inventory
-    inv = _safe(get_workload_inventory)
+    inv = trace.step("tool", f"Azure Resource Graph: resources in {config.workload_rg}", _safe, get_workload_inventory,
+                     summary=lambda r: f"{len(r.get('resources', []))} resources found" if isinstance(r, dict) else "")
     return inv if isinstance(inv, dict) else {}
 
 
 def recommend_strategy() -> dict:
     from dr_agent.agents import architect
-    res = architect.run(get_profile(), _inventory_summary())
+    prof = get_profile()
+    trace.emit("input", "Application profile", f"{prof.name}: tier {prof.tier}, RTO {prof.rto_min} min, RPO {prof.rpo_min} min",
+               data=prof.model_dump())
+    res = architect.run(prof, _inventory_summary())
     store.upsert_exercise(PHASE1, {"strategy_json": res.output.model_dump_json()})
     return {**res.output.model_dump(), "source": res.source, "via": res.via}
 
@@ -110,22 +115,32 @@ def gather_readiness_facts() -> dict:
     from dr_agent.tools.azure_webapp import list_app_settings
     from dr_agent.tools.heartbeat import replication_lag_seconds
     facts: dict[str, Any] = {}
-    fog = _safe(lambda: runner._fog().status())
+    s = trace.step
+    fog = s("tool", f"Azure SQL: failover group {config.sql_fog_name} state", _safe, lambda: runner._fog().status(),
+            summary=lambda r: f"primary {r.get('primary_region')}")
     facts["fog_status"] = fog if "error" not in fog else {"primary_region": None, "servers": {}}
-    facts["lag_s"] = _safe(lambda: replication_lag_seconds(runner._sql_connect()))
+    facts["lag_s"] = s("tool", "SQL query: replication lag from the heartbeat table", _safe,
+                       lambda: replication_lag_seconds(runner._sql_connect()),
+                       summary=lambda r: f"{r:.1f}s behind" if isinstance(r, (int, float)) else "")
     if isinstance(facts["lag_s"], dict):
         facts["lag_s"] = None
-    facts["probe_a"] = _safe(runner._probe, "A")
-    facts["probe_b"] = _safe(runner._probe, "B")
-    tm = _safe(get_profile_status)
+    probe_sum = lambda r: f"HTTP {r.get('status_code', '?')} · {r.get('region', '')}".rstrip(" ·")  # noqa: E731
+    facts["probe_a"] = s("tool", "HTTPS probe: East Asia /health", _safe, runner._probe, "A", summary=probe_sum)
+    facts["probe_b"] = s("tool", "HTTPS probe: Southeast Asia /health", _safe, runner._probe, "B", summary=probe_sum)
+    tm = s("tool", f"Traffic Manager: profile {config.tm_profile_name} endpoints", _safe, get_profile_status,
+           summary=lambda r: f"{len(r.get('endpoints') or [])} endpoints")
     facts["tm_endpoints"] = [{"name": e.get("name"), "enabled": e.get("endpoint_status") == "Enabled",
                               "monitor_status": e.get("endpoint_monitor_status")}
                              for e in (tm.get("endpoints") or [])] if isinstance(tm, dict) else []
-    sa = _safe(list_app_settings, config.webapp_a_name)
-    sb = _safe(list_app_settings, config.webapp_b_name)
+    sa = s("tool", f"App Service: app settings of {config.webapp_a_name}", _safe, list_app_settings, config.webapp_a_name,
+           summary=lambda r: f"{len(r)} settings (names only are compared)")
+    sb = s("tool", f"App Service: app settings of {config.webapp_b_name}", _safe, list_app_settings, config.webapp_b_name,
+           summary=lambda r: f"{len(r)} settings (names only are compared)")
     if "error" not in sa and "error" not in sb:
         facts["settings_a"], facts["settings_b"] = sa, sb
-    asr = _safe(lambda: __import__("dr_agent.tools.azure_asr", fromlist=["x"]).AsrTestFailover.from_env().status())
+    asr = s("tool", "Site Recovery: replication health of dra-vm-reports", _safe,
+            lambda: __import__("dr_agent.tools.azure_asr", fromlist=["x"]).AsrTestFailover.from_env().status(),
+            summary=lambda r: str(r.get("health") or r.get("state") or ""))
     facts["asr"] = asr if "error" not in asr else {"protected": False, "state": asr["error"]}
     facts["keyvault_ok"] = bool(config.console_passcode)  # resolved via Key Vault reference at startup
     return facts
@@ -134,6 +149,11 @@ def gather_readiness_facts() -> dict:
 def check_readiness() -> dict:
     from dr_agent.agents import readiness
     checks = readiness.build_checks(gather_readiness_facts())
+    n_fail = sum(c.status == "fail" for c in checks)
+    trace.emit("check", f"{len(checks)} deterministic checks evaluated",
+               f"{sum(c.status == 'pass' for c in checks)} pass, {sum(c.status == 'warn' for c in checks)} warn, {n_fail} fail"
+               + (" (any fail forces NO-GO, whatever the agent says)" if n_fail else ""),
+               status="fail" if n_fail else "ok")
     res = readiness.run(checks)
     store.upsert_exercise(PHASE1, {"readiness_json": res.output.model_dump_json()})
     out = res.output.model_dump(mode="json")
@@ -167,10 +187,11 @@ def apply_parity_fix(keys: list[str], approver: str) -> dict:
 def review_runbook() -> dict:
     from dr_agent.agents import runbook
     md = RUNBOOK_PATH.read_text(encoding="utf-8") if RUNBOOK_PATH.exists() else "1. (no runbook found)"
+    trace.emit("input", f"Runbook {RUNBOOK_PATH.name}", f"{len(md.splitlines())} lines of markdown")
     inv = _inventory_summary()
     res = runbook.run(md, inv)
     store.upsert_exercise(PHASE1, {"runbook_json": res.output.model_dump_json()[:60000]})
-    return {**res.output.model_dump(), "source": res.source, "via": res.via}
+    return {**res.output.model_dump(), "source": res.source, "via": res.via, "original_md": md}
 
 
 # ------------------------------------------------------------------ plan
@@ -179,7 +200,10 @@ def generate_plan() -> dict:
     p1 = _phase1()
     strategy = StrategyRec.model_validate_json(p1["strategy_json"]) if p1.get("strategy_json") else None
     readiness = ReadinessReport.model_validate_json(p1["readiness_json"]) if p1.get("readiness_json") else None
-    res = planner.run(get_profile(), strategy, readiness, _inventory_summary())
+    prof = get_profile()
+    trace.emit("input", "Inputs from phase 1", f"strategy {strategy.recommended if strategy else 'warm-standby (default)'}; "
+               f"{len(readiness.risks) if readiness else 0} readiness risks; allowlisted actions and the mandatory safe sequence")
+    res = planner.run(prof, strategy, readiness, _inventory_summary())
     store.upsert_exercise(DRAFT, {"plan_json": res.output.model_dump_json(), "source": res.source, "via": res.via})
     return {**res.output.model_dump(), "source": res.source, "via": res.via}
 

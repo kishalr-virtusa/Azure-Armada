@@ -15,24 +15,15 @@
     <h2>Generate Exercise Plan</h2>
     <p class="sub">The AI planner will create an ordered execution plan</p>
     
-    <div style="margin-top: 16px;">
+    <div>
         <button id="generateBtn" class="btn btn-primary" onclick="generatePlan()">Generate Plan</button>
     </div>
-    
-    <div id="generateLoading" class="hide" style="padding: 24px; text-align: center; color: var(--ink-3);">
-        <p>Generating exercise plan...</p>
-        <p style="font-size: 12px;">This may take a moment</p>
-    </div>
+
+    <div id="planTrace" class="trace hide"></div>
 </div>
 
 <!-- Plan Display Section -->
 <div id="planSection" class="hide stack">
-    <!-- Assumptions -->
-    <div class="card">
-        <h2>Assumptions</h2>
-        <ul id="assumptionsList" style="margin: 0; padding-left: 20px; color: var(--ink-2); display: flex; flex-direction: column; gap: 6px;"></ul>
-    </div>
-    
     <!-- Plan Steps by Phase -->
     <div class="card">
         <h2>
@@ -44,6 +35,12 @@
         <div id="planSteps" style="margin-top: 16px;"></div>
     </div>
     
+    <!-- Assumptions -->
+    <div class="card">
+        <h2>Assumptions</h2>
+        <ul id="assumptionsList" style="margin: 0; padding-left: 20px; color: var(--ink-2); display: flex; flex-direction: column; gap: 6px;"></ul>
+    </div>
+
     <!-- Approval Section -->
     <div class="card" id="approvalSection">
         <h2>Approve & Start Exercise</h2>
@@ -76,7 +73,7 @@
     
     function renderSourceBadge(source, via) {
         const isAI = source === 'llm' || source === 'ai';
-        const label = via === 'foundry-agent' ? 'Azure AI Foundry Agent' : 'AI';
+        const label = via === 'foundry-agent' ? 'Azure AI Foundry Agent' : 'Azure OpenAI (direct)';
         return isAI
             ? `<span class="badge" style="background: var(--accent); color: white; border-color: var(--accent);" title="${via || ''}">${label}</span>`
             : '<span class="badge" title="deterministic fallback">Rules</span>';
@@ -84,14 +81,11 @@
     
     async function generatePlan() {
         const btn = document.getElementById('generateBtn');
-        const loading = document.getElementById('generateLoading');
-        
         btn.disabled = true;
-        loading.classList.remove('hide');
-        
+        btn.textContent = 'Planner agent working…';
+
         try {
-            const res = await fetch('/api/plan', { method: 'POST' });
-            const data = await res.json();
+            const data = await AgentUI.runWithTrace('/api/plan', document.getElementById('planTrace'));
             
             if (data.error) {
                 alert('Failed to generate plan: ' + data.error);
@@ -101,14 +95,14 @@
             currentPlan = data;
             renderPlan(data);
             
-            document.getElementById('generateSection').classList.add('hide');
             document.getElementById('planSection').classList.remove('hide');
+            btn.className = 'btn btn-secondary';
             
         } catch (e) {
             alert('Failed to generate plan: ' + e.message);
         } finally {
             btn.disabled = false;
-            loading.classList.add('hide');
+            btn.textContent = currentPlan ? 'Regenerate plan' : 'Generate Plan';
         }
     }
     
@@ -214,8 +208,10 @@
             if (data && data.steps && data.steps.length > 0) {
                 currentPlan = data;
                 renderPlan(data);
-                document.getElementById('generateSection').classList.add('hide');
                 document.getElementById('planSection').classList.remove('hide');
+                const btn = document.getElementById('generateBtn');
+                btn.textContent = 'Regenerate plan';
+                btn.className = 'btn btn-secondary';
             }
         } catch (e) {
             // No existing plan, show generate button

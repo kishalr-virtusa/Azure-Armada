@@ -26,6 +26,9 @@ def run(profile: AppProfile, strategy: StrategyRec | None, readiness: ReadinessR
     if first.source == "llm" or not (first.error and "PlanError" in first.error):
         return first
     # one corrective retry with the validator's problems
+    from dr_agent import trace
+    trace.emit("fallback", "Plan rejected by the safety validator; asking the Planner again with the problems",
+               first.error[:300], status="warn")
     retry = dict(base, previous_attempt_problems=first.error)
     second = run_agent("planner-retry", prompt("planner"), retry, ExercisePlan, default_plan, validate=validate_plan)
     second.latency_ms += first.latency_ms
