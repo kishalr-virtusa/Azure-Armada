@@ -31,7 +31,7 @@ ELSE
 -- Least privilege: SELECT on the one table the report needs, and no role memberships.
 GRANT SELECT ON OBJECT::dbo.transactions TO [reports_reader];
 
-DECLARE @role sysname;
+DECLARE @role sysname, @stmt nvarchar(400);
 DECLARE roles CURSOR LOCAL FAST_FORWARD FOR
     SELECT r.name FROM sys.database_role_members m
     JOIN sys.database_principals r ON r.principal_id = m.role_principal_id
@@ -40,7 +40,8 @@ OPEN roles;
 FETCH NEXT FROM roles INTO @role;
 WHILE @@FETCH_STATUS = 0
 BEGIN
-    EXEC (N'ALTER ROLE ' + QUOTENAME(@role) + N' DROP MEMBER [reports_reader]');
+    SET @stmt = N'ALTER ROLE ' + QUOTENAME(@role) + N' DROP MEMBER [reports_reader]';
+    EXEC sp_executesql @stmt;
     FETCH NEXT FROM roles INTO @role;
 END;
 CLOSE roles;
