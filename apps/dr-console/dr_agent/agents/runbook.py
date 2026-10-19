@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from dr_agent.agents import prompt
+from dr_agent.agents import grounding, prompt
 from dr_agent.llm import AgentResult, run_agent
 from dr_agent.models import RunbookReview, RunbookStepReview
 
@@ -44,4 +44,8 @@ def run(runbook_md: str, inventory: dict) -> AgentResult[RunbookReview]:
     names = {r.get("name", "") for r in resources}
     services = set(inventory.get("services", [])) | {r.get("type", "").split("/")[-1] for r in resources}
     payload = {"runbook_markdown": runbook_md, "inventory": inventory}
-    return run_agent("runbook", prompt("runbook"), payload, RunbookReview, lambda: fallback(runbook_md, names, services))
+    steps = parse_steps(runbook_md)
+    check = grounding.Check("runbook", lambda out, ctx: grounding.verify_runbook(out, steps, names))
+    res = run_agent("runbook", prompt("runbook"), payload, RunbookReview, lambda: fallback(runbook_md, names, services),
+                    validate=check)
+    return check.attach(res, {"payload": payload, "evidence": res.evidence})

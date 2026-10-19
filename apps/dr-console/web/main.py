@@ -296,13 +296,18 @@ async def api_blackbox_ask(request: Request, data: dict = Body(...)):
     question = str(data.get("question") or "").strip()
     if not 1 <= len(question) <= 500:
         return JSONResponse({"error": "question must be 1-500 characters"}, status_code=422)
-    history = data.get("history") if isinstance(data.get("history"), list) else []
+    # a client "history" is accepted for older pages but never used: earlier turns come from Cosmos DB, so a crafted
+    # request cannot plant fake earlier answers
     conv_id = str(data.get("conversation_id") or "")
-    if not _BB_CONV.fullmatch(conv_id):
+    history: list[dict] = []
+    if _BB_CONV.fullmatch(conv_id):
+        history = await run_in_threadpool(_bb_history, conv_id)
+    else:
         conv_id = secrets.token_hex(6)  # a new conversation
     tid = _trace_id(request)
     res = await run_in_threadpool(trace.run, tid, blackbox.run, question, history)
-    reply = {**res.output.model_dump(), "source": res.source, "via": res.via, "latency_ms": res.latency_ms}
+    reply = {**res.output.model_dump(), "source": res.source, "via": res.via, "latency_ms": res.latency_ms,
+             "blocked": res.blocked, "grounding": res.grounding}
     try:  # every question and answer is kept: "New conversation" starts another one, it never deletes
         from dr_agent.tools import store
         await run_in_threadpool(store.add_conversation_turn, conv_id, question, reply,
@@ -313,6 +318,20 @@ async def api_blackbox_ask(request: Request, data: dict = Body(...)):
 
 
 _BB_CONV = re.compile(r"[0-9a-f]{12}")
+
+
+def _bb_history(conv_id: str) -> list[dict]:
+    """The stored turns of a conversation as Black box history: answered turns only (not errors or blocked ones)."""
+    from dr_agent.agents import blackbox
+    from dr_agent.tools import store
+    try:
+        conv = store.get_conversation(conv_id) or {}
+    except Exception as e:  # noqa: BLE001 - answer without follow-up context rather than not at all
+        log.warning("could not load black box conversation %s: %s", conv_id, e)
+        return []
+    turns = [t for t in conv.get("turns") or []
+             if isinstance(t.get("reply"), dict) and t["reply"].get("answer") and not t["reply"].get("blocked")]
+    return [{"question": t.get("question") or "", "answer": t["reply"]["answer"]} for t in turns[-blackbox.MAX_HISTORY:]]
 
 
 @app.get("/api/blackbox/conversations", dependencies=[api])

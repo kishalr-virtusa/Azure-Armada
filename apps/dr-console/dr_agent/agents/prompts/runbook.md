@@ -10,5 +10,6 @@ For every numbered runbook step return:
   - missing: an important action the runbook lacks, e.g. failback, RPO verification, re-enabling routing
     (add these as extra entries with step_no = 0 and text = a short title of the missing action)
 - reason: exactly what differs from the live environment ("matches the live environment" for valid steps).
-- suggested: the corrected step using the real resource names (empty string for valid steps).
+- suggested: the corrected step using ONLY resource names that appear in the inventory (empty string for valid
+  steps). Code checks that every step_no exists in the runbook and every resource name exists in the inventory.
 updated_runbook_md: the full corrected runbook in markdown, numbered, using the real resource names.

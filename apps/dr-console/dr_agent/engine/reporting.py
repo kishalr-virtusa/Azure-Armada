@@ -61,8 +61,18 @@ td{padding:6px;border-bottom:1px solid var(--line);vertical-align:top;color:var(
 </table></div>
 <div class="card"><h2>Timeline</h2><table><tr><th>Time (UTC)</th><th>Step</th><th>Event</th></tr>
 {% for e in events %}<tr><td>{{ e.ts[11:19] if e.ts else '' }}</td><td>{{ e.step_id or '' }}</td><td>{{ e.message }}</td></tr>{% endfor %}</table></div>
-<div class="sub">Approvals: {{ approvals }} · RTO/RPO are computed from recorded timestamps by the engine; the AI agents only write the narrative.</div>
+<div class="sub">Approvals: {{ approvals }} · RTO/RPO are computed from recorded timestamps by the engine; the AI agents only write the narrative.{% if grounding %} {{ grounding }}{% endif %}</div>
 </div></body></html>"""
+
+
+def grounding_note(g: dict) -> str:
+    """One line for the report footer: how much of the narrative code verified against the measurements."""
+    if not g or not g.get("checked"):
+        return ""
+    if g.get("verified"):
+        return f"Narrative verified against the measurements: {g['checked']}/{g['checked']} figures and verdicts match."
+    return (f"Narrative check: {g['supported']}/{g['checked']} figures and verdicts match the measurements; "
+            f"not supported: {'; '.join(g.get('unsupported') or [])}.")
 
 
 ASR_TERMS = ("asr", "site recovery", "test failover", "replication of the reports vm")
@@ -122,7 +132,8 @@ def build_report(xid: str) -> str:
         "errors": [e["message"] for e in events if e.get("kind") in ("error", "diagnosis")],
         "timeline": [f"{e.get('ts', '')[11:19]} {e.get('step_id') or ''} {e.get('message')}" for e in events][-60:],
     }
-    narrative = reporter.run(facts).output
+    res = reporter.run(facts)
+    narrative = res.output
     narrative.issues = [x for x in narrative.issues if not superseded(x)]
     narrative.remediation = [r for r in narrative.remediation if not superseded(r.item)]
     env = Environment(autoescape=select_autoescape(["html"]))
@@ -132,7 +143,8 @@ def build_report(xid: str) -> str:
         rto_met=rto_met, rpo_met=rpo_met, overall=rto_met and rpo_met, iaas=iaas,
         segs=segs, segs_total=round(sum(s["seconds"] for s in segs), 3), precision=precision,
         generated=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-        approvals=m.get("approvals_json", ""))
+        approvals=m.get("approvals_json", ""), grounding=grounding_note(res.grounding))
     url = store.upload_report(xid, html)
-    store.upsert_exercise(xid, {"report_url": url, "remediation_json": json.dumps([r.model_dump() for r in narrative.remediation])})
+    store.upsert_exercise(xid, {"report_url": url, "remediation_json": json.dumps([r.model_dump() for r in narrative.remediation]),
+                                "report_grounding_json": json.dumps(res.grounding)})
     return url
