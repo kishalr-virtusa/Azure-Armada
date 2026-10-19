@@ -337,7 +337,7 @@
         cls(L.hbB, 'link' + (hb && hb.writing && primary === 'B' ? ' live' : ' off'));
         cls(L.agents, 'link' + (active ? ' live' : ''));
         setPill('console', active ? 'acc' : 'mute', active ? `drill ${dr.steps_done}/${dr.steps_total}` : 'idle');
-        setPill('agents', 'mute', '6 registered');
+        setPill('agents', 'mute', '7 registered');
         setPill('vmA', 'ok', 'replicating');
         const asr = dr && dr.asr;
         setPill('vmB', asr && asr.started && !asr.done && active ? 'warn' : asr && asr.done && active ? 'ok' : 'mute',
