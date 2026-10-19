@@ -22,6 +22,8 @@ fi
 
 SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 echo "Deploying to subscription: $SUBSCRIPTION_ID"
+# the signed-in user gets data access to Cosmos DB (runs the one-off record migration); a service principal skips it
+OPERATOR_ID=$(az ad signed-in-user show --query id -o tsv 2>/dev/null || true)
 
 # Deploy Bicep at subscription scope
 echo "Starting infrastructure deployment..."
@@ -34,6 +36,7 @@ az deployment sub create \
     --parameters notifyEmailTo="${NOTIFY_EMAIL_TO:-}" plantConfigGap="${PLANT_CONFIG_GAP:-true}" deployEmail="${DEPLOY_EMAIL:-false}" \
     --parameters vmAdminPassword="${VM_ADMIN_PASSWORD:-}" deployIaas="${DEPLOY_IAAS:-true}" \
     --parameters publicUrl="${PUBLIC_URL:-}" altPublicUrl="${ALT_PUBLIC_URL:-}" consoleAppName="${CONSOLE_APP_NAME:-azure-armada}" resendApiKey="${RESEND_API_KEY:-}" appAccessCode="$APP_ACCESS_CODE" entraClientId="${ENTRA_CLIENT_ID:-}" \
+    --parameters operatorPrincipalId="${OPERATOR_ID:-}" \
     --output table
 
 # Get deployment outputs

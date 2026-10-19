@@ -15,6 +15,12 @@ param controlLocation string = 'centralindia'
 @description('Region of the DR console (control plane). Outside both DR regions so it survives the disasters it manages.')
 param consoleLocation string = 'southindia'
 
+@description('Cosmos DB replica region (the console records survive a regional outage)')
+param cosmosReplicaLocation string = 'southeastasia'
+
+@description('Object id of the person running up.sh: data access to Cosmos DB for migrations (empty to skip)')
+param operatorPrincipalId string = ''
+
 @description('Location for Azure OpenAI')
 param openAILocation string = 'eastus2'
 
@@ -288,6 +294,8 @@ module console 'modules/console.bicep' = {
     storageAccountName: storage.outputs.storageAccountName
     storageTableEndpoint: storage.outputs.tableEndpoint
     storageBlobEndpoint: storage.outputs.blobEndpoint
+    cosmosEndpoint: 'https://dra-cosmos-${suffix}.documents.azure.com:443/'
+    cosmosDatabase: 'dra'
     openAIEndpoint: useExistingOpenAI ? '' : openAI.outputs.openAIEndpoint
     openAIDeploymentName: openAI.outputs.openAIDeploymentName
     foundryProjectEndpoint: useExistingOpenAI ? '' : openAI.outputs.projectEndpoint
@@ -302,6 +310,21 @@ module console 'modules/console.bicep' = {
     acsSenderAddress: deployEmail ? email!.outputs.senderAddress : ''
     notifyEmailTo: notifyEmailTo
     projectTag: projectTag
+  }
+}
+
+// Cosmos DB for the console's records (in control RG): primary with the control plane, replica in another
+// region. South India (the console's region) refused new Cosmos DB accounts for this subscription (capacity).
+module cosmos 'modules/cosmos.bicep' = {
+  name: 'cosmos-deployment'
+  scope: controlRg
+  params: {
+    location: controlLocation
+    secondaryLocation: cosmosReplicaLocation
+    suffix: suffix
+    projectTag: projectTag
+    consolePrincipalId: console.outputs.consoleAppPrincipalId
+    operatorPrincipalId: operatorPrincipalId
   }
 }
 
@@ -383,3 +406,5 @@ output asrVaultName string = deployIaas && !empty(vmAdminPassword) ? iaas!.outpu
 output foundryProjectEndpoint string = useExistingOpenAI ? '' : openAI.outputs.projectEndpoint
 output keyVaultName string = keyVault.outputs.keyVaultName
 output storageAccountName string = storage.outputs.storageAccountName
+output cosmosEndpoint string = cosmos.outputs.endpoint
+output cosmosAccountName string = cosmos.outputs.accountName

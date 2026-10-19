@@ -7,6 +7,12 @@ param location string
 @description('Suffix for unique naming')
 param suffix string
 
+@description('Cosmos DB endpoint for the console records')
+param cosmosEndpoint string = ''
+
+@description('Cosmos DB database name')
+param cosmosDatabase string = 'dra'
+
 @description('Project tag value')
 param projectTag string = 'dr-agent'
 
@@ -189,6 +195,15 @@ resource consoleApp 'Microsoft.Web/sites@2023-01-01' = {
         {
           name: 'STORAGE_BLOB_ENDPOINT'
           value: storageBlobEndpoint
+        }
+        // Cosmos DB (records; signs in with the managed identity)
+        {
+          name: 'COSMOS_ENDPOINT'
+          value: cosmosEndpoint
+        }
+        {
+          name: 'COSMOS_DATABASE'
+          value: cosmosDatabase
         }
         // Console auth (Key Vault reference)
         {

@@ -29,8 +29,8 @@ from dr_agent.config import config
 
 logger = logging.getLogger(__name__)
 
-# Reads go to the nearest copy: the console runs in South India
-PREFERRED_REGIONS = ["South India", "Central India"]
+# Reads go to the primary (Central India, nearest the console in South India), then the replica
+PREFERRED_REGIONS = ["Central India", "Southeast Asia"]
 _SYSTEM = {"_rid", "_self", "_etag", "_attachments", "_ts", "_lsn"}
 _KEYS = {"id", "pk", "PartitionKey", "RowKey"}
 PATCH_MAX_OPS = 10  # Cosmos DB limit per patch request
