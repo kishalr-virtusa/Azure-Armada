@@ -74,7 +74,7 @@ FOUNDRY_AGENTS: dict = {}
 
 @app.on_event("startup")
 def _register_foundry_agents() -> None:
-    """Register the six agents in Azure AI Foundry Agent Service (background; idempotent)."""
+    """Register the seven agents in Azure AI Foundry Agent Service (background; idempotent)."""
     import threading
 
     def _go():
@@ -263,6 +263,24 @@ def api_live_map():
 @app.get("/map", response_class=HTMLResponse)
 def map_page(request: Request):
     return _page(request, "map.html", "map")
+
+
+@app.get("/blackbox", response_class=HTMLResponse)
+def blackbox_page(request: Request):
+    return _page(request, "blackbox.html", "blackbox")
+
+
+@app.post("/api/blackbox/ask", dependencies=[api])
+async def api_blackbox_ask(request: Request, data: dict = Body(...)):
+    """Ask the Black box agent about recorded drills; it answers only from the records, with citations."""
+    from dr_agent import trace
+    from dr_agent.agents import blackbox
+    question = str(data.get("question") or "").strip()
+    if not 1 <= len(question) <= 500:
+        return JSONResponse({"error": "question must be 1-500 characters"}, status_code=422)
+    history = data.get("history") if isinstance(data.get("history"), list) else []
+    res = await run_in_threadpool(trace.run, _trace_id(request), blackbox.run, question, history)
+    return {**res.output.model_dump(), "source": res.source, "via": res.via, "latency_ms": res.latency_ms}
 
 
 @app.get("/api/autopilot", dependencies=[api])

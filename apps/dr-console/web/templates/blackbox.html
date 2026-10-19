@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Black box — DR Agent Console{% endblock %}
+
+{% block content %}
+<style>
+    .bb-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); gap: 16px; align-items: start; }
+    @media (max-width: 1000px) { .bb-grid { grid-template-columns: 1fr; } }
+    .bb-chat { min-height: 420px; }
+    .bb-msgs { display: flex; flex-direction: column; gap: 12px; max-height: 60vh; overflow-y: auto; padding: 2px; }
+    .bb-empty { color: var(--mute); font-size: 13px; padding: 24px 0; text-align: center; }
+    .bb-msg { max-width: 85%; padding: 10px 14px; border-radius: 8px; font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+    .bb-q { align-self: flex-end; background: var(--accent-soft); color: var(--ink); }
+    .bb-a { align-self: flex-start; background: var(--canvas-soft); box-shadow: var(--ring); color: var(--ink); display: flex; flex-direction: column; gap: 8px; }
+    .bb-a.err { background: var(--danger-soft); color: var(--danger); box-shadow: none; }
+    .bb-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .bb-cites { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; border-top: 1px solid var(--hairline); padding-top: 8px; }
+    .bb-cites li { font-size: 12.5px; line-height: 18px; color: var(--body); }
+    .bb-cites .src { font-family: var(--mono); font-size: 12px; color: var(--ink); margin-right: 6px; }
+    .bb-suggest { display: flex; flex-wrap: wrap; gap: 8px; }
+    .bb-suggest button { height: 28px; padding: 0 10px; border-radius: 999px; border: 0; background: var(--canvas); box-shadow: var(--ring); color: var(--body); font-family: inherit; font-size: 13px; cursor: pointer; }
+    .bb-suggest button:hover { color: var(--ink); background: var(--canvas-soft-2); }
+    .bb-suggest button:disabled { opacity: .45; cursor: not-allowed; }
+    .bb-form { display: flex; gap: 8px; }
+    .bb-form .form-input { flex: 1; min-width: 0; }
+    .bb-pending { color: var(--mute); }
+</style>
+
+<header>
+    <div>
+        <span class="eyebrow">Investigate</span>
+        <h1>Black box</h1>
+        <p class="sub" style="margin-top: 4px;">Ask anything about past drills. Like a flight recorder, it answers only from what the DR Agent recorded, cites every fact, and says so when something is not in the records.</p>
+    </div>
+    <button class="btn btn-secondary" id="bbClear" type="button">New conversation</button>
+</header>
+
+<div class="bb-grid">
+    <div class="card bb-chat">
+        <div class="bb-msgs" id="bbMsgs" aria-live="polite"></div>
+        <div class="bb-suggest" id="bbSuggest"></div>
+        <form class="bb-form" id="bbForm" autocomplete="off">
+            <input class="form-input" id="bbInput" maxlength="500" placeholder="Ask about a drill, an approval, lost writes, Autopilot…" aria-label="Question">
+            <button class="btn btn-primary" id="bbAsk" type="submit">Ask</button>
+        </form>
+    </div>
+    <div class="stack">
+        <div id="bbTrace" class="trace hide"></div>
+        <div class="card" id="bbTraceHint">
+            <h2>Agent activity</h2>
+            <p class="sub">Each question runs the Black box agent in Azure AI Foundry. Its record lookups (drills, timelines, Autopilot runs) appear here as they happen.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const esc = AgentUI.esc;
+    const KEY = 'dra-blackbox';
+    const SUGGESTIONS = [
+        'Summarise the latest drill',
+        'Which writes were lost in the last drill under load?',
+        'Who approved the failback in the latest drill?',
+        'Why was the drill at 09:54 slower than the one at 10:52?',
+        'What did Autopilot find today?',
+    ];
+    const SAFE_LINK = /^\/(?:(?:results|exercise)\/ex-\d{8}-\d{6})?$/;  // citations may only point inside the console
+    const CONF = { high: 'pass', medium: 'info', low: 'warn' };
+    const msgs = document.getElementById('bbMsgs');
+    const input = document.getElementById('bbInput');
+    const askBtn = document.getElementById('bbAsk');
+    let convo = [];  // [{question, reply}] reply = server answer or {error}
+    let busy = false;
+
+    try { convo = JSON.parse(sessionStorage.getItem(KEY) || '[]') || []; } catch (e) { convo = []; }
+    const save = () => { try { sessionStorage.setItem(KEY, JSON.stringify(convo.slice(-20))); } catch (e) { /* storage blocked */ } };
+
+    function via(r) {
+        if (r.source === 'fallback') return '<span class="badge" title="deterministic fallback">Rules fallback</span>';
+        return `<span class="badge recommended">${r.via === 'foundry-agent' ? 'Azure AI Foundry Agent' : 'Azure OpenAI (direct)'}</span>`;
+    }
+
+    function answerHtml(r) {
+        if (!r) return '<div class="bb-msg bb-a bb-pending">Searching the records…</div>';
+        if (r.error) return `<div class="bb-msg bb-a err">${esc(r.error)}</div>`;
+        const cites = (r.citations || []).map((c) => {
+            const detail = esc(c.detail);
+            const body = SAFE_LINK.test(c.link || '') ? `<a href="${esc(c.link)}">${detail}</a>` : detail;
+            return `<li><span class="src">${esc(c.source)}</span>${body}</li>`;
+        }).join('');
+        return `<div class="bb-msg bb-a">
+            <div>${esc(r.answer)}</div>
+            <div class="bb-meta">
+                <span class="st ${CONF[r.confidence] || 'neutral'}">Confidence: ${esc(r.confidence || 'unknown')}</span>
+                ${r.found_in_records ? '' : '<span class="st neutral">Not in the records</span>'}
+                ${via(r)}
+            </div>
+            ${cites ? `<ul class="bb-cites">${cites}</ul>` : ''}
+        </div>`;
+    }
+
+    function render() {
+        msgs.innerHTML = convo.length
+            ? convo.map((m) => `<div class="bb-msg bb-q">${esc(m.question)}</div>${answerHtml(m.reply)}`).join('')
+            : '<div class="bb-empty">No questions yet. Try one of the suggestions below.</div>';
+        msgs.scrollTop = msgs.scrollHeight;
+        document.getElementById('bbSuggest').innerHTML = SUGGESTIONS
+            .map((s, i) => `<button type="button" data-i="${i}" ${busy ? 'disabled' : ''}>${esc(s)}</button>`).join('');
+        askBtn.disabled = busy;
+        askBtn.textContent = busy ? 'Searching…' : 'Ask';
+    }
+
+    async function ask(question) {
+        question = (question || '').trim();
+        if (!question || busy) return;
+        if (question.length > 500) { alert('Please keep the question under 500 characters.'); return; }
+        // only answered turns go back as context, so a failed question cannot confuse a follow-up
+        const history = convo.filter((m) => m.reply && !m.reply.error).slice(-6)
+            .map((m) => ({ question: m.question, answer: m.reply.answer }));
+        const turn = { question, reply: null };
+        convo.push(turn);
+        busy = true;
+        input.value = '';
+        render();
+        document.getElementById('bbTraceHint').classList.add('hide');
+        try {
+            turn.reply = await AgentUI.runWithTrace('/api/blackbox/ask', document.getElementById('bbTrace'), {
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question, history }),
+            });
+        } catch (e) {
+            turn.reply = { error: `Could not get an answer: ${e.message}` };
+        } finally {
+            busy = false;
+            save();
+            render();
+            input.focus();
+        }
+    }
+
+    document.getElementById('bbForm').addEventListener('submit', (e) => { e.preventDefault(); ask(input.value); });
+    document.getElementById('bbSuggest').addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-i]');
+        if (b) ask(SUGGESTIONS[Number(b.dataset.i)]);
+    });
+    document.getElementById('bbClear').addEventListener('click', () => {
+        if (busy) return;
+        convo = [];
+        save();
+        render();
+    });
+    convo = convo.filter((m) => m && m.reply);  // a turn left pending by a reload has no answer to show
+    render();
+})();
+</script>
+{% endblock %}

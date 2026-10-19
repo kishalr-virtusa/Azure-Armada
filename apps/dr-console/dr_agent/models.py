@@ -153,3 +153,17 @@ class ExerciseReport(BaseModel):
     html: str
     summary_text: str
     remediation: list[RemediationItem]
+
+
+# ---------- Black box (LLM): questions about recorded drills ----------
+class Citation(BaseModel):
+    source: str  # e.g. "drill ex-20261019-105207", "autopilot feed", "current state"
+    detail: str  # the recorded fact this citation supports
+    link: str    # console page: "/results/ex-...", "/exercise/ex-..." or "/"
+
+
+class BlackboxAnswer(BaseModel):  # (LLM)
+    answer: str  # plain English, 1-6 sentences
+    citations: list[Citation]
+    confidence: Literal["high", "medium", "low"]
+    found_in_records: bool

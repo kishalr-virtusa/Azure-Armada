@@ -1,4 +1,4 @@
-"""Azure AI Foundry Agent Service: the six DR agents are registered as Foundry prompt agents and invoked there.
+"""Azure AI Foundry Agent Service: the seven DR agents are registered as Foundry prompt agents and invoked there.
 
 Each agent is a versioned agent in the Foundry project (visible in the Foundry portal under Agents, with its
 instructions, model and strict JSON output schema). The console invokes it through the project's
@@ -39,6 +39,7 @@ AGENTS: dict[str, tuple[str, str]] = {
     "planner": ("ExercisePlan", "Phase 2: builds the ordered, allowlisted DR exercise plan."),
     "validator": ("Diagnosis", "Phase 2: diagnoses a failed exercise step and proposes retry/rollback."),
     "reporter": ("ReportNarrative", "Phase 2: writes the exercise report and remediation backlog."),
+    "blackbox": ("BlackboxAnswer", "Black box: answers questions about recorded drills, only from the records, with citations."),
 }
 
 
@@ -198,7 +199,7 @@ def get_agents() -> Optional[FoundryAgents]:
 
 
 def register_all() -> dict[str, str]:
-    """Register all six agents (called at console startup so they appear in the portal right after deploy)."""
+    """Register all seven agents (called at console startup so they appear in the portal right after deploy)."""
     from dr_agent import models
     from dr_agent.agents import prompt
     client = get_agents()
