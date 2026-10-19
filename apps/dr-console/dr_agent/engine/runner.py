@@ -542,7 +542,11 @@ class ExerciseRunner(threading.Thread):
         evidence = {"t_failover": iso(t_fo), "t_failover_done": iso(t_end), "checked_writes": res.checked,
                     "acked_during_failover": res.acked_during_failover, "write_interval_s": HEARTBEAT_INTERVAL_S,
                     "last_acked_seq": res.last_acked_seq, "last_acked_ts": iso(res.last_acked_ts),
-                    "newest_present_ts": iso(res.newest_present_ts), "lost_writes": len(res.lost_seqs), "note": res.note}
+                    "newest_present_ts": iso(res.newest_present_ts), "lost_writes": len(res.lost_seqs),
+                    # which acknowledged writes are missing, so an auditor can check each one (seq = write time in ms)
+                    "lost_seqs": res.lost_seqs[:50],
+                    "lost_write_times": [iso(h.client_ts) for h in self.heartbeats if h.seq in set(res.lost_seqs)][:50],
+                    "note": res.note}
         self.update(rpo_s=res.rpo_s, rpo_met=ev["rpo_met"], rpo_evidence_json=json.dumps(evidence))
         self.event("measurement", f"RPO {M.fmt_duration(res.rpo_s)} (target {prof.rpo_min} min): "
                                   f"{'MET' if ev['rpo_met'] else 'MISSED'}. {res.note}", data=evidence)

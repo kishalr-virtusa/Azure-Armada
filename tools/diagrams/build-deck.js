@@ -168,7 +168,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   title(s, "Yet most organisations cannot prove their recovery works today",
     "Plans exist on paper. Tests are rare, manual and partial, so the gaps surface during the real disaster.");
   const gap = [
-    ["< 1 in 3", "organisations perform regular failover testing", "Cockroach Labs, State of Resilience 2025 (1,000 executives) [11]"],
+    ["< 1 in 3", "organisations perform regular failover testing", "Cockroach Labs, State of Resilience 2025 (1,000 executives, 2024 survey) [11]"],
     ["20%", "of executives believe their organisation is fully prepared to prevent or respond to outages", "Cockroach Labs, State of Resilience 2025 [11]"],
     ["#1", "cause of human-error outages: staff not following established procedures", "Uptime Institute, Annual Outage Analysis 2026 [2]"],
   ];
@@ -216,11 +216,11 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   });
   card(s, 0.6, 6.15, 12.1, 0.72, C.navy, false);
   s.addText([
-    { text: "The DR Agent measured 34.35 s", options: { bold: true, color: C.white } },
-    { text: " to recover the same kind of service in our live Azure drill (18 Oct 2026), with zero payments lost, and proves it again on every run.", options: { color: "C9C3E6" } },
+    { text: "The DR Agent measured 29.04 s", options: { bold: true, color: C.white } },
+    { text: " to recover the same kind of service in a live Azure drill (19 Oct 2026), and proved the data loss write by write: 2.8 s of writes, against a 15-minute target.", options: { color: "C9C3E6" } },
   ], { x: 0.85, y: 6.15, w: 11.7, h: 0.72, fontFace: BF, fontSize: 14.5, valign: "middle", margin: 0, isTextBox: true });
   footer(s);
-  s.addNotes("Put it together with transparent inputs. A tier-1 payments service with a 30-minute target that has never really been tested. On the day, recovery takes four hours, like the NSE halt. At the 2026 average of $15,000 a minute, that is $3.6 million of direct loss, $3.15 million of it beyond the target, before any regulatory action: NSE paid about $8.8 million to settle, and the RBI froze HDFC's and Kotak's digital growth for 10 to 15 months. Our agent measured 34.35 seconds for the same kind of service, with zero payments lost, and it can prove it again on demand.");
+  s.addNotes("Put it together with transparent inputs. A tier-1 payments service with a 30-minute target that has never really been tested. On the day, recovery takes four hours, like the NSE halt. At the 2026 average of $15,000 a minute, that is $3.6 million of direct loss, $3.15 million of it beyond the target, before any regulatory action: NSE paid about $8.8 million to settle, and the RBI froze HDFC's and Kotak's digital growth for 10 to 15 months. Our agent measured 29.04 seconds for the same kind of service, and proved the data loss write by write: 2.8 seconds of writes, against a 15-minute target. It can prove it again on demand.");
 
   // ---------- 7. Solution ----------
   s = add(); s.background = { color: C.white };
@@ -228,7 +228,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
     "Six AI agents on Azure AI Foundry plan and judge; a guarded engine executes on live Azure resources; humans approve.");
   const phases = [
     ["1", "Design & prepare", [["Architect", "picks the cheapest strategy that truly meets RTO/RPO, with real Azure prices"], ["Readiness", "7 live checks; finds drift before the disaster; one-click approved fix"], ["Runbook", "flags stale steps and writes the corrected runbook"]]],
-    ["2", "Plan, execute, fail back, report", [["Planner", "builds a 21-step drill from an allowlist of safe actions"], ["Engine + Validator", "injects the outage, fails over, measures; diagnoses any failure live"], ["Reporter", "audit-ready report with every second of RTO accounted for"]]],
+    ["2", "Plan, execute, fail back, report", [["Planner", "builds the drill from an allowlist of safe actions; the engine rejects any unsafe plan"], ["Engine + Validator", "injects the outage, fails over, measures; diagnoses any failure live"], ["Reporter", "audit-ready report with every second of RTO accounted for"]]],
   ];
   phases.forEach(([n, h, items], i) => {
     const x = 0.6 + i * 6.15, y = 1.75;
@@ -253,7 +253,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   // ---------- 8. Agents ----------
   s = add(); s.background = { color: C.white };
   title(s, "Six specialist agents, each with one job and a contract",
-    "Versioned prompt agents in Azure AI Foundry Agent Service. Every answer must match a strict JSON schema and pass code checks.");
+    "Versioned prompt agents in Azure AI Foundry Agent Service. Every answer must match a strict JSON schema; every decision that drives an action is checked by code.");
   const agents = [
     ["Architect", "gpt-4.1-mini", "Profile, inventory, live Azure prices", "Strategy + all 5 options", "Cheapest option that truly meets targets"],
     ["Readiness", "gpt-4.1-mini", "7 deterministic checks with evidence", "GO / NO-GO, risks", "Any failed check forces NO-GO"],
@@ -280,9 +280,9 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   title(s, "Agents decide. The engine acts. Humans approve.",
     "DR touches production, so no model can call an Azure write API. Every action is allowlisted, ordered, approved and reversible.");
   const guards = [
-    [I.lock, "Allowlisted actions", "The engine runs only 15 known actions (stop/start app, SQL failover, endpoint on/off, ASR test). Anything else is rejected."],
+    [I.lock, "Allowlisted actions", "15 known actions only (outage injection, start app, SQL failover, endpoint on/off, health waits, ASR test). Region-changing actions only where the safe sequence puts them."],
     [I.route, "Mandatory safe sequence", "Every plan must contain heartbeat → outage → SQL failover → reroute → verify → measure → fail back, in that order."],
-    [I.user, "Human approval gates", "The plan, the forced database failover, the failback and any Validator fix wait for a named approver."],
+    [I.user, "Human approval gates", "A named approver signs off the plan; the DB team gives the go for the forced failover; the app team approves failback; a human approves any fix. Plans without these gates are rejected."],
     [I.power, "Kill switch and rollback", "One click stops the drill; rollback restores the primary region and the database role."],
     [I.history, "Fallback for every agent", "Foundry agent → model deployment → deterministic rules. The screen shows which one answered."],
     [I.audit, "Full audit trail", "Every event, approval and measurement is timestamped and stored, then written into the report."],
@@ -306,7 +306,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   // ---------- 10. Architecture ----------
   s = add(); s.background = { color: C.white };
   title(s, "Architecture: 100% Azure, across an Azure paired region",
-    "East Asia (primary) and Southeast Asia (DR). The control plane runs outside both, in South India, so it survives the disaster it manages.");
+    "East Asia (primary) and Southeast Asia (DR). The control plane runs outside both: console in South India, its state and secrets in Central India, agents in East US 2.");
   s.addImage({ path: "docs/deck/architecture-deck.png", x: 0.6, y: 1.65, w: 12.1, h: 12.1 * 1264 / 3072 });
   const chips = ["App Service ×2", "Azure SQL failover group", "Traffic Manager", "Site Recovery", "AI Foundry Agent Service", "Key Vault + managed identity", "Storage", "Monitor + App Insights", "Bicep: one-click up / down"];
   chips.forEach((t, i) => {
@@ -319,9 +319,9 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   // ---------- 11. Results ----------
   s = add(); s.background = { color: C.white };
   title(s, "Measured on live Azure, not assumed",
-    "Real failovers of the payments service, East Asia → Southeast Asia, 17–18 Oct 2026. Target: RTO 30 min, RPO 15 min.");
-  const kpi = [["34.35 s", "RTO, latest drill", "29.6–40.4 s across 8 drills (median 33.5 s)"], ["0 s", "RPO, every drill", "no confirmed payment lost (1 s heartbeat proof)"],
-    ["3 min 14 s", "Failback to primary", "planned, no data loss"], ["5 min 45 s", "VM recovered by Site Recovery", "proven by a command inside the VM"]];
+    "Real failovers of the payments service, East Asia → Southeast Asia, 17–19 Oct 2026. Target: RTO 30 min, RPO 15 min.");
+  const kpi = [["29.04 s", "RTO, latest drill", "29.0–40.4 s across 9 drills (median 32.7 s)"], ["2.8 s", "RPO, proven write by write", "2 of 45 acknowledged writes lost in the forced failover"],
+    ["3 min 44 s", "Failback to primary", "planned, no data loss"], ["3 min 08 s", "VM recovered by Site Recovery", "test-failover job; service verified inside the VM at 3 min 55 s"]];
   kpi.forEach(([v, l, x0], i) => {
     const x = 0.6 + i * 3.06;
     card(s, x, 1.75, 2.88, 1.85);
@@ -329,9 +329,9 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
     s.addText(l, { x: x + 0.2, y: 2.65, w: 2.5, h: 0.35, fontFace: BF, fontSize: 13, bold: true, color: C.navy, margin: 0, isTextBox: true });
     s.addText(x0, { x: x + 0.2, y: 3.0, w: 2.55, h: 0.5, fontFace: BF, fontSize: 11, color: C.muted, valign: "top", margin: 0, isTextBox: true });
   });
-  s.addText("Where the 34.35 s went (latest drill, one clock, segments add up exactly)", { x: 0.6, y: 3.9, w: 12.1, h: 0.35, fontFace: BF, fontSize: 14, bold: true, color: C.navy, margin: 0, isTextBox: true });
-  const segs = [["Outage injected", 0.519, "9F86FF"], ["SQL forced failover", 15.355, C.teal], ["Traffic Manager reroute", 5.916, "C105B2"], ["DNS + health checks reach DR", 11.619, "7C5CFF"], ["Engine bookkeeping", 0.944, "BDBDC7"]];
-  const total = 34.353; let bx = 0.6;
+  s.addText("Where the 29.04 s went (latest drill, one clock, segments add up exactly)", { x: 0.6, y: 3.9, w: 12.1, h: 0.35, fontFace: BF, fontSize: 14, bold: true, color: C.navy, margin: 0, isTextBox: true });
+  const segs = [["Outage injected", 0.714, "9F86FF"], ["SQL forced failover", 14.321, C.teal], ["Traffic Manager reroute", 3.782, "C105B2"], ["DNS + health checks reach DR", 9.478, "7C5CFF"], ["Engine bookkeeping", 0.745, "BDBDC7"]];
+  const total = 29.040; let bx = 0.6;
   segs.forEach(([l, v, col]) => {
     const w = 12.1 * v / total;
     s.addShape(pres.shapes.RECTANGLE, { x: bx, y: 4.35, w, h: 0.5, fill: { color: col }, line: { color: C.white, width: 1 } });
@@ -346,10 +346,10 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   card(s, 0.6, 5.6, 12.1, 1.25, C.tealLight, false);
   s.addText([
     { text: "Why judges can trust the numbers: ", options: { bold: true, color: C.navy } },
-    { text: "RTO runs from the injected outage to the first healthy check through Traffic Manager (1 s probes; the previous failed check is shown as the precision window). RPO compares every confirmed heartbeat write with the rows that survived in the new primary. Chaos drill with a surprise fault: 57.4 s.", options: { color: C.ink } },
+    { text: "RTO runs from the injected outage to the first healthy check through Traffic Manager from Southeast Asia (the engine checks every second; the previous failed check is shown as the precision window). RPO: one confirmed write per second, and every write the database acknowledged until the failover completed must exist in the new primary. Chaos drill with a surprise fault: 57.4 s.", options: { color: C.ink } },
   ], { x: 0.85, y: 5.6, w: 11.6, h: 1.25, fontFace: BF, fontSize: 12.5, valign: "middle", margin: 0, isTextBox: true });
   footer(s);
-  s.addNotes("These are measured, not estimated. Eight drills without chaos: RTO between 29.6 and 40.4 seconds, median 33.5, against a 30-minute target; RPO zero every time. Failback about three minutes with no data loss. The reports VM was recovered by Site Recovery in under six minutes and proven by running a command inside it. And every second of RTO is accounted for: the latest 34.35 seconds split into 15.4 s SQL failover, 5.9 s Traffic Manager, 11.6 s DNS and health checks, and under a second each for the injection and our own bookkeeping.");
+  s.addNotes("These are measured, not estimated. Nine drills without chaos: RTO between 29.0 and 40.4 seconds, median 32.7, against a 30-minute target. RPO is proven write by write: in the latest drill the old primary acknowledged 6 writes while the forced failover was running, and 2 of them never reached the new primary, so 2.8 seconds of writes were lost, against a 15-minute target. That is exactly what a forced failover with asynchronous replication means, and our own audit found that our first, narrower measurement had missed it. Failback is planned and loses nothing. Site Recovery brought the reports VM up in Southeast Asia in 3 minutes 8 seconds, and we proved the service inside it at 3 minutes 55. Every second of the latest 29.04 s RTO is accounted for: 14.3 s SQL failover, 3.8 s Traffic Manager, 9.5 s DNS and health checks, and under a second each for the injection and our own bookkeeping.");
 
   // ---------- 12. Cost ----------
   s = add(); s.background = { color: C.white };
@@ -357,7 +357,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
     "Actual Azure bills and list prices for what we built, compared with the cost of downtime.");
   const cost = [["$0.09", "all AI agent calls", "every Foundry agent run across 2 days of building and 9 drills: $0.087 (Azure Cost Management) [12]"],
     ["$2.44", "entire environment so far", "two regions, database, VM, console, monitoring: everything, 17–18 Oct 2026 (Azure Cost Management) [12]"],
-    ["$38.26", "per month for the DR set-up", "both regions + Traffic Manager at Azure list prices (Retail Prices API) [13]"]];
+    ["$38.26", "per month for the PaaS DR pair", "2× App Service B1, 2× SQL Basic, Traffic Manager at Azure list prices (Retail Prices API) [13]"]];
   cost.forEach(([v, l, n], i) => {
     const x = 0.6 + i * 4.1;
     card(s, x, 1.75, 3.85, 2.55);
@@ -383,7 +383,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   const demo = ["Scan the QR code: Contoso Payments opens on your phone; make a payment",
     "Readiness says NO-GO: Southeast Asia is missing a setting; one approved click fixes it",
     "The Planner builds the drill; we approve it and inject the outage",
-    "Your phone goes red, then reconnects to Southeast Asia in ~30 s with the same balance",
+    "Your phone goes red, then reconnects to Southeast Asia in about 35 s with the same balance",
     "Failback, then the report: RTO, RPO and every second accounted for"];
   s.addText("The demo", { x: 0.6, y: 1.7, w: 6, h: 0.4, fontFace: HF, fontSize: 18, bold: true, color: C.navy, margin: 0, isTextBox: true });
   demo.forEach((t, i) => {
@@ -394,7 +394,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   });
   card(s, 7.2, 1.7, 5.5, 5.15, C.card, false);
   s.addText("Roadmap (not in the demo)", { x: 7.5, y: 1.9, w: 5, h: 0.4, fontFace: HF, fontSize: 18, bold: true, color: C.navy, margin: 0, isTextBox: true });
-  const road = [["Scheduled drills", "weekly, and after every infrastructure change"], ["More services", "AKS, Cosmos DB, Storage, Service Bus as new allowlisted actions"],
+  const road = [["Scheduled drills", "on a set cadence (e.g. quarterly, as SEBI asks) and after every infrastructure change"], ["More services", "AKS, Cosmos DB, Storage, Service Bus as new allowlisted actions"],
     ["Azure Chaos Studio", "standard fault library alongside our own faults"], ["Approvals where teams work", "Microsoft Teams approval cards"], ["Portfolio view", "resilience score across many applications"]];
   road.forEach(([h, b], i) => {
     const y = 2.45 + i * 0.85;
@@ -432,7 +432,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   circ(s, I.shield, 0.6, 0.8, 1.0, C.teal);
   s.addText("Don't assume you can recover.", { x: 0.6, y: 2.2, w: 12, h: 0.9, fontFace: HF, fontSize: 44, bold: true, color: C.white, margin: 0, isTextBox: true });
   s.addText("Let the DR Agent test it for real, and prove it, whenever you need.", { x: 0.6, y: 3.1, w: 12, h: 0.8, fontFace: HF, fontSize: 30, color: "C9C3E6", margin: 0, isTextBox: true });
-  [["Real DR drills", "Fail over, measure, fail back: 9 live drills, RTO ~34 s, RPO 0"], ["Built 100% on Azure", "AI Foundry, SQL failover groups, Traffic Manager, Site Recovery, Monitor"], ["Safe by design", "Allowlisted actions, human approval, kill switch, full audit trail"]].forEach(([h, b], i) => {
+  [["Real DR drills", "Fail over, measure, fail back: 10 live drills, RTO about 30 s, data loss proven write by write"], ["Built 100% on Azure", "AI Foundry, SQL failover groups, Traffic Manager, Site Recovery, Monitor"], ["Safe by design", "Allowlisted actions, human approval, kill switch, full audit trail"]].forEach(([h, b], i) => {
     const x = 0.6 + i * 4.1;
     s.addText([{ text: h, options: { bold: true, fontSize: 17, color: C.white, breakLine: true } }, { text: b, options: { fontSize: 13, color: "C9C3E6" } }],
       { x, y: 4.6, w: 3.8, h: 1.0, fontFace: BF, valign: "top", margin: 0, isTextBox: true });

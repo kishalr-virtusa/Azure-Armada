@@ -851,8 +851,10 @@
                     document.getElementById('factRto').textContent = `Service restored in ${Math.round(data.rto_s)} seconds`;
                 }
                 if (data.rpo_s != null) {
+                    // honest wording from the measured data loss (every acknowledged write is checked)
                     document.getElementById('factRpo').textContent = data.rpo_s === 0
-                        ? 'None of your payments were lost' : 'Your payments are safe';
+                        ? 'None of your payments were lost'
+                        : `Payments made in the ${Math.ceil(data.rpo_s)} seconds before the switch may need to be retried`;
                 }
 
                 expectedRegion = data.serving_region;
