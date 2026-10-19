@@ -1,7 +1,7 @@
 """Reporter agent: narrative (summary, issues, remediation) for the exercise report."""
 from __future__ import annotations
 
-from dr_agent.agents import prompt
+from dr_agent.agents import grounding, prompt
 from dr_agent.llm import AgentResult, run_agent
 from dr_agent.models import RemediationItem, ReportNarrative
 
@@ -22,4 +22,7 @@ def fallback(facts: dict) -> ReportNarrative:
 
 
 def run(facts: dict) -> AgentResult[ReportNarrative]:
-    return run_agent("reporter", prompt("reporter"), facts, ReportNarrative, lambda: fallback(facts))
+    """The narrative is checked against the measured facts before it reaches the auditor-facing report."""
+    check = grounding.Check("reporter", lambda out, ctx: grounding.verify_report(out, ctx["payload"]))
+    res = run_agent("reporter", prompt("reporter"), facts, ReportNarrative, lambda: fallback(facts), validate=check)
+    return check.attach(res, {"payload": facts, "evidence": res.evidence})

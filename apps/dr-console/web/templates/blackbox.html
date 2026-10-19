@@ -68,6 +68,13 @@
     .bb-cites { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
     .bb-cites li { font-size: 12.5px; line-height: 18px; color: var(--body); padding-left: 10px; border-left: 2px solid var(--hairline-strong); overflow-wrap: anywhere; }
     .bb-cites .src { display: block; font-family: var(--mono); font-size: 11px; color: var(--mute); }
+    /* grounding: code checked the answer's ids, numbers and times against the records the agent read */
+    .bb-ground { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--mute); }
+    .bb-ground svg { width: 13px; height: 13px; flex-shrink: 0; }
+    .bb-ground.ok svg { color: var(--success); }
+    .bb-ground.part svg { color: var(--warning); }
+    .bb-unsup { font-size: 12px; line-height: 17px; color: var(--mute); overflow-wrap: anywhere; }
+    .bb-a.blocked { background: var(--warning-soft); box-shadow: none; }
 
     .bb-thinking { display: flex; align-items: center; gap: 10px; color: var(--body); min-height: 21px; }
     .bb-thinking .now { overflow-wrap: anywhere; }
@@ -153,6 +160,9 @@
     ];
     const SAFE_LINK = /^\/(?:(?:results|exercise)\/ex-\d{8}-\d{6})?$/;  // citations may only point inside the console
     const CONF = { high: 'pass', medium: 'info', low: 'warn' };
+    const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
+    const ALERT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>';
+    const SHIELD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/></svg>';
     const AVATAR = '<span class="bb-av sm" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="3"/><path d="M8 6V4h8v2"/></svg></span>';
     const scroller = document.getElementById('bbScroll');
     const msgs = document.getElementById('bbMsgs');
@@ -175,6 +185,18 @@
         return `<span class="badge recommended">${r.via === 'foundry-agent' ? 'Azure AI Foundry Agent' : 'Azure OpenAI (direct)'}</span>`;
     }
 
+    // the grounding check of an answer (older saved turns have none): a quiet line, never a headline
+    function grounded(r) {
+        const g = r.grounding || {};
+        if (!g.checked) return '';
+        const recs = g.records ? ` ${g.records} record${g.records === 1 ? '' : 's'}` : ' the records';
+        if (g.verified) {
+            return `<span class="bb-ground ok" title="Code checked every drill id, number and time in this answer and its sources against what the agent read">${CHECK}Verified against${esc(recs)}</span>`;
+        }
+        const n = (g.unsupported || []).length;
+        return `<span class="bb-ground part" title="Code could not find ${n} claim${n === 1 ? '' : 's'} in the records">${ALERT}Partially verified · ${g.supported}/${g.checked} found in the records</span>`;
+    }
+
     // every server value below goes through esc() before it becomes markup
     function el(html) { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; }
 
@@ -183,6 +205,14 @@
     function answer(turn) {
         const r = turn.reply;
         if (r.error) return el(`<div class="bb-row">${AVATAR}<div class="bb-a err">${esc(r.error)}</div></div>`);
+        if (r.blocked) {  // a security control did its job: say so, not "AI unavailable"
+            return el(`<div class="bb-row">${AVATAR}<div class="bb-a blocked">
+                <div class="bb-who">Black box</div>
+                <div class="bb-text">${esc(r.answer)}</div>
+                <div class="bb-meta"><span class="bb-ground part">${SHIELD}Blocked by Azure AI Content Safety · Prompt Shields</span></div>
+            </div></div>`);
+        }
+        const unsup = (r.grounding && !r.grounding.verified && r.grounding.unsupported) || [];
         const cites = (r.citations || []).map((c) => {
             const detail = esc(c.detail);
             const body = SAFE_LINK.test(c.link || '') ? `<a href="${esc(c.link)}">${detail}</a>` : detail;
@@ -195,7 +225,9 @@
                 <span class="st ${CONF[r.confidence] || 'neutral'}">Confidence: ${esc(r.confidence || 'unknown')}</span>
                 ${r.found_in_records ? '' : '<span class="st neutral">Not in the records</span>'}
                 ${via(r)}
+                ${grounded(r)}
             </div>
+            ${unsup.length ? `<div class="bb-unsup">Not found in the records: ${unsup.map((u) => esc(u)).join(' · ')}</div>` : ''}
             ${cites.length ? `<details class="bb-src"${cites.length <= 3 ? ' open' : ''}><summary>Sources · ${cites.length}</summary><ul class="bb-cites">${cites.join('')}</ul></details>` : ''}
             <div class="trace hide"></div>
         </div></div>`);
@@ -221,9 +253,6 @@
         q = (q || '').trim();
         if (!q || busy) return;
         if (q.length > 500) { alert('Please keep the question under 500 characters.'); return; }
-        // only answered turns go back as context, so a failed question cannot confuse a follow-up
-        const history = convo.filter((m) => m.reply && !m.reply.error).slice(-6)
-            .map((m) => ({ question: m.question, answer: m.reply.answer }));
         const turn = { question: q, reply: null, trace: null };
         convo.push(turn);
         input.value = '';
@@ -253,7 +282,8 @@
         try {
             turn.reply = await AgentUI.runWithTrace('/api/blackbox/ask', panel, {
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question: q, history, conversation_id: convId }),
+                // follow-up context is rebuilt on the server from the saved conversation, never sent from here
+                body: JSON.stringify({ question: q, conversation_id: convId }),
                 onTrace: (tr, ms) => { if ((tr.events || []).length) turn.trace = { ...tr, elapsed_ms: tr.elapsed_ms || Math.round(ms) }; },
             });
             if (turn.reply && turn.reply.conversation_id) { convId = turn.reply.conversation_id; remember(convId); }

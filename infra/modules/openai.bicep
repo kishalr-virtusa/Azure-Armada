@@ -1,4 +1,5 @@
-// Azure AI Foundry: AI Services account (Foundry resource) + Foundry project + gpt-4.1-mini model deployment.
+// Azure AI Foundry: AI Services account (Foundry resource) + Foundry project + model deployments with the
+// "dra-guardrails" content filter (guardrails.bicep, also deployed on its own by scripts/deploy-ws2.sh).
 // The DR Agent's agents use this project (model calls, Agent Service, tracing in the Foundry portal).
 
 @description('Location for the Foundry resource (eastus2 has GlobalStandard gpt-4.1-mini quota on Free Trial)')
@@ -26,7 +27,7 @@ param modelVersion string = '2025-04-14'
 param deploymentSku string = 'GlobalStandard'
 
 @description('Capacity in thousands of tokens per minute')
-param capacity int = 30
+param capacity int = 200
 
 @description('Foundry project name')
 param projectName string = 'dr-agent'
@@ -35,7 +36,7 @@ param projectName string = 'dr-agent'
 param reasoningDeploymentName string = 'gpt-5-mini'
 
 @description('Reasoning model capacity (thousands of tokens per minute)')
-param reasoningCapacity int = 50
+param reasoningCapacity int = 100
 
 var foundryName = 'dra-foundry-${suffix}'
 
@@ -75,42 +76,22 @@ resource project 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = if
   }
 }
 
-resource deployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = if (!useExistingOpenAI) {
-  parent: foundry
-  name: deploymentName
+// both deployments, behind the dra-guardrails content filter (Prompt Shields: jailbreak + indirect attack)
+module models 'guardrails.bicep' = if (!useExistingOpenAI) {
+  name: 'foundry-models'
   // serialize after the project: parallel child operations on the account fail with RequestConflict
   dependsOn: [
     project
   ]
-  sku: {
-    name: deploymentSku
+  params: {
+    foundryName: foundryName
+    deploymentName: deploymentName
+    modelName: modelName
+    modelVersion: modelVersion
+    deploymentSku: deploymentSku
     capacity: capacity
-  }
-  properties: {
-    model: {
-      format: 'OpenAI'
-      name: modelName
-      version: modelVersion
-    }
-  }
-}
-
-resource reasoningDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = if (!useExistingOpenAI) {
-  parent: foundry
-  name: reasoningDeploymentName
-  dependsOn: [
-    deployment // serialize child operations on the account
-  ]
-  sku: {
-    name: 'GlobalStandard'
-    capacity: reasoningCapacity
-  }
-  properties: {
-    model: {
-      format: 'OpenAI'
-      name: 'gpt-5-mini'
-      version: '2025-08-07'
-    }
+    reasoningDeploymentName: reasoningDeploymentName
+    reasoningCapacity: reasoningCapacity
   }
 }
 
