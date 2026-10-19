@@ -16,6 +16,19 @@
     .bb-head h1 { font-size: 16px; line-height: 22px; margin: 0; }
     .bb-head .sub { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .bb-head .btn { height: 32px; padding: 0 12px; font-size: 13px; flex-shrink: 0; }
+    .bb-head { position: relative; }
+    .bb-hist { position: absolute; top: calc(100% - 6px); right: 20px; z-index: 20; width: min(380px, calc(100% - 40px));
+               max-height: 60vh; overflow-y: auto; background: var(--surface, #fff); border: 1px solid var(--hairline);
+               border-radius: 12px; box-shadow: 0 12px 32px rgba(17, 12, 46, .14); padding: 6px; }
+    .bb-hist[hidden] { display: none; }
+    .bb-hist .h { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); padding: 8px 10px 6px; }
+    .bb-hist button { display: block; width: 100%; text-align: left; border: 0; background: none; border-radius: 8px;
+                      padding: 8px 10px; cursor: pointer; font: inherit; color: var(--ink); }
+    .bb-hist button:hover, .bb-hist button:focus-visible { background: var(--canvas-soft-2, #f4f2fb); outline: none; }
+    .bb-hist button.cur { background: var(--accent-soft); }
+    .bb-hist .ti { display: block; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bb-hist .mt { display: block; font-size: 12px; color: var(--mute); margin-top: 2px; }
+    .bb-hist .none { font-size: 13px; color: var(--mute); padding: 10px; }
     .bb-av { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
     .bb-av svg { width: 17px; height: 17px; }
     .bb-av.sm { width: 28px; height: 28px; }
@@ -94,7 +107,9 @@
             <h1>Black box</h1>
             <p class="sub">Answers only from what the DR Agent recorded · Azure AI Foundry</p>
         </div>
+        <button class="btn btn-secondary" id="bbHistBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="bbHist">History</button>
         <button class="btn btn-secondary" id="bbClear" type="button">New conversation</button>
+        <div class="bb-hist" id="bbHist" hidden role="menu" aria-label="Past conversations"></div>
     </div>
 
     <div class="bb-scroll" id="bbScroll">
@@ -121,7 +136,7 @@
 <script>
 (function () {
     const esc = AgentUI.esc;
-    const KEY = 'dra-blackbox';
+    const KEY = 'dra-blackbox-conv';  // which saved conversation this browser has open (the turns live on the server)
     const SUGGESTIONS = [
         'Summarise the latest drill',
         'Which writes were lost in the last drill under load?',
@@ -139,16 +154,11 @@
     const input = document.getElementById('bbInput');
     const askBtn = document.getElementById('bbAsk');
     let convo = [];  // [{question, reply, trace}] reply = server answer or {error}; trace = the agent's recorded steps
+    let convId = null;  // the server keeps every conversation; "New conversation" starts another one
     let busy = false;
 
-    try { convo = JSON.parse(sessionStorage.getItem(KEY) || '[]') || []; } catch (e) { convo = []; }
-    const save = () => {
-        const recent = convo.filter((m) => m.reply).slice(-20);
-        try { sessionStorage.setItem(KEY, JSON.stringify(recent)); } catch (e) {
-            // too big with the steps' details: keep the conversation itself
-            try { sessionStorage.setItem(KEY, JSON.stringify(recent.map(({ question, reply }) => ({ question, reply })))); } catch (e2) { /* storage blocked */ }
-        }
-    };
+    const remember = (id) => { try { id ? localStorage.setItem(KEY, id) : localStorage.removeItem(KEY); } catch (e) { /* storage blocked */ } };
+    const remembered = () => { try { return localStorage.getItem(KEY); } catch (e) { return null; } };
 
     const nearBottom = () => scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 80;
     const toBottom = () => { scroller.scrollTop = scroller.scrollHeight; };
@@ -236,16 +246,16 @@
         try {
             turn.reply = await AgentUI.runWithTrace('/api/blackbox/ask', panel, {
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question: q, history }),
+                body: JSON.stringify({ question: q, history, conversation_id: convId }),
                 onTrace: (tr, ms) => { if ((tr.events || []).length) turn.trace = { ...tr, elapsed_ms: tr.elapsed_ms || Math.round(ms) }; },
             });
+            if (turn.reply && turn.reply.conversation_id) { convId = turn.reply.conversation_id; remember(convId); }
         } catch (e) {
             turn.reply = { error: `Could not get an answer: ${e.message}` };
         } finally {
             watch.disconnect();
             pending.replaceWith(answer(turn));
             setBusy(false);
-            save();
             toBottom();
             input.focus();
         }
@@ -268,13 +278,58 @@
     });
     document.getElementById('bbClear').addEventListener('click', () => {
         if (busy) return;
-        convo = [];
-        save();
+        convo = []; convId = null; remember(null);  // the old one stays saved: open it again from History
+        closeHist();
         render();
         input.focus();
     });
-    convo = convo.filter((m) => m && m.reply);  // a turn left pending by a reload has no answer to show
+
+    // ---------------------------------------------------------------- saved conversations
+    const hist = document.getElementById('bbHist');
+    const histBtn = document.getElementById('bbHistBtn');
+    const ago = (iso) => {
+        const s = Math.max(0, (Date.now() - Date.parse(iso || '')) / 1000);
+        if (!Number.isFinite(s)) return '';
+        if (s < 60) return 'just now';
+        if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+        if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+        return new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short' });
+    };
+    function closeHist() { hist.hidden = true; histBtn.setAttribute('aria-expanded', 'false'); }
+    async function openHist() {
+        hist.hidden = false; histBtn.setAttribute('aria-expanded', 'true');
+        hist.innerHTML = '<div class="none">Loading…</div>';
+        try {
+            const res = await fetch('/api/blackbox/conversations', { cache: 'no-store' });
+            const list = res.ok ? await res.json() : [];
+            hist.innerHTML = '<div class="h">Past conversations</div>' + (list.length ? list.map((c) =>
+                `<button type="button" role="menuitem" data-id="${esc(c.id)}" class="${c.id === convId ? 'cur' : ''}">
+                    <span class="ti">${esc(c.title)}</span>
+                    <span class="mt">${c.turns} question${c.turns === 1 ? '' : 's'} · ${esc(ago(c.updated_at))}${c.by ? ' · ' + esc(c.by) : ''}</span>
+                 </button>`).join('') : '<div class="none">No saved conversations yet.</div>');
+        } catch (e) { hist.innerHTML = '<div class="none">Could not load the history.</div>'; }
+    }
+    async function load(id) {
+        try {
+            const res = await fetch(`/api/blackbox/conversations/${encodeURIComponent(id)}`, { cache: 'no-store' });
+            if (!res.ok) throw new Error();
+            const c = await res.json();
+            convo = (c.turns || []).filter((t) => t.reply);
+            convId = c.id; remember(convId);
+        } catch (e) { convo = []; convId = null; remember(null); }
+        render();
+    }
+    histBtn.addEventListener('click', (e) => { e.stopPropagation(); hist.hidden ? openHist() : closeHist(); });
+    hist.addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-id]');
+        if (b && !busy) { closeHist(); load(b.dataset.id); }
+    });
+    document.addEventListener('click', (e) => { if (!hist.hidden && !hist.contains(e.target)) closeHist(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !hist.hidden) { closeHist(); histBtn.focus(); } });
+
     render();
+    const last = remembered();
+    if (last) load(last);  // reopen the conversation this browser had open
 })();
 </script>
 {% endblock %}

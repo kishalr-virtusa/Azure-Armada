@@ -93,6 +93,53 @@ def list_exercises(limit: int = 50) -> list[dict[str, Any]]:
     return sorted(results, key=lambda x: x.get("t0") or "", reverse=True)  # selected-but-missing props come back as None
 
 
+# ============== Black box conversations ==============
+# In the exercises table, but never with RowKey 'meta', so drill listings do not see them:
+#   PartitionKey bbconv-<id>, RowKey 'bbconv'       title, created_at, updated_at, turns, by
+#   PartitionKey bbconv-<id>, RowKey 'turn-000001'  question, reply_json, trace_json, at
+
+def add_conversation_turn(conv_id: str, question: str, reply: dict[str, Any], trace_json: str | None,
+                          by: str = "") -> int:
+    client = get_table_client("exercises")
+    pk = f"bbconv-{conv_id}"
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        head = dict(client.get_entity(partition_key=pk, row_key="bbconv"))
+    except Exception:  # noqa: BLE001 - a new conversation
+        head = {"PartitionKey": pk, "RowKey": "bbconv", "title": question[:120], "created_at": now, "turns": 0, "by": by}
+    n = int(head.get("turns") or 0) + 1
+    client.upsert_entity({"PartitionKey": pk, "RowKey": f"turn-{n:06d}", "question": question, "at": now,
+                          "reply_json": json.dumps(reply, default=str)[:30000],
+                          "trace_json": trace_json if trace_json and len(trace_json) <= 30000 else None})
+    client.upsert_entity({**head, "turns": n, "updated_at": now})
+    return n
+
+
+def list_conversations(limit: int = 30) -> list[dict[str, Any]]:
+    client = get_table_client("exercises")
+    rows = [dict(e) for e in client.query_entities(query_filter="RowKey eq 'bbconv'",
+                                                   select=["PartitionKey", "title", "created_at", "updated_at", "turns", "by"])]
+    rows.sort(key=lambda r: r.get("updated_at") or "", reverse=True)
+    return [{"id": r["PartitionKey"][len("bbconv-"):], "title": r.get("title") or "", "turns": int(r.get("turns") or 0),
+             "created_at": r.get("created_at"), "updated_at": r.get("updated_at"), "by": r.get("by") or ""}
+            for r in rows[:limit]]
+
+
+def get_conversation(conv_id: str) -> dict[str, Any] | None:
+    client = get_table_client("exercises")
+    pk = f"bbconv-{conv_id}"
+    rows = sorted((dict(e) for e in client.query_entities(query_filter="PartitionKey eq @pk", parameters={"pk": pk})),
+                  key=lambda r: r["RowKey"])
+    head = next((r for r in rows if r["RowKey"] == "bbconv"), None)
+    if not head:
+        return None
+    turns = [{"question": r.get("question") or "", "at": r.get("at"),
+              "reply": json.loads(r.get("reply_json") or "{}"),
+              "trace": json.loads(r["trace_json"]) if r.get("trace_json") else None}
+             for r in rows if r["RowKey"].startswith("turn-")]
+    return {"id": conv_id, "title": head.get("title") or "", "updated_at": head.get("updated_at"), "turns": turns}
+
+
 # ============== Events Table ==============
 
 def add_event(

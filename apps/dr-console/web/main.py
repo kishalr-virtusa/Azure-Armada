@@ -5,6 +5,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import secrets
 from pathlib import Path
 from urllib.parse import urlencode
@@ -296,8 +297,37 @@ async def api_blackbox_ask(request: Request, data: dict = Body(...)):
     if not 1 <= len(question) <= 500:
         return JSONResponse({"error": "question must be 1-500 characters"}, status_code=422)
     history = data.get("history") if isinstance(data.get("history"), list) else []
-    res = await run_in_threadpool(trace.run, _trace_id(request), blackbox.run, question, history)
-    return {**res.output.model_dump(), "source": res.source, "via": res.via, "latency_ms": res.latency_ms}
+    conv_id = str(data.get("conversation_id") or "")
+    if not _BB_CONV.fullmatch(conv_id):
+        conv_id = secrets.token_hex(6)  # a new conversation
+    tid = _trace_id(request)
+    res = await run_in_threadpool(trace.run, tid, blackbox.run, question, history)
+    reply = {**res.output.model_dump(), "source": res.source, "via": res.via, "latency_ms": res.latency_ms}
+    try:  # every question and answer is kept: "New conversation" starts another one, it never deletes
+        from dr_agent.tools import store
+        await run_in_threadpool(store.add_conversation_turn, conv_id, question, reply,
+                                trace.snapshot(tid) if tid else None, auth.current_user(request) or "")
+    except Exception as e:  # noqa: BLE001 - the answer is still shown; only its history is missing
+        log.warning("could not save black box turn: %s", e)
+    return {**reply, "conversation_id": conv_id}
+
+
+_BB_CONV = re.compile(r"[0-9a-f]{12}")
+
+
+@app.get("/api/blackbox/conversations", dependencies=[api])
+def api_blackbox_conversations():
+    from dr_agent.tools import store
+    return JSONResponse(store.list_conversations(), headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/blackbox/conversations/{conv_id}", dependencies=[api])
+def api_blackbox_conversation(conv_id: str):
+    from dr_agent.tools import store
+    conv = store.get_conversation(conv_id) if _BB_CONV.fullmatch(conv_id) else None
+    if not conv:
+        return JSONResponse({"error": "conversation not found"}, status_code=404)
+    return JSONResponse(conv, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/autopilot", dependencies=[api])

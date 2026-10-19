@@ -126,3 +126,57 @@ def test_ask_api_requires_auth():
     from fastapi.testclient import TestClient
     from web import main
     assert TestClient(main.app).post("/api/blackbox/ask", json={"question": "hi"}).status_code == 401
+
+
+# ------------------------------------------------------------------ saved conversations
+class _FakeTable:
+    """Just enough of an Azure TableClient for the conversation store."""
+    def __init__(self):
+        self.rows = {}
+
+    def get_entity(self, partition_key, row_key):
+        return dict(self.rows[(partition_key, row_key)])
+
+    def upsert_entity(self, e):
+        self.rows[(e["PartitionKey"], e["RowKey"])] = dict(e)
+
+    def query_entities(self, query_filter, parameters=None, select=None):
+        if query_filter == "RowKey eq 'bbconv'":
+            return [dict(v) for (pk, rk), v in self.rows.items() if rk == "bbconv"]
+        return [dict(v) for (pk, rk), v in self.rows.items() if pk == parameters["pk"]]
+
+
+def test_conversations_are_kept_and_listed_newest_first(monkeypatch):
+    t = _FakeTable()
+    monkeypatch.setattr(store, "get_table_client", lambda name: t)
+    store.add_conversation_turn("aaaaaaaaaaaa", "Who approved the failback?", {"answer": "Kishal"}, '{"events": []}', "Kishal")
+    store.add_conversation_turn("aaaaaaaaaaaa", "And the one before?", {"answer": "Arasan"}, None)
+    store.add_conversation_turn("bbbbbbbbbbbb", "What did Autopilot find?", {"answer": "nothing"}, "x" * 40000)
+    lst = store.list_conversations()
+    assert [c["id"] for c in lst] == ["bbbbbbbbbbbb", "aaaaaaaaaaaa"]
+    assert lst[1] == {**lst[1], "title": "Who approved the failback?", "turns": 2, "by": "Kishal"}
+    conv = store.get_conversation("aaaaaaaaaaaa")
+    assert [x["question"] for x in conv["turns"]] == ["Who approved the failback?", "And the one before?"]
+    assert conv["turns"][0]["trace"] == {"events": []} and conv["turns"][1]["reply"] == {"answer": "Arasan"}
+    assert store.get_conversation("bbbbbbbbbbbb")["turns"][0]["trace"] is None  # too big to keep: answer still kept
+    assert store.get_conversation("cccccccccccc") is None
+    # drill listings never see conversation rows
+    assert all(rk != "meta" for (pk, rk) in t.rows)
+
+
+def test_ask_saves_the_turn_and_returns_the_conversation_id(client, monkeypatch):
+    from dr_agent.llm import AgentResult
+    out = BlackboxAnswer(answer="Kishal", confidence="high", found_in_records=True, citations=[])
+    monkeypatch.setattr(blackbox, "run", lambda q, h: AgentResult(output=out, source="ai", via="foundry-agent", latency_ms=5))
+    saved = []
+    monkeypatch.setattr(store, "add_conversation_turn", lambda *a: saved.append(a) or 1)
+    c = client
+    r = c.post("/api/blackbox/ask", json={"question": "Who approved?"}).json()
+    assert r["answer"] == "Kishal" and len(r["conversation_id"]) == 12 and saved[0][0] == r["conversation_id"]
+    r2 = c.post("/api/blackbox/ask", json={"question": "And before?", "conversation_id": r["conversation_id"]}).json()
+    assert r2["conversation_id"] == r["conversation_id"]
+    r3 = c.post("/api/blackbox/ask", json={"question": "x", "conversation_id": "../../etc"}).json()
+    assert r3["conversation_id"] != "../../etc" and len(r3["conversation_id"]) == 12
+    monkeypatch.setattr(store, "add_conversation_turn", lambda *a: (_ for _ in ()).throw(RuntimeError("table down")))
+    assert c.post("/api/blackbox/ask", json={"question": "still answers?"}).json()["answer"] == "Kishal"
+    assert c.get("/api/blackbox/conversations/not-an-id").status_code == 404
