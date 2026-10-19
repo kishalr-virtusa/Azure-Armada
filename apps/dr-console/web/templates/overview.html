@@ -34,6 +34,27 @@
     </div>
 </div>
 
+<!-- Autopilot: checks readiness on its own -->
+<div class="card" id="autopilot">
+    <div class="card-head-row" style="flex-wrap: wrap;">
+        <div>
+            <h2 style="display: flex; align-items: center; gap: 10px;">Autopilot <span class="st neutral" id="apState">loading</span></h2>
+            <p class="sub" style="margin-top: 4px;" id="apSub">The DR Agent checks readiness on its own. No one has to ask.</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <div class="tabs" role="tablist" aria-label="Autonomy level">
+                <button class="tab" data-level="observe" type="button" title="Alert only">Observe</button>
+                <button class="tab" data-level="propose" type="button" title="Prepare the fix, a human approves">Propose fixes</button>
+                <button class="tab" data-level="auto-fix" type="button" title="Apply the allowlisted DR-side fix itself, audited">Auto-fix config drift</button>
+            </div>
+            <button class="btn btn-secondary" id="apRun" type="button">Run check now</button>
+        </div>
+    </div>
+    <div class="ap-strip" id="apStrip"></div>
+    <div id="apTrace" class="trace hide"></div>
+    <div id="apFinding"></div>
+</div>
+
 <!-- Proven recovery + system -->
 <div class="twin">
     <div class="card">
@@ -309,6 +330,67 @@
         }).join('');
     }
 
+    // ---------------------------------------------------------------- autopilot
+    const ago = (iso) => { if (!iso) return '—'; const s = Math.round((Date.now() - Date.parse(iso)) / 1000);
+        return s < 60 ? `${s} s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`; };
+    const until = (iso) => { if (!iso) return ''; const s = Math.round((Date.parse(iso) - Date.now()) / 1000);
+        return s <= 0 ? 'due now' : s < 60 ? `in ${s} s` : `in ${Math.round(s / 60)} min`; };
+
+    async function loadAutopilot() {
+        let a;
+        try { a = await (await fetch('/api/autopilot', { cache: 'no-store' })).json(); } catch (e) { return; }
+        const st = a.settings || {}, last = a.last || {};
+        const pill = document.getElementById('apState');
+        pill.className = 'st ' + (st.enabled ? (last.go === false ? 'fail' : 'pass') : 'neutral');
+        pill.textContent = !st.enabled ? 'off' : a.running ? 'checking…' : last.go === false ? 'problem found' : 'watching';
+        document.getElementById('apSub').textContent = st.enabled
+            ? `Checks DR readiness by itself every ${st.interval_min} min · last check ${ago(a.last_run_at)} · next ${until(a.next_run_at)}. No one has to ask.`
+            : 'Autopilot is off.';
+        document.querySelectorAll('[data-level]').forEach(b => b.classList.toggle('active', b.dataset.level === st.level));
+        // strip of recent runs (oldest left)
+        const runs = (a.feed || []).filter(e => e.data && e.data.at && !e.data.skipped).slice(0, 20).reverse();
+        document.getElementById('apStrip').innerHTML = runs.length ? runs.map(e => {
+            const d = e.data, ok = d.go;
+            return `<span class="ap-dot ${ok ? 'ok' : 'bad'}" title="${esc(new Date(d.at).toLocaleString())} · ${esc(d.trigger)} · ${ok ? 'all checks pass' : esc(Object.keys(d.failing || {}).join(', '))}"></span>`;
+        }).join('') + `<span class="ap-strip-l">last ${runs.length} checks</span>` : '<span class="ap-strip-l">No checks yet: the first runs about a minute after start, or press Run check now.</span>';
+        // latest finding
+        const f = document.getElementById('apFinding');
+        if (last.go === false) {
+            const p = a.proposal, ai = last.ai || {};
+            f.innerHTML = `<div class="box ap-find">
+                <div class="ap-find-h"><span class="st fail">Found by Autopilot</span> <span>${esc(new Date(last.at).toLocaleString())} · ${esc(last.trigger === 'manual' ? 'manual check' : 'scheduled check, no one asked')}</span></div>
+                <ul>${Object.entries(last.failing || {}).map(([k, v]) => `<li><b>${esc(k)}</b>: ${esc(v)}</li>`).join('')}</ul>
+                ${ai.summary ? `<p class="ap-ai"><b>Readiness agent${ai.via === 'foundry-agent' ? ' (Azure AI Foundry)' : ''}:</b> ${esc(ai.summary)}</p>` : ''}
+                ${p ? `<div class="ap-prop"><span>Proposed fix: copy <b>${esc(p.keys.join(', '))}</b> to ${esc(p.to)} (allowlisted, DR side only).</span>
+                       <button class="btn btn-primary" id="apApprove" type="button">Approve fix</button></div>` : ''}
+                ${last.proposal && last.proposal.status === 'applied automatically' ? `<p class="ap-ai"><span class="st pass">Applied automatically</span> ${esc(last.proposal.result || '')}</p>` : ''}
+            </div>`;
+            const btn = document.getElementById('apApprove');
+            if (btn) btn.onclick = async () => {
+                const by = AgentUI.approverName(); if (by === null) return;
+                btn.disabled = true; btn.textContent = 'Applying…';
+                const out = await (await fetch('/api/autopilot/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ by }) })).json();
+                alert(out.error || out.message || 'Fix applied'); loadAutopilot();
+            };
+        } else {
+            f.innerHTML = last.at ? `<div class="ap-ok"><span class="st pass">All ${last.checks || 7} checks pass</span> <span class="sys-n">${esc(new Date(last.at).toLocaleString())} · ${esc(last.trigger)}${(last.resolved || []).length ? ' · resolved: ' + esc(last.resolved.join(', ')) : ''}</span></div>` : '';
+        }
+        if (a.trace && !apRunning) AgentUI.showSaved(document.getElementById('apTrace'), a.trace, last.at);
+    }
+    let apRunning = false;
+    document.getElementById('apRun').onclick = async () => {
+        const btn = document.getElementById('apRun');
+        btn.disabled = true; btn.textContent = 'Checking…'; apRunning = true;
+        try { await AgentUI.runWithTrace('/api/autopilot/run', document.getElementById('apTrace')); } catch (e) { alert(e.message); }
+        apRunning = false; btn.disabled = false; btn.textContent = 'Run check now';
+        loadAutopilot();
+    };
+    document.querySelectorAll('[data-level]').forEach(b => b.onclick = async () => {
+        const by = AgentUI.approverName(); if (by === null) return;
+        await fetch('/api/autopilot/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ level: b.dataset.level, by }) });
+        loadAutopilot();
+    });
+
     // ---------------------------------------------------------------- overview summary
     const esc = (v) => AgentUI.esc(v);
     const when = (iso) => iso ? new Date(iso).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -369,6 +451,8 @@
     loadExercises();
     loadOverview();
     setInterval(loadOverview, 15000);
+    loadAutopilot();
+    setInterval(() => { if (!apRunning) loadAutopilot(); }, 10000);
     
     // Poll every 2 seconds
     setInterval(loadStatus, 2000);

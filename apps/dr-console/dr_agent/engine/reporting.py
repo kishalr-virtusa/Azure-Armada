@@ -102,8 +102,18 @@ def build_report(xid: str) -> str:
     asr_proven = iaas["status"] == "validated"
     superseded = lambda text: asr_proven and any(k in text.lower() for k in ASR_TERMS)  # noqa: E731
     open_findings = [f for f in open_findings if not superseded(f)]
+    # memory across drills: save this drill's RTO breakdown, compare with earlier drills, find recurring findings
+    seg_sum: dict[str, float] = {}
+    for sg in segs:
+        seg_sum[sg["label"]] = round(seg_sum.get(sg["label"], 0.0) + sg["seconds"], 3)
+    if seg_sum:
+        store.upsert_exercise(xid, {"rto_breakdown_json": json.dumps(seg_sum)})
+    from dr_agent.engine.history import drill_history, recurring
+    hist = drill_history(xid)
+    facts_history = {k: hist.get(k) for k in ("previous_drills", "median_rto_s", "rto_vs_median_pct", "biggest_segment_change")}
+    facts_history["recurring_findings"] = recurring(open_findings, hist)
     facts = {
-        "profile": prof.model_dump(), "strategy": strategy, "iaas": iaas,
+        "profile": prof.model_dump(), "strategy": strategy, "iaas": iaas, "history": facts_history,
         "rto_breakdown_s": [(s["label"], s["seconds"]) for s in segs], "rto_precision_s": precision,
         "results": {"rto": fmt_duration(rto), "rto_target": f"{prof.rto_min} min", "rto_met": rto_met,
                     "rpo": fmt_duration(rpo), "rpo_target": f"{prof.rpo_min} min", "rpo_met": rpo_met,

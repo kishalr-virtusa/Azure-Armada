@@ -6,3 +6,7 @@ what_went_well and issues: short factual bullets. remediation: concrete items wi
 (include readiness/runbook findings that are still open).
 Measured results override earlier warnings: if a readiness or runbook finding is disproved by this drill's measurements
 (for example iaas.status is "validated" while readiness warned about Site Recovery), it is resolved; do not list it.
+history (computed by code from earlier drills): if rto_vs_median_pct is above +15, say the RTO regressed against the
+median of previous drills and name biggest_segment_change; if it is below -15, say it improved. For every item in
+recurring_findings, say it has been open for that many earlier drills and raise its remediation priority to high.
+Use only these numbers; do not invent trends.

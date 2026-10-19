@@ -1,6 +1,7 @@
 """DR Agent Console: FastAPI app (pages + JSON API). Run: gunicorn -k uvicorn.workers.UvicornWorker web.main:app"""
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 from pathlib import Path
@@ -60,6 +61,12 @@ def _resume() -> None:
             log.info("resumed exercises: %s", resumed)
     except Exception:  # noqa: BLE001
         log.exception("resume check failed")
+
+
+@app.on_event("startup")
+def _start_autopilot() -> None:
+    from dr_agent import autopilot
+    autopilot.start()
 
 
 FOUNDRY_AGENTS: dict = {}
@@ -258,6 +265,36 @@ def map_page(request: Request):
     return _page(request, "map.html", "map")
 
 
+@app.get("/api/autopilot", dependencies=[api])
+def api_autopilot():
+    from dr_agent import autopilot
+    from dr_agent.tools import store
+    st = autopilot.get_state()
+    row = store.get_exercise(autopilot.STATE) or {}
+    st["trace"] = json.loads(row["last_trace_json"]) if row.get("last_trace_json") else None
+    st["feed"] = [{"ts": e.get("ts"), "kind": e.get("kind"), "message": e.get("message"),
+                   "data": json.loads(e["data_json"]) if e.get("data_json") else None} for e in autopilot.feed(20)]
+    return JSONResponse(st, headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/autopilot/run", dependencies=[api])
+async def api_autopilot_run(request: Request):
+    from dr_agent import autopilot
+    return await run_in_threadpool(autopilot.run_once, "manual", _trace_id(request) or None)
+
+
+@app.post("/api/autopilot/settings", dependencies=[api])
+def api_autopilot_settings(request: Request, data: dict = Body(...)):
+    from dr_agent import autopilot
+    return autopilot.set_settings(data.get("enabled"), data.get("level"), data.get("interval_min"), _who(request, data.get("by")))
+
+
+@app.post("/api/autopilot/approve", dependencies=[api])
+async def api_autopilot_approve(request: Request, data: Optional[dict] = Body(None)):
+    from dr_agent import autopilot
+    return await run_in_threadpool(autopilot.approve, _who(request, (data or {}).get("by")))
+
+
 @app.get("/api/overview", dependencies=[api])
 def api_overview():
     """Readiness verdict from live checks, region health with reasons, proven-recovery stats, system info."""
@@ -366,7 +403,7 @@ async def api_generate_plan(request: Request):
 async def api_approve(request: Request, data: dict = Body(...)):
     # the approved plan is always the saved one the Planner produced and the approver reviewed, never a client copy
     return await run_in_threadpool(service.approve_and_start, _who(request, data.get("approver_name")), None,
-                                   bool(data.get("chaos")))
+                                   bool(data.get("chaos")), bool(data.get("load")))
 
 
 @app.get("/api/access", dependencies=[api])

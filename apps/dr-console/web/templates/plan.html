@@ -55,6 +55,10 @@
                 <input type="checkbox" name="confirm" required>
                 <span>I have reviewed the plan and understand that this will inject a real outage</span>
             </label>
+            <label class="check-row">
+                <input type="checkbox" name="load">
+                <span>Run under payment load: 20 database writes per second, each checked for loss (shown on the Live map)</span>
+            </label>
             <label class="check-row" style="color: var(--upd);">
                 <input type="checkbox" name="chaos">
                 <span>Inject a surprise fault during the drill (tests the Validator agent)</span>
@@ -171,6 +175,7 @@
         const formData = new FormData(e.target);
         const approverName = formData.get('approver_name');
         const chaos = formData.get('chaos') === 'on';
+        const load = formData.get('load') === 'on';
         
         if (!confirm('Are you sure you want to start the DR exercise? This will inject a real outage.')) {
             return;
@@ -187,6 +192,7 @@
                 body: JSON.stringify({
                     approver_name: approverName,
                     chaos: chaos,
+                    load: load,
                 }),
             });
             

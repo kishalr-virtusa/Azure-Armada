@@ -377,6 +377,17 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .saved-note { margin: -4px 0 0; font-family: var(--mono); font-size: 11.5px; color: var(--mute); }
 
+.ap-strip { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.ap-dot { width: 14px; height: 14px; border-radius: 4px; background: var(--hairline-strong); }
+.ap-dot.ok { background: var(--success); } .ap-dot.bad { background: var(--danger); }
+.ap-strip-l { font-size: 12px; color: var(--mute); margin-left: 8px; }
+.ap-find { border-color: var(--danger) !important; background: color-mix(in srgb, var(--danger-soft) 50%, var(--canvas)) !important; display: flex; flex-direction: column; gap: 8px; }
+.ap-find-h { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--body); flex-wrap: wrap; }
+.ap-find ul { margin: 0; padding-left: 18px; font-size: 13.5px; display: flex; flex-direction: column; gap: 3px; }
+.ap-ai { margin: 0; font-size: 13.5px; line-height: 20px; color: var(--ink); }
+.ap-prop { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid var(--hairline); font-size: 13.5px; }
+.ap-ok { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
 /* short laptop screens: keep the sidebar compact (must come after the base rules) */
 @media (max-height: 760px) and (min-width: 961px) {
     .nav { gap: 12px; padding-top: 14px; }

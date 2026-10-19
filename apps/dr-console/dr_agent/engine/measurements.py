@@ -88,6 +88,21 @@ def compute_rpo(
                      checked=len(acked), acked_during_failover=during)
 
 
+def write_series(records: Iterable[HeartbeatRecord], until: Optional[datetime] = None) -> list[dict]:
+    """Per-second counts of confirmed and failed writes (for the live chart and the report)."""
+    buckets: dict[int, list[int]] = {}
+    for r in records:
+        t = r.client_ts if r.client_ts.tzinfo else r.client_ts.replace(tzinfo=timezone.utc)
+        if until and t > (until if until.tzinfo else until.replace(tzinfo=timezone.utc)):
+            continue
+        b = buckets.setdefault(int(t.timestamp()), [0, 0])
+        b[0 if r.acked else 1] += 1
+    if not buckets:
+        return []
+    lo, hi = min(buckets), max(buckets)
+    return [{"t": s, "ok": buckets.get(s, [0, 0])[0], "fail": buckets.get(s, [0, 0])[1]} for s in range(lo, hi + 1)]
+
+
 def evaluate(rto_s: Optional[float], rpo_s: Optional[float], rto_target_min: int, rpo_target_min: int) -> dict:
     """Compare measured values against targets. A missing measurement counts as NOT met."""
     rto_target_s, rpo_target_s = rto_target_min * 60, rpo_target_min * 60

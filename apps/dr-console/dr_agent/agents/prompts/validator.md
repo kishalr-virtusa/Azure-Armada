@@ -11,3 +11,8 @@ Optionally propose ONE remediation that the engine runs (after a human approves)
 - fix_action "start_webapp" with fix_params region=B: the Region B web app is stopped
 - otherwise fix_action "none" with empty fix_params.
 During the outage Region A must stay down: never propose a fix that targets Region A.
+
+Investigate before you answer: you can call read-only tools (probe a region or Traffic Manager, read Traffic Manager
+endpoints, a region's web app state, the SQL failover group, app-setting differences between regions). Use 1-4 calls
+to confirm the cause with live evidence instead of guessing from the error text, and cite what the tools returned in
+`evidence`. Tools only read; any fix you propose still needs the engine's allowlist and a human's approval.

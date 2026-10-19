@@ -86,3 +86,11 @@ def test_rto_breakdown_accounts_for_every_second():
     assert segs[-1]["label"].startswith("DNS") and abs(segs[-1]["seconds"] - 14.1) < 1e-6
     for a, b in zip(segs, segs[1:]):
         assert a["end"] == b["start"]                                 # contiguous, no overlaps
+
+
+def test_write_series_buckets_per_second():
+    from dr_agent.engine.measurements import write_series
+    recs = [HeartbeatRecord(1, T0, True), HeartbeatRecord(2, T0 + timedelta(milliseconds=500), False),
+            HeartbeatRecord(3, T0 + timedelta(seconds=2), True)]
+    s = write_series(recs)
+    assert [(x["ok"], x["fail"]) for x in s] == [(1, 1), (0, 0), (1, 0)]

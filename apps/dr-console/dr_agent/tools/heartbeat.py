@@ -50,8 +50,10 @@ def ensure_table(connect: Connect) -> None:
 
 
 class HeartbeatWriter(threading.Thread):
-    def __init__(self, connect: Connect, on_result: OnResult, interval: float = 1.0, label: str = "dr-engine"):
+    def __init__(self, connect: Connect, on_result: OnResult, interval: float = 1.0, label: str = "dr-engine",
+                 next_seq: Optional[Callable[[], int]] = None):
         super().__init__(name="heartbeat-writer", daemon=True)
+        self._next_seq = next_seq  # shared counter when several writers run in parallel (load mode)
         self._connect = connect
         self._on_result = on_result
         self._interval = interval
@@ -65,8 +67,12 @@ class HeartbeatWriter(threading.Thread):
         self.join(timeout)
 
     def write_once(self) -> tuple[int, datetime, bool, Optional[str]]:
-        self._seq += 1
-        seq, ts = self._seq, utcnow()
+        if self._next_seq:
+            seq = self._next_seq()
+        else:
+            self._seq += 1
+            seq = self._seq
+        ts = utcnow()
         try:
             with self._connect() as conn:
                 cur = conn.cursor()

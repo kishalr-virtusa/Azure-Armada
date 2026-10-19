@@ -16,6 +16,7 @@ from typing import Any, Optional
 from dr_agent import trace
 from dr_agent.config import config
 from dr_agent.engine import runner
+from dr_agent.engine import measurements as M
 from dr_agent.engine.measurements import fmt_duration
 from dr_agent.engine.plan import validate_plan, PlanError
 from dr_agent.models import AppProfile, ExercisePlan, ReadinessReport, StrategyRec
@@ -170,6 +171,11 @@ def overview_summary() -> dict:
 
 
 # ------------------------------------------------------------------ live map
+def _epoch(v: Any) -> Optional[float]:
+    iso = _utc_iso(v)
+    return datetime.fromisoformat(iso).timestamp() if iso else None
+
+
 def _utc_iso(v: Any) -> Optional[str]:
     """Stored timestamps are UTC but may lack the offset; browsers would read those as local time."""
     if not v:
@@ -216,6 +222,7 @@ def _compute_live_map() -> dict:
         f_st = pool.submit(get_status, 1.5)
         f_pa = pool.submit(_safe, runner._probe, "A")
         f_pb = pool.submit(_safe, runner._probe, "B")
+        f_tm = pool.submit(_safe, runner.tm_resolve)  # the engine's fresh DNS answer, not a cached lookup
     st = f_st.result()
     probes = {"A": f_pa.result(), "B": f_pb.result()}
     eps = {e.get("name"): e for e in ((st.get("traffic_manager") or {}).get("endpoints") or [])}
@@ -234,8 +241,9 @@ def _compute_live_map() -> dict:
             "tm_enabled": ep.get("endpoint_status") == "Enabled",
             "tm_monitor": ep.get("endpoint_monitor_status"),
         }
+    fresh = f_tm.result() or {}
     routing = st.get("routing") or {}
-    serving = "A" if routing.get("points_to_region_a") else "B" if routing.get("points_to_region_b") else None
+    serving = fresh.get("dns_region") or ("A" if routing.get("points_to_region_a") else "B" if routing.get("points_to_region_b") else None)
     out: dict[str, Any] = {"regions": regions, "serving": serving, "primary": fog.get("primary_region"),
                            "replication": fog.get("replication_state"), "drill": None,
                            "server_time": datetime.now(timezone.utc).isoformat()}
@@ -265,6 +273,10 @@ def _compute_live_map() -> dict:
                           "failed": sum(not h.acked for h in hb) if hb else None,
                           "acked_10s": sum(h.acked for h in recent), "failed_10s": sum(not h.acked for h in recent),
                           "lost": ev.get("lost_writes"), "writing": bool(r and getattr(r, "hb_writer", None))},
+            "series": (M.write_series(hb)[-120:] if hb else json.loads(m.get("write_series_json") or "[]")[-120:]),
+            "markers": {k: _epoch(m.get(k)) for k in ("t0", "t_failover", "t_failover_done", "t_recovered")},
+            "lost_at": [_epoch(t) for t in (ev.get("lost_write_times") or [])],
+            "load": _num(m.get("load_writes_per_s")) or 1,
             "asr": {"started": bool(m.get("iaas_started")), "done": bool(m.get("iaas_failover_done")),
                     "recovered_s": _num(m.get("iaas_recovered_s"))},
         }
@@ -490,7 +502,10 @@ def get_draft_plan() -> dict:
             "at": row.get("plan_at"), "trace": json.loads(row["plan_trace_json"]) if row.get("plan_trace_json") else None}
 
 
-def approve_and_start(approver: str, plan_data: Optional[dict] = None, chaos: bool = False) -> dict:
+LOAD_WRITES_PER_S = 20  # "under payment load" option: confirmed database writes per second during the drill
+
+
+def approve_and_start(approver: str, plan_data: Optional[dict] = None, chaos: bool = False, load: bool = False) -> dict:
     if not approver.strip():
         return {"error": "approver name is required"}
     plan = ExercisePlan.model_validate(plan_data) if plan_data else ExercisePlan.model_validate(get_draft_plan())
@@ -513,6 +528,7 @@ def approve_and_start(approver: str, plan_data: Optional[dict] = None, chaos: bo
         "approvals_json": json.dumps({"plan": {"by": approver, "at": now}}),
         "confirmations_json": "{}", "completed_steps_json": "[]", "command": "", "t0": "",
         "chaos_armed": "true" if chaos else "", "chaos_injected": "",
+        "load_writes_per_s": LOAD_WRITES_PER_S if load else 1,
     })
     store.add_event(xid, "approval", f"Plan approved by {approver}", None, {"by": approver, "at": now})
     try:
@@ -622,6 +638,21 @@ def list_exercises() -> list[dict]:
     return sorted(rows, key=lambda e: e["PartitionKey"], reverse=True)[:50]
 
 
+def _history_view(xid: str, m: dict) -> dict:
+    """Trend for the Results page: earlier drills plus this one, and recurring remediation items."""
+    from dr_agent.engine.history import drill_history, recurring
+    try:
+        h = drill_history(xid)
+    except Exception as e:  # noqa: BLE001
+        log.warning("history failed: %s", e)
+        return {}
+    items = [r.get("item", "") for r in json.loads(m.get("remediation_json") or "[]")]
+    h["recurring"] = recurring(items, h)
+    if _num(m.get("rto_s")) is not None:
+        h["trend"] = h["trend"] + [{"id": xid, "rto_s": _num(m.get("rto_s")), "chaos": bool(m.get("chaos_injected")), "current": True}]
+    return h
+
+
 def _precise(sec):
     """Measured seconds shown exactly as recorded (2 decimals), never rounded to whole seconds."""
     if sec is None:
@@ -654,6 +685,7 @@ def results_context(xid: Optional[str]) -> dict:
         "last_hb_seq": ev.get("last_acked_seq"), "last_hb_ts": ev.get("last_acked_ts"),
         "dr_hb_seq": None, "dr_hb_ts": ev.get("newest_present_ts"),
         "remediation_items": json.loads(m.get("remediation_json") or "[]"),  # same items as the report
+        "history": _history_view(xid, m),
         **_rto_accounting(xid, m, rto),
         "report_url": f"/reports/{xid}" if m.get("report_url") else None,
     }

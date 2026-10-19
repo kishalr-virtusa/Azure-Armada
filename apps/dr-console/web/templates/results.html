@@ -44,6 +44,54 @@
     </div>
 </div>
 
+<!-- Memory across drills -->
+{% if history and history.trend and history.trend|length > 1 %}
+<div class="card">
+    <div>
+        <h2>Compared with earlier drills</h2>
+        <p class="sub" style="margin-top: 4px;">
+            {% set pct = history.rto_vs_median_pct %}
+            {% if pct is not none %}This drill recovered {{ '%.1f' % (pct|abs) }}% {{ 'faster' if pct < 0 else 'slower' }} than the median of
+            {{ history.previous_drills }} earlier drills ({{ '%.2f' % history.median_rto_s }} s).{% endif %}
+            {% if history.biggest_segment_change %} Biggest change: {{ history.biggest_segment_change.segment }}
+            {{ '%+.3f' % history.biggest_segment_change.delta_s }} s against {{ history.biggest_segment_change.vs_drill }}.{% endif %}
+        </p>
+    </div>
+    <svg id="trend" viewBox="0 0 1000 170" style="width: 100%; height: auto;" role="img" aria-label="RTO per drill"></svg>
+    {% if history.recurring %}
+    <div class="box" style="margin-top: 4px;">
+        <h4 style="margin: 0 0 6px;">Findings that keep coming back</h4>
+        <ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px;">
+            {% for r in history.recurring %}<li>{{ r.item }} <span class="st warn">open in {{ r.seen_in_previous_drills }} earlier drill{{ 's' if r.seen_in_previous_drills != 1 }}</span></li>{% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+<script>
+(function () {
+    const data = {{ history.trend | tojson }}, med = {{ (history.median_rto_s or 0) | tojson }};
+    const svg = document.getElementById('trend'), NS = 'http://www.w3.org/2000/svg';
+    const el = (t, a) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); svg.appendChild(e); return e; };
+    const W = 1000, H = 120, top = 18, left = 40, n = data.length;
+    const maxV = Math.max(...data.map(d => d.rto_s), med) * 1.15;
+    const bw = Math.min(70, (W - left - 20) / n - 10);
+    const y = v => top + H - (v / maxV) * H;
+    el('line', { x1: left, x2: W - 10, y1: top + H, y2: top + H, stroke: 'var(--hairline-strong)' });
+    if (med) {
+        el('line', { x1: left, x2: W - 10, y1: y(med), y2: y(med), stroke: 'var(--mute)', 'stroke-dasharray': '4 4' });
+        el('text', { x: W - 12, y: y(med) - 5, 'text-anchor': 'end', 'font-size': 11, fill: 'var(--mute)' }).textContent = `median ${med.toFixed(2)} s`;
+    }
+    data.forEach((d, i) => {
+        const x = left + 10 + i * ((W - left - 20) / n);
+        const col = d.current ? 'var(--accent)' : d.chaos ? 'var(--warning)' : 'var(--hairline-strong)';
+        el('rect', { x, y: y(d.rto_s), width: bw, height: top + H - y(d.rto_s), rx: 3, fill: col });
+        el('text', { x: x + bw / 2, y: y(d.rto_s) - 5, 'text-anchor': 'middle', 'font-size': 11, fill: d.current ? 'var(--accent)' : 'var(--body)' }).textContent = d.rto_s.toFixed(1);
+        el('text', { x: x + bw / 2, y: top + H + 16, 'text-anchor': 'middle', 'font-size': 10, fill: 'var(--mute)' }).textContent = `${d.id.slice(9, 11)}/${d.id.slice(7, 9)} ${d.id.slice(12, 14)}:${d.id.slice(14, 16)}`;  // ex-YYYYMMDD-HHMMSS
+    });
+})();
+</script>
+{% endif %}
+
 <!-- Where every second of the RTO went -->
 {% if rto_segments %}
 <div class="card">

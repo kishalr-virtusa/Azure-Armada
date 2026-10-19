@@ -75,6 +75,30 @@ class FoundryAgents:
     def _req(self, method: str, path: str, body: Optional[dict] = None, params: Optional[dict] = None) -> httpx.Response:
         return self._http.request(method, self.endpoint + path, headers=self._headers(), json=body, params=params)
 
+    def _run_tools(self, aid: str, data: dict) -> dict:
+        """While the agent asks for tools: run them (read-only, allowlisted per agent), send the results back, repeat."""
+        from dr_agent.agents import tools as agent_tools
+        agent, calls_made = aid.removeprefix(PREFIX), 0
+        while _tool_calls(data) and calls_made < agent_tools.MAX_TOOL_CALLS:
+            outputs = []
+            for c in _tool_calls(data):
+                calls_made += 1
+                label = f"{c.get('name')}({', '.join(str(v) for v in json.loads(c.get('arguments') or '{}').values())})"
+                idx = trace.emit("tool", f"AI agent called {label}", "read-only investigation chosen by the agent", status="running")
+                started = time.monotonic()
+                out = agent_tools.call(agent, c.get("name", ""), c.get("arguments", "{}"))
+                result = json.loads(out)
+                summary = "; ".join(f"{k}={v}" for k, v in list(result.items())[:4]) if isinstance(result, dict) else str(result)[:200]
+                trace.update(idx, "fail" if isinstance(result, dict) and "error" in result else "ok", summary[:240], data=result,
+                             ms=int((time.monotonic() - started) * 1000))
+                outputs.append({"type": "function_call_output", "call_id": c["call_id"], "output": out})
+            r = self._req("POST", "/openai/v1/responses", {"agent_reference": {"name": aid, "type": "agent_reference"},
+                                                          "previous_response_id": data["id"], "input": outputs})
+            if r.status_code >= 300:
+                raise RuntimeError(f"agent {aid} tool round failed: HTTP {r.status_code} {r.text[:300]}")
+            data = r.json()
+        return data
+
     # ---------------------------------------------------------------- registration
     def ensure(self, name: str, instructions: str, schema: Type[BaseModel]) -> str:
         """Make sure the Foundry agent exists with exactly this spec; returns the agent id."""
@@ -87,6 +111,10 @@ class FoundryAgents:
             "text": {"format": {"type": "json_schema", "name": schema.__name__,
                                 "schema": strict_schema(schema), "strict": True}},
         }
+        from dr_agent.agents import tools as agent_tools
+        tool_defs = agent_tools.definitions(aid.removeprefix(PREFIX))
+        if tool_defs:  # read-only investigation tools the agent may call itself
+            definition["tools"] = tool_defs
         if aid.removeprefix(PREFIX) in REASONING_AGENTS and self.reasoning_model:
             definition["model"] = self.reasoning_model
             definition.pop("temperature")  # reasoning models only accept the default
@@ -133,6 +161,7 @@ class FoundryAgents:
             trace.update(idx, "fail", f"HTTP {r.status_code}", ms=ms)
             raise RuntimeError(f"agent {aid} run failed: HTTP {r.status_code} {r.text[:300]}")
         data = r.json()
+        data = self._run_tools(aid, data)
         usage = data.get("usage") or {}
         reasoning = (usage.get("output_tokens_details") or {}).get("reasoning_tokens")
         trace.update(idx, "ok", f"Answered in {ms / 1000:.1f}s · {usage.get('input_tokens', '?')} tokens in, "
@@ -144,6 +173,10 @@ class FoundryAgents:
         if not text:
             raise RuntimeError(f"agent {aid} returned no text (status={data.get('status')})")
         return schema.model_validate_json(text)
+
+
+def _tool_calls(data: dict) -> list[dict]:
+    return [o for o in data.get("output", []) if o.get("type") == "function_call"]
 
 
 _client: Optional[FoundryAgents] = None

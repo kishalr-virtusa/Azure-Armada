@@ -9,6 +9,8 @@
 from __future__ import annotations
 
 import json
+import math
+import itertools
 import logging
 import threading
 import time
@@ -500,8 +502,21 @@ class ExerciseRunner(threading.Thread):
                 store.record_heartbeat(seq, ts, acked, error)
             except Exception:  # noqa: BLE001
                 pass
-        self.hb_writer = HeartbeatWriter(connect, on_result, interval=HEARTBEAT_INTERVAL_S)
-        self.hb_writer.start()
+        # Load mode: N parallel writers share one sequence counter (each write opens its own connection to the
+        # listener, ~0.3-0.6 s cross-region, so one writer manages ~2 writes/s). Every write is still checked.
+        rate = max(1.0, float(self.meta().get("load_writes_per_s") or 1))
+        n = 1 if rate <= 1 else int(math.ceil(rate / 2))
+        counter = itertools.count(int(time.time() * 1000))
+        lock = threading.Lock()
+
+        def next_seq() -> int:
+            with lock:
+                return next(counter)
+        writers = [HeartbeatWriter(connect, on_result, interval=n / rate, label=f"dr-engine-{i}", next_seq=next_seq)
+                   for i in range(n)]
+        for w in writers:
+            w.start()
+        self.hb_writer = _WriterGroup(writers)
         if resumed:
             return {"resumed": True}
         self.sleep(5)
@@ -547,7 +562,9 @@ class ExerciseRunner(threading.Thread):
                     "lost_seqs": res.lost_seqs[:50],
                     "lost_write_times": [iso(h.client_ts) for h in self.heartbeats if h.seq in set(res.lost_seqs)][:50],
                     "note": res.note}
-        self.update(rpo_s=res.rpo_s, rpo_met=ev["rpo_met"], rpo_evidence_json=json.dumps(evidence))
+        series = M.write_series(self.heartbeats)[-300:]  # the chart of this drill's writes, kept for afterwards
+        self.update(rpo_s=res.rpo_s, rpo_met=ev["rpo_met"], rpo_evidence_json=json.dumps(evidence),
+                    write_series_json=json.dumps(series)[:30000])
         self.event("measurement", f"RPO {M.fmt_duration(res.rpo_s)} (target {prof.rpo_min} min): "
                                   f"{'MET' if ev['rpo_met'] else 'MISSED'}. {res.note}", data=evidence)
         return evidence
@@ -593,6 +610,18 @@ class ExerciseRunner(threading.Thread):
                 return
             time.sleep(5)
         raise StepFailed(f"Region {region} not healthy after {timeout_s}s")
+
+
+class _WriterGroup:
+    """Several heartbeat writers stopped together."""
+    def __init__(self, writers: list) -> None:
+        self.writers = writers
+
+    def stop(self) -> None:
+        for w in self.writers:
+            w._stop_event.set()
+        for w in self.writers:
+            w.join(10)
 
 
 ENDPOINTS = {"A": "endpoint-a", "B": "endpoint-b"}
