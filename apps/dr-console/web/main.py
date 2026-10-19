@@ -248,6 +248,16 @@ def api_me(request: Request):
     return {"user": auth.current_user(request), "auth": "entra" if auth.entra_enabled() else "passcode"}
 
 
+@app.get("/api/live-map", dependencies=[api])
+def api_live_map():
+    return JSONResponse(service.live_map(), headers={"Cache-Control": "no-store"})
+
+
+@app.get("/map", response_class=HTMLResponse)
+def map_page(request: Request):
+    return _page(request, "map.html", "map")
+
+
 @app.get("/api/overview", dependencies=[api])
 def api_overview():
     """Readiness verdict from live checks, region health with reasons, proven-recovery stats, system info."""

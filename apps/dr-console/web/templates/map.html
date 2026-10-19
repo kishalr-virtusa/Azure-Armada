@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+
+{% block title %}Live map — DR Agent Console{% endblock %}
+
+{% block content %}
+<style>
+    .map-card { padding: 0; overflow: hidden; }
+    .map-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 20px; border-bottom: 1px solid var(--hairline); }
+    .map-head h2 { margin: 0; }
+    .map-wrap { background: var(--canvas-soft); padding: 8px; }
+    #map { width: 100%; height: auto; display: block; }
+    .seg { display: inline-flex; padding: 3px; border-radius: 8px; background: var(--canvas-soft-2); }
+    .seg button { border: 0; background: none; font: inherit; font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px; color: var(--body); cursor: pointer; }
+    .seg button.on { background: var(--canvas); color: var(--ink); box-shadow: var(--ring); }
+    /* svg */
+    .box { fill: var(--canvas); stroke: var(--hairline-strong); stroke-width: 1; }
+    .region { fill: color-mix(in srgb, var(--canvas) 70%, transparent); stroke: var(--hairline-strong); stroke-dasharray: 5 5; }
+    .region.outage { fill: color-mix(in srgb, var(--danger-soft) 80%, transparent); stroke: var(--danger); stroke-dasharray: none; }
+    .region-label { font: 600 14px var(--sans); fill: var(--ink); }
+    .region-sub { font: 400 12px var(--mono); fill: var(--mute); }
+    .outage-tag { font: 700 13px var(--mono); fill: var(--danger); letter-spacing: .06em; }
+    .n-title { font: 600 14px var(--sans); fill: var(--ink); }
+    .n-sub { font: 400 11.5px var(--sans); fill: var(--body); }
+    .pill-bg { rx: 9; }
+    .pill-t { font: 600 11px var(--sans); }
+    .pill-ok .pill-bg { fill: var(--success-soft); } .pill-ok .pill-t { fill: var(--success); }
+    .pill-bad .pill-bg { fill: var(--danger-soft); } .pill-bad .pill-t { fill: var(--danger); }
+    .pill-warn .pill-bg { fill: var(--warning-soft); } .pill-warn .pill-t { fill: var(--warning); }
+    .pill-acc .pill-bg { fill: var(--accent-soft); } .pill-acc .pill-t { fill: var(--accent); }
+    .pill-mute .pill-bg { fill: var(--canvas-soft-2); } .pill-mute .pill-t { fill: var(--mute); }
+    .node.bad .box { stroke: var(--danger); stroke-width: 2; }
+    .node.primary .box { stroke: var(--accent); stroke-width: 2; }
+    .link { fill: none; stroke: var(--hairline-strong); stroke-width: 2; stroke-dasharray: 4 6; }
+    .link.live { stroke: var(--accent); stroke-dasharray: 8 8; animation: flow 0.9s linear infinite; }
+    .link.repl { stroke: var(--success); stroke-dasharray: 3 7; animation: flow 1.4s linear infinite; }
+    .link.down { stroke: var(--danger); stroke-dasharray: 2 6; opacity: .7; }
+    .link.off { opacity: .25; }
+    @keyframes flow { to { stroke-dashoffset: -32; } }
+    .link-label { font: 400 11px var(--mono); fill: var(--mute); }
+    /* panels under the map */
+    .now { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: center; }
+    .now-phase { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); }
+    .now-title { font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.4px; color: var(--ink); margin-top: 2px; }
+    .now-explain { font-size: 14px; line-height: 21px; color: var(--body); margin-top: 4px; max-width: 900px; }
+    .watch { font: 600 40px/48px var(--mono); font-variant-numeric: tabular-nums; color: var(--ink); text-align: right; }
+    .watch-l { font-size: 12px; color: var(--mute); text-align: right; }
+    .mkpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    @media (max-width: 1000px) { .mkpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .now { grid-template-columns: 1fr; } .watch, .watch-l { text-align: left; } }
+    .mk { padding: 14px 16px; border-radius: 8px; background: var(--canvas); box-shadow: var(--ring); }
+    .mk-l { font-size: 12px; color: var(--mute); }
+    .mk-v { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.6px; font-variant-numeric: tabular-nums; color: var(--ink); margin-top: 2px; }
+    .mk-n { font-size: 12px; color: var(--body); margin-top: 2px; }
+    .bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--canvas-soft-2); margin-top: 8px; }
+    .bar span { display: block; height: 100%; }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 12.5px; color: var(--body); padding: 10px 20px 14px; border-top: 1px solid var(--hairline); }
+    .legend i { display: inline-block; width: 26px; height: 0; border-top: 2px dashed; vertical-align: middle; margin-right: 6px; }
+</style>
+
+<header>
+    <div>
+        <span class="eyebrow">Present</span>
+        <h1>Live map</h1>
+        <p class="sub" style="margin-top: 4px;">What the DR Agent is doing to the real Azure resources, as it happens.</p>
+    </div>
+</header>
+
+<div class="card map-card">
+    <div class="map-head">
+        <h2>Contoso Payments on Azure</h2>
+        <div class="seg" role="tablist" aria-label="Service names">
+            <button class="on" data-names="azure" type="button">Azure names</button>
+            <button data-names="aws" type="button">AWS equivalents</button>
+        </div>
+    </div>
+    <div class="map-wrap"><svg id="map" viewBox="0 0 1200 640" role="img" aria-label="Live architecture map"></svg></div>
+    <div class="legend">
+        <span><i style="border-color: var(--accent);"></i>customer traffic / database writes (live)</span>
+        <span><i style="border-color: var(--success);"></i>replication (copies data to the other region)</span>
+        <span><i style="border-color: var(--hairline-strong);"></i>standby path (not in use)</span>
+        <span><i style="border-color: var(--danger);"></i>failed / outage</span>
+    </div>
+</div>
+
+<div class="card now">
+    <div>
+        <div class="now-phase" id="nowPhase">Normal operation</div>
+        <div class="now-title" id="nowTitle">No drill running</div>
+        <div class="now-explain" id="nowExplain">Loading…</div>
+    </div>
+    <div>
+        <div class="watch" id="watch">00:00.0</div>
+        <div class="watch-l" id="watchL">outage stopwatch</div>
+    </div>
+</div>
+
+<div class="mkpis">
+    <div class="mk"><div class="mk-l">Recovery time (RTO)</div><div class="mk-v" id="kRto">—</div><div class="mk-n" id="kRtoN">target 30 min</div></div>
+    <div class="mk"><div class="mk-l">Data loss (RPO)</div><div class="mk-v" id="kRpo">—</div><div class="mk-n" id="kRpoN">checked write by write</div></div>
+    <div class="mk"><div class="mk-l">Database writes (heartbeat, 1/s)</div><div class="mk-v" id="kHb">—</div>
+        <div class="bar"><span id="bAck" style="background: var(--success); width: 0"></span><span id="bFail" style="background: var(--warning); width: 0"></span><span id="bLost" style="background: var(--danger); width: 0"></span></div>
+        <div class="mk-n" id="kHbN">confirmed · failed · lost</div></div>
+    <div class="mk"><div class="mk-l">Drill progress</div><div class="mk-v" id="kSteps">—</div><div class="mk-n" id="kStepsN"></div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const svg = document.getElementById('map');
+    const NS = 'http://www.w3.org/2000/svg';
+    const el = (tag, attrs = {}, parent = svg) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); parent.appendChild(e); return e; };
+
+    const NAMES = {
+        azure: { phones: ["Customers' phones", 'Contoso Payments app'], tm: ['Traffic Manager', 'sends users to a healthy region'],
+                 console: ['DR Agent console', 'engine · South India'], agents: ['AI agents', 'Azure AI Foundry · East US 2'],
+                 app: ['App Service', 'payments web app'], sql: ['Azure SQL', 'failover group'], vmA: ['Reports VM', 'Windows Server'],
+                 vmB: ['Site Recovery copy', 'test VM, isolated network'], regionA: 'Region A · East Asia (Hong Kong)',
+                 regionB: 'Region B · Southeast Asia (Singapore)', repl: 'geo-replication', asr: 'Site Recovery', hb: 'heartbeat writes' },
+        aws: { phones: ["Customers' phones", 'Contoso Payments app'], tm: ['≈ Route 53', 'failover routing + health checks'],
+               console: ['DR Agent console', 'engine · India (≈ ap-south)'], agents: ['≈ Bedrock Agents', '6 agents · ≈ us-east'],
+               app: ['≈ Elastic Beanstalk', 'payments web app'], sql: ['≈ Aurora Global DB', 'cross-region replica'], vmA: ['Reports VM', '≈ EC2 (Windows)'],
+               vmB: ['≈ AWS DRS copy', 'Elastic Disaster Recovery drill'], regionA: 'Region A · ≈ ap-east-1 (Hong Kong)',
+               regionB: 'Region B · ≈ ap-southeast-1 (Singapore)', repl: '≈ global replication', asr: '≈ DRS replication', hb: 'heartbeat writes' },
+    };
+    let names = 'azure';
+    try { names = localStorage.getItem('dra-map-names') || 'azure'; } catch (e) { /* ignore */ }
+
+    // ---------------------------------------------------------------- static drawing
+    const linkLayer = el('g'); const regionLayer = el('g'); const nodeLayer = el('g'); const dotLayer = el('g');
+    svg.insertBefore(regionLayer, linkLayer);
+    const R = {};
+    // labels sit on the outer edge of each region so the two databases can face each other across the gap
+    const region = (id, x, y, w, h, top) => {
+        const g = el('g', {}, regionLayer);
+        const ly = top ? y + 26 : y + h - 30, sy = top ? y + 44 : y + h - 12;
+        R[id] = { box: el('rect', { x, y, width: w, height: h, rx: 14, class: 'region' }, g),
+                  label: el('text', { x: x + 18, y: ly, class: 'region-label' }, g),
+                  sub: el('text', { x: x + 18, y: sy, class: 'region-sub' }, g),
+                  tag: el('text', { x: x + w - 18, y: ly, class: 'outage-tag', 'text-anchor': 'end' }, g) };
+    };
+    region('A', 520, 20, 660, 290, true);
+    region('B', 520, 330, 660, 290, false);
+    const N = {};
+    const node = (id, x, y, w = 170, h = 84) => {
+        const g = el('g', { class: 'node' }, nodeLayer);
+        el('rect', { x, y, width: w, height: h, rx: 10, class: 'box' }, g);
+        const t = el('text', { x: x + 14, y: y + 26, class: 'n-title' }, g);
+        const s = el('text', { x: x + 14, y: y + 44, class: 'n-sub' }, g);
+        const pg = el('g', { class: 'pill-mute' }, g);
+        const pb = el('rect', { x: x + 14, y: y + 54, width: 60, height: 20, class: 'pill-bg' }, pg);
+        const pt = el('text', { x: x + 22, y: y + 68, class: 'pill-t' }, pg);
+        N[id] = { g, t, s, pg, pb, pt, x, y, w, h };
+    };
+    node('phones', 30, 278); node('tm', 270, 278, 190);
+    node('console', 30, 520, 200); node('agents', 270, 520, 190);
+    node('appA', 550, 64); node('sqlA', 770, 196); node('vmA', 990, 64, 175);
+    node('appB', 550, 470); node('sqlB', 770, 342); node('vmB', 990, 470, 175);
+    const L = {};
+    const link = (id, d, label, lx, ly) => {
+        L[id] = el('path', { d, class: 'link', id: 'p-' + id }, linkLayer);
+        if (label) L[id + '_label'] = el('text', { x: lx, y: ly, class: 'link-label' }, linkLayer);
+    };
+    link('users', 'M200 320 L270 320');
+    link('tmA', 'M460 320 C 505 320, 505 106, 550 106');
+    link('tmB', 'M460 320 C 505 320, 505 512, 550 512');
+    link('aA', 'M720 106 C 748 106, 742 238, 770 238'); link('bB', 'M720 512 C 748 512, 742 384, 770 384');
+    link('aB', 'M720 126 C 760 126, 735 400, 770 400'); link('bA', 'M720 492 C 760 492, 735 222, 770 222');
+    link('replAB', 'M845 280 L845 342', 'repl', 880, 316); link('replBA', 'M865 342 L865 280');
+    link('hbA', 'M230 545 C 420 545, 470 320, 640 320 C 760 320, 800 300, 800 280', 'hb', 300, 600);
+    link('hbB', 'M230 555 C 430 555, 480 320, 650 320 C 770 320, 805 335, 805 342');
+    link('agents', 'M230 562 L270 562');
+    link('asr', 'M1077 148 L1077 470', 'asr', 1086, 316);
+
+    function setPill(id, cls, text) {
+        const n = N[id];
+        n.pg.setAttribute('class', 'pill-' + cls);
+        n.pt.textContent = text;
+        n.pb.setAttribute('width', Math.max(46, text.length * 6.6 + 16));
+    }
+    function applyNames() {
+        const t = NAMES[names];
+        const set = (id, pair) => { N[id].t.textContent = pair[0]; N[id].s.textContent = pair[1]; };
+        set('phones', t.phones); set('tm', t.tm); set('console', t.console); set('agents', t.agents);
+        set('appA', t.app); set('appB', t.app); set('sqlA', t.sql); set('sqlB', t.sql); set('vmA', t.vmA); set('vmB', t.vmB);
+        R.A.label.textContent = t.regionA; R.B.label.textContent = t.regionB;
+        L.replAB_label.textContent = t.repl; L.asr_label.textContent = t.asr; L.hbA_label.textContent = t.hb;
+        document.querySelectorAll('[data-names]').forEach(b => b.classList.toggle('on', b.dataset.names === names));
+    }
+    document.querySelectorAll('[data-names]').forEach(b => b.onclick = () => {
+        names = b.dataset.names; try { localStorage.setItem('dra-map-names', names); } catch (e) { /* ignore */ }
+        applyNames();
+    });
+    applyNames();
+
+    // dots that travel along a path: customers' requests and each confirmed / failed database write
+    function dot(pathIds, color, dur = 1.2, stopAt = 1) {
+        let delay = 0;
+        for (const pid of pathIds) {
+            const p = document.getElementById('p-' + pid); if (!p) continue;
+            const c = el('circle', { r: 5, fill: color, opacity: 0 }, dotLayer);
+            const len = p.getTotalLength();
+            const start = performance.now() + delay;
+            const step = (now) => {
+                const t = (now - start) / (dur * 1000);
+                if (t < 0) { requestAnimationFrame(step); return; }
+                if (t > stopAt) { c.remove(); return; }
+                const pt = p.getPointAtLength(len * t);
+                c.setAttribute('cx', pt.x); c.setAttribute('cy', pt.y); c.setAttribute('opacity', t > stopAt - 0.1 ? 0.3 : 1);
+                requestAnimationFrame(step);
+            };
+            requestAnimationFrame(step);
+            delay += dur * 1000;
+            if (stopAt < 1) break;
+        }
+    }
+
+    // ---------------------------------------------------------------- live state
+    let state = null, skew = 0, lastAck = null, lastFail = null;
+    const fmt = (s) => s < 60 ? `${s.toFixed(2)}s` : `${Math.floor(s / 60)}m ${(s % 60).toFixed(2).padStart(5, '0')}s`;
+    const cls = (e, c) => e.setAttribute('class', c);
+
+    const EXPLAIN = {
+        idle: ['Normal operation', 'Customers are served from East Asia. Every payment is written to the primary database there and copied to Southeast Asia within seconds, so the standby is always ready.'],
+        snapshot_inventory: ['Pre-checks', 'The agent records every resource and setting before touching anything, so the report can show exactly what changed.'],
+        check_fog: ['Pre-checks', 'Checking that the database copy in Southeast Asia is in sync before we start.'],
+        start_heartbeat: ['Measuring', 'The agent starts writing one database record per second. Afterwards it checks every confirmed write against the new primary: that is how data loss (RPO) is proven, not estimated.'],
+        inject_outage: ['Outage', 'Outage injected: the East Asia app is stopped. From now on customers in East Asia get errors. The stopwatch is running.'],
+        sql_failover_forced: ['Failover', 'The database copy in Southeast Asia is being promoted to primary (forced failover). Writes the old primary confirmed but had not yet copied can be lost: we will count them.'],
+        tm_disable_a: ['Failover', 'Traffic Manager is told to stop sending customers to East Asia.'],
+        wait_tm_b: ['Validation', 'Waiting until a customer request through Traffic Manager is answered from Southeast Asia, with a working database. That moment stops the RTO clock.'],
+        functional_txn_check: ['Validation', 'A real payment is made through Traffic Manager and read back from the new region.'],
+        measure_rpo: ['Validation', 'Checking every confirmed write against the new primary to measure data loss write by write.'],
+        human: ['Waiting for a person', 'This step needs a human approval in the console. The agent never skips it.'],
+        start_webapp_a: ['Failback', 'East Asia is being started again.'],
+        sql_failover_planned: ['Failback', 'Moving the database back to East Asia with a planned failover: nothing is lost this way.'],
+        tm_enable_a: ['Failback', 'Traffic Manager may send customers to East Asia again.'],
+        wait_tm_a: ['Failback', 'Waiting until customers are served from East Asia again.'],
+        asr_test_failover: ['VM recovery', 'Site Recovery is building a copy of the reports VM in an isolated network in Southeast Asia, without touching production.'],
+        asr_verify_recovery: ['VM recovery', 'The agent runs a command inside the recovered VM to prove the service works in Southeast Asia.'],
+        asr_test_cleanup: ['Clean-up', 'Deleting the test VM.'],
+        stop_heartbeat: ['Clean-up', 'Stopping the measurement writes.'],
+        generate_report: ['Report', 'The Reporter agent writes the audit-ready report from the measured numbers.'],
+    };
+    function explainKey(step) {
+        if (!step) return 'idle';
+        if (step.type === 'human') return 'human';
+        const a = step.action, p = step.params || {};
+        if (a === 'sql_failover') return (p.allow_data_loss || '').toLowerCase() === 'true' ? 'sql_failover_forced' : 'sql_failover_planned';
+        if (a === 'tm_set_endpoint') return (p.enabled || '').toLowerCase() === 'true' ? 'tm_enable_a' : 'tm_disable_a';
+        if (a === 'wait_healthy') return (p.expect_region || '').toUpperCase() === 'A' ? 'wait_tm_a' : 'wait_tm_b';
+        if (a === 'start_webapp') return 'start_webapp_a';
+        return EXPLAIN[a] ? a : 'idle';
+    }
+
+    function render(d) {
+        const A = d.regions.A, B = d.regions.B, primary = d.primary, serving = d.serving;
+        for (const [r, x] of [['A', A], ['B', B]]) {
+            const down = x.app_state !== 'Running' || !x.healthy;
+            cls(R[r].box, 'region' + (down ? ' outage' : ''));
+            R[r].tag.textContent = x.app_state !== 'Running' ? 'OUTAGE · app stopped' : (!x.healthy ? 'UNHEALTHY' : '');
+            R[r].label.textContent = `${NAMES[names]['region' + r]} · ${serving === r ? 'serving customers' : 'standby'}`;
+            R[r].sub.textContent = '';
+            setPill('app' + r, x.app_state !== 'Running' ? 'bad' : x.healthy ? 'ok' : 'bad',
+                    x.app_state !== 'Running' ? 'Stopped' : x.healthy ? `Healthy${x.latency_ms ? ' · ' + x.latency_ms + ' ms' : ''}` : 'Unhealthy');
+            N['app' + r].g.setAttribute('class', 'node' + (down ? ' bad' : ''));
+            const role = x.sql_role || (primary === r ? 'Primary' : 'Secondary');
+            setPill('sql' + r, role === 'Primary' ? 'acc' : 'mute', role === 'Primary' ? 'PRIMARY · read/write' : 'copy · read-only');
+            N['sql' + r].g.setAttribute('class', 'node' + (role === 'Primary' ? ' primary' : ''));
+        }
+        // Traffic Manager: one active path to the serving region
+        const tmOk = (r) => d.regions[r].tm_enabled && d.regions[r].tm_monitor === 'Online';
+        setPill('tm', serving ? 'acc' : 'bad', serving ? `→ ${serving === 'A' ? 'East Asia' : 'Southeast Asia'}` : 'no healthy region');
+        cls(L.tmA, 'link' + (serving === 'A' ? (A.healthy ? ' live' : ' down') : (d.regions.A.tm_enabled ? '' : ' off')));
+        cls(L.tmB, 'link' + (serving === 'B' ? (B.healthy ? ' live' : ' down') : (d.regions.B.tm_enabled ? '' : ' off')));
+        cls(L.users, 'link live');
+        setPill('phones', serving && d.regions[serving].healthy ? 'ok' : 'bad', serving && d.regions[serving].healthy ? 'Working' : 'Errors');
+        // app -> primary database (through the failover group listener)
+        for (const id of ['aA', 'aB', 'bA', 'bB']) cls(L[id], 'link off');
+        if (serving && primary) cls(L[(serving === 'A' ? 'a' : 'b') + primary], 'link live');
+        // replication primary -> secondary
+        cls(L.replAB, 'link' + (primary === 'A' && d.replication === 'CATCH_UP' ? ' repl' : ' off'));
+        cls(L.replBA, 'link' + (primary === 'B' && d.replication === 'CATCH_UP' ? ' repl' : ' off'));
+        // drill panel + heartbeat path
+        const dr = d.drill, active = dr && dr.running;
+        const hb = dr && dr.heartbeat;
+        cls(L.hbA, 'link' + (hb && hb.writing && primary === 'A' ? ' live' : ' off'));
+        cls(L.hbB, 'link' + (hb && hb.writing && primary === 'B' ? ' live' : ' off'));
+        cls(L.agents, 'link' + (active ? ' live' : ''));
+        setPill('console', active ? 'acc' : 'mute', active ? `drill ${dr.steps_done}/${dr.steps_total}` : 'idle');
+        setPill('agents', 'mute', '6 registered');
+        setPill('vmA', 'ok', 'replicating');
+        const asr = dr && dr.asr;
+        setPill('vmB', asr && asr.started && !asr.done && active ? 'warn' : asr && asr.done && active ? 'ok' : 'mute',
+                asr && asr.started && !asr.done && active ? 'building…' : asr && asr.done && active ? 'up · verifying' : 'not running');
+        cls(L.asr, 'link' + (asr && asr.started && active ? ' live' : ' repl'));
+
+        const key = explainKey(active ? dr.step : null);
+        document.getElementById('nowPhase').textContent = active ? (dr.step ? `${dr.step.phase} · ${EXPLAIN[key][0]}` : 'Starting') : 'Normal operation';
+        document.getElementById('nowTitle').textContent = active ? (dr.step ? dr.step.title : 'Starting the drill') : (dr ? `Last drill: ${dr.status}` : 'No drill yet');
+        document.getElementById('nowExplain').textContent = EXPLAIN[key][1];
+        document.getElementById('kRto').textContent = dr && dr.rto_s != null ? fmt(dr.rto_s) : '—';
+        document.getElementById('kRpo').textContent = dr && dr.rpo_s != null ? fmt(dr.rpo_s) : '—';
+        if (hb) {
+            const failed = hb.failed || 0, total = Math.max(1, hb.acked + failed);
+            document.getElementById('kHb').textContent = hb.failed == null
+                ? `${hb.acked} checked · ${hb.lost ?? 0} lost` : `${hb.acked} · ${failed} · ${hb.lost ?? '—'}`;
+            document.getElementById('kHbN').textContent = hb.failed == null ? 'last drill: confirmed writes checked against the new primary' : 'confirmed · failed · lost';
+            document.getElementById('bAck').style.width = `${100 * (hb.acked - (hb.lost || 0)) / total}%`;
+            document.getElementById('bFail').style.width = `${100 * failed / total}%`;
+            document.getElementById('bLost').style.width = `${100 * (hb.lost || 0) / total}%`;
+        }
+        document.getElementById('kSteps').textContent = dr ? `${dr.steps_done} / ${dr.steps_total}` : '—';
+        document.getElementById('kStepsN').textContent = dr ? `${dr.id} · ${dr.status}${dr.chaos ? ' · chaos fault injected' : ''}` : '';
+        // fly a dot for each new confirmed (green) or failed (amber) write since the last update
+        if (hb && lastAck !== null && hb.writing) {
+            const newAck = Math.min(4, hb.acked - lastAck), newFail = Math.min(4, hb.failed - lastFail);
+            for (let i = 0; i < newAck; i++) setTimeout(() => dot([primary === 'B' ? 'hbB' : 'hbA'], 'var(--success)', 1.1), i * 450);
+            for (let i = 0; i < newFail; i++) setTimeout(() => dot([primary === 'B' ? 'hbB' : 'hbA'], 'var(--warning)', 1.1, 0.55), i * 450 + 200);
+        }
+        if (hb) { lastAck = hb.acked; lastFail = hb.failed; }
+    }
+
+    // customer requests: one dot per second from phones through Traffic Manager to the serving region
+    setInterval(() => {
+        if (!state) return;
+        const s = state.serving, ok = s && state.regions[s].healthy;
+        if (!s) { dot(['users'], 'var(--danger)', 0.6); return; }
+        dot(['users', s === 'A' ? 'tmA' : 'tmB'], ok ? 'var(--accent)' : 'var(--danger)', 0.55, ok ? 1 : 1);
+    }, 1000);
+
+    // stopwatch: from the injected outage (t0) until recovery, on the server's clock
+    setInterval(() => {
+        const dr = state && state.drill;
+        const w = document.getElementById('watch'), l = document.getElementById('watchL');
+        if (!dr || !dr.t0) { w.textContent = '00:00.0'; l.textContent = 'outage stopwatch'; return; }
+        if (dr.rto_s != null) { w.textContent = fmt(dr.rto_s); l.textContent = 'recovered (RTO)'; return; }
+        if (!dr.running) { w.textContent = '—'; return; }
+        const s = Math.max(0, (Date.now() - skew - Date.parse(dr.t0)) / 1000);
+        w.textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${(s % 60).toFixed(1).padStart(4, '0')}`;
+        l.textContent = 'customers affected for';
+    }, 100);
+
+    async function poll() {
+        try {
+            const res = await fetch('/api/live-map', { cache: 'no-store' });
+            if (res.ok) {
+                const d = await res.json();
+                skew = Date.now() - Date.parse(d.server_time);
+                state = d; render(d);
+            }
+        } catch (e) { /* keep last state */ }
+        setTimeout(poll, 2000);
+    }
+    poll();
+})();
+</script>
+{% endblock %}

@@ -53,23 +53,30 @@ def _not_deployed(v: Any, what: str) -> Any:
 def get_status(max_age_s: float = 5.0) -> dict:
     if _status_cache["v"] and time.monotonic() - _status_cache["t"] < max_age_s:
         return _status_cache["v"]
+    from concurrent.futures import ThreadPoolExecutor
     from dr_agent.tools.azure_trafficmanager import get_profile_status, resolve_tm_dns
     from dr_agent.tools.azure_webapp import get_webapp_state
-    fog = _safe(lambda: runner._fog().status())
+    with ThreadPoolExecutor(max_workers=5) as pool:  # independent Azure reads: ~1 s instead of ~5 s
+        f_fog = pool.submit(_safe, lambda: runner._fog().status())
+        f_dns = pool.submit(_safe, resolve_tm_dns)
+        f_a = pool.submit(_safe, get_webapp_state, config.webapp_a_name)
+        f_b = pool.submit(_safe, get_webapp_state, config.webapp_b_name)
+        f_tm = pool.submit(_safe, get_profile_status)
+    fog = f_fog.result()
     fg_view: dict = {"error": fog["error"]} if "error" in fog else {
         "primary_region": fog.get("primary_region"),
         "replication_role": (fog.get("servers", {}).get("A") or {}).get("role"),
         "replication_state": (fog.get("servers", {}).get("A") or {}).get("state"),
         "servers": fog.get("servers"),
     }
-    routing = _safe(resolve_tm_dns)
+    routing = f_dns.result()
     if isinstance(routing, dict) and "error" not in routing:
         routing["active_region"] = ("A (East Asia)" if routing.get("points_to_region_a")
                                     else "B (Southeast Asia)" if routing.get("points_to_region_b") else "unknown")
     v = {
-        "region_a": _not_deployed(_safe(get_webapp_state, config.webapp_a_name), "Region A web app"),
-        "region_b": _not_deployed(_safe(get_webapp_state, config.webapp_b_name), "Region B web app"),
-        "traffic_manager": _not_deployed(_safe(get_profile_status), "Traffic Manager"),
+        "region_a": _not_deployed(f_a.result(), "Region A web app"),
+        "region_b": _not_deployed(f_b.result(), "Region B web app"),
+        "traffic_manager": _not_deployed(f_tm.result(), "Traffic Manager"),
         "failover_group": fg_view,
         "routing": _not_deployed(routing, "Traffic Manager DNS"),
         "time": datetime.now(timezone.utc).isoformat(),
@@ -160,6 +167,109 @@ def overview_summary() -> dict:
     if not _summary["v"]:
         return {"pending": True}
     return {**_summary["v"], "age_s": round(time.monotonic() - _summary["t"], 1), "refreshing": _summary["busy"]}
+
+
+# ------------------------------------------------------------------ live map
+def _utc_iso(v: Any) -> Optional[str]:
+    """Stored timestamps are UTC but may lack the offset; browsers would read those as local time."""
+    if not v:
+        return None
+    try:
+        d = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return (d if d.tzinfo else d.replace(tzinfo=timezone.utc)).isoformat()
+
+
+_map_cache: dict[str, Any] = {"t": 0.0, "v": None}
+_map_lock = threading.Lock()
+
+
+def live_map() -> dict:
+    """Latest map state, instantly. A background refresher recomputes it every ~2 s while the page is open."""
+    _map_cache["seen"] = time.monotonic()
+    with _map_lock:
+        if not _map_cache.get("thread"):
+            _map_cache["thread"] = threading.Thread(target=_map_refresher, name="live-map", daemon=True)
+            _map_cache["thread"].start()
+    if not _map_cache["v"]:
+        return _compute_live_map()
+    return _map_cache["v"]
+
+
+def _map_refresher() -> None:
+    try:
+        while time.monotonic() - _map_cache.get("seen", 0) < 30:  # stop when nobody has looked for 30 s
+            started = time.monotonic()
+            try:
+                _compute_live_map()
+            except Exception as e:  # noqa: BLE001
+                log.warning("live map refresh failed: %s", e)
+            time.sleep(max(0.0, 2.0 - (time.monotonic() - started)))
+    finally:
+        _map_cache["thread"] = None
+
+
+def _compute_live_map() -> dict:
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        f_st = pool.submit(get_status, 1.5)
+        f_pa = pool.submit(_safe, runner._probe, "A")
+        f_pb = pool.submit(_safe, runner._probe, "B")
+    st = f_st.result()
+    probes = {"A": f_pa.result(), "B": f_pb.result()}
+    eps = {e.get("name"): e for e in ((st.get("traffic_manager") or {}).get("endpoints") or [])}
+    fog = st.get("failover_group") or {}
+    servers = fog.get("servers") or {}
+    regions = {}
+    for r, key in (("A", "region_a"), ("B", "region_b")):
+        app, pr = st.get(key) or {}, probes[r]
+        ep = eps.get(f"endpoint-{r.lower()}") or {}
+        regions[r] = {
+            "app_state": app.get("state") or ("unknown" if app.get("error") else None),
+            "healthy": bool(pr.get("ok")) and pr.get("db_ok") is not False,
+            "reason": None if pr.get("ok") else (pr.get("reason") or pr.get("error")),
+            "latency_ms": pr.get("latency_ms"),
+            "sql_role": (servers.get(r) or {}).get("role"),
+            "tm_enabled": ep.get("endpoint_status") == "Enabled",
+            "tm_monitor": ep.get("endpoint_monitor_status"),
+        }
+    routing = st.get("routing") or {}
+    serving = "A" if routing.get("points_to_region_a") else "B" if routing.get("points_to_region_b") else None
+    out: dict[str, Any] = {"regions": regions, "serving": serving, "primary": fog.get("primary_region"),
+                           "replication": fog.get("replication_state"), "drill": None,
+                           "server_time": datetime.now(timezone.utc).isoformat()}
+    ex = list_exercises()[:1]
+    if ex:
+        xid = ex[0]["PartitionKey"]
+        m = store.get_exercise(xid) or {}
+        plan = json.loads(m.get("plan_json") or "{}")
+        step_id = m.get("current_step") or m.get("waiting_step") or ""
+        step = next((s for s in plan.get("steps", []) if s["id"] == step_id), None)
+        r = runner._RUNNERS.get(xid)
+        hb = list(getattr(r, "heartbeats", []) or [])
+        now = datetime.now(timezone.utc)
+        aware = lambda t: t if t.tzinfo else t.replace(tzinfo=timezone.utc)  # noqa: E731
+        recent = [h for h in hb if (now - aware(h.client_ts)).total_seconds() <= 10]
+        ev = json.loads(m.get("rpo_evidence_json") or "{}")
+        out["drill"] = {
+            "id": xid, "status": m.get("status"), "running": runner.is_running(xid),
+            "step": step and {"id": step["id"], "title": step["title"], "phase": step["phase"], "type": step["type"],
+                              "action": step.get("action") or "",
+                              "params": {p["key"]: p["value"] for p in step.get("params", [])}},
+            "steps_done": len(json.loads(m.get("completed_steps_json") or "[]")), "steps_total": len(plan.get("steps", [])),
+            "t0": _utc_iso(m.get("t0")), "t_recovered": _utc_iso(m.get("t_recovered")),
+            "rto_s": _num(m.get("rto_s")), "rpo_s": _num(m.get("rpo_s")), "chaos": bool(m.get("chaos_injected")),
+            # live counts while the writer runs; afterwards the drill's evidence (writes checked, writes lost)
+            "heartbeat": {"acked": sum(h.acked for h in hb) if hb else (ev.get("checked_writes") or 0),
+                          "failed": sum(not h.acked for h in hb) if hb else None,
+                          "acked_10s": sum(h.acked for h in recent), "failed_10s": sum(not h.acked for h in recent),
+                          "lost": ev.get("lost_writes"), "writing": bool(r and getattr(r, "hb_writer", None))},
+            "asr": {"started": bool(m.get("iaas_started")), "done": bool(m.get("iaas_failover_done")),
+                    "recovered_s": _num(m.get("iaas_recovered_s"))},
+        }
+    _map_cache.update(t=time.monotonic(), v=out)
+    return out
 
 
 def probe_tm() -> dict:
