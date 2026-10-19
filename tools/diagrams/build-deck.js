@@ -242,7 +242,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
     });
   });
   const cmp = [["How often DR is proven", "Once or twice a year", "On demand, any day"], ["RTO and RPO", "Assumed on paper", "Measured on every drill, to the millisecond"],
-    ["Configuration drift", "Found during the real outage", "Found by readiness checks, fixed with approval"], ["Audit evidence", "Screenshots and spreadsheets", "Generated report with timestamps and approvals"]];
+    ["Configuration drift", "Found during the real outage", "Found by Autopilot every 10 min, fixed with approval"], ["Audit evidence", "Screenshots and spreadsheets", "Generated report with timestamps and approvals"]];
   s.addTable([[{ text: "", options: { fill: { color: C.white } } }, { text: "Today", options: { bold: true, color: C.red } }, { text: "With the DR Agent", options: { bold: true, color: C.teal } }],
     ...cmp.map(([a, b, c]) => [{ text: a, options: { bold: true, color: C.navy } }, { text: b, options: { color: C.ink } }, { text: c, options: { color: C.ink } }])],
     { x: 0.6, y: 5.5, w: 12.1, colW: [3.3, 3.9, 4.9], fontFace: BF, fontSize: 12, rowH: 0.27, margin: [2, 6, 2, 6],
@@ -256,10 +256,10 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
     "Versioned prompt agents in Azure AI Foundry Agent Service. Every answer must match a strict JSON schema; every decision that drives an action is checked by code.");
   const agents = [
     ["Architect", "gpt-4.1-mini", "Profile, inventory, live Azure prices", "Strategy + all 5 options", "Cheapest option that truly meets targets"],
-    ["Readiness", "gpt-4.1-mini", "7 deterministic checks with evidence", "GO / NO-GO, risks", "Any failed check forces NO-GO"],
+    ["Readiness", "gpt-4.1-mini", "7 deterministic checks + read-only tools it calls itself", "GO / NO-GO, risks", "Any failed check forces NO-GO"],
     ["Runbook", "gpt-4.1-mini", "Runbook markdown, inventory", "Stale / valid per step, corrected runbook", "Schema only (advisory)"],
     ["Planner", "gpt-5-mini", "Strategy, risks, allowlist, safe sequence", "21-step drill plan", "Allowlisted actions, mandatory sequence, approvals"],
-    ["Validator", "gpt-5-mini", "Failed step, error, events, live probes", "Cause, evidence, fix", "Fix allowlisted; never Region A mid-outage; human approves"],
+    ["Validator", "gpt-5-mini", "Failed step, error, events + read-only tools it calls itself", "Cause, evidence, fix", "Fix allowlisted; never Region A mid-outage; human approves"],
     ["Reporter", "gpt-4.1-mini", "Measured RTO/RPO, timeline, findings", "Summary, remediation items", "Numbers rendered by code, not retyped"],
   ];
   const th = (t) => ({ text: t, options: { bold: true, color: C.white, fill: { color: C.navy } } });
@@ -269,20 +269,21 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
       border: { type: "solid", color: C.line, pt: 0.75 } });
   card(s, 0.6, 5.55, 12.1, 1.3, C.tealLight, false);
   s.addText([
-    { text: "Watch them think. ", options: { bold: true, color: C.navy } },
-    { text: "A live activity panel streams every Azure read, the Foundry call (agent version, latency, tokens) and the code check, as it happens. It caught a real defect: the Architect compared a cost multiplier with a dollar budget; we now give it Azure list prices and it is right first time (5 of 5 runs).", options: { color: C.ink } },
+    { text: "They investigate, and you can watch. ", options: { bold: true, color: C.navy } },
+    { text: "Validator and Readiness call read-only tools themselves (probe, traffic_manager, web_app, sql_failover_group, app_settings_diff, site_recovery); when something is wrong they must call one before answering. Each agent has its own tool allowlist. The live activity panel shows every call: ", options: { color: C.ink } },
+    { text: "\"AI agent called app_settings_diff() → PAYMENT_PROVIDER only in East Asia\"", options: { color: C.teal, bold: true } },
   ], { x: 0.85, y: 5.55, w: 11.6, h: 1.3, fontFace: BF, fontSize: 13.5, valign: "middle", margin: 0, isTextBox: true });
   footer(s);
-  s.addNotes("Each agent is a versioned prompt agent in Azure AI Foundry with a strict JSON schema. Code gathers the facts, the agent decides, code checks the answer, and every agent has a deterministic fallback so the demo never depends on one model call. The live activity panel shows exactly what each agent did. It also exposed a real defect: we were giving the Architect a cost multiplier and a dollar budget; it guessed wrong. We fixed the input, not the model, and it is now right first time.");
+  s.addNotes("Each agent is a versioned prompt agent in Azure AI Foundry with a strict JSON schema. Code gathers the facts, the agent decides, code checks the answer, and every agent has a deterministic fallback so the demo never depends on one model call. The Validator and Readiness agents do more than read a prepared summary: through Foundry function calling they investigate with read-only tools: probing a region or Traffic Manager, reading the web apps, the SQL failover group and Site Recovery, and diffing app settings between regions. When something is wrong they are required to call at least one tool before they answer, and each agent may only use the tools on its own allowlist. The tools only read; they cannot change anything. Every call appears in the live activity panel, for example: the agent called app_settings_diff and found PAYMENT_PROVIDER only in East Asia. The panel also exposed a real defect earlier: we were giving the Architect a cost multiplier and a dollar budget; we fixed the input, not the model, and it is now right first time.");
 
   // ---------- 9. Safety ----------
   s = add(); s.background = { color: C.white };
   title(s, "Agents decide. The engine acts. Humans approve.",
-    "DR touches production, so no model can call an Azure write API. Every action is allowlisted, ordered, approved and reversible.");
+    "DR touches production, so no model can call an Azure write API: agent tools only read. Every action is allowlisted, ordered, approved and reversible.");
   const guards = [
-    [I.lock, "Allowlisted actions", "15 known actions only (outage injection, start app, SQL failover, endpoint on/off, health waits, ASR test). Region-changing actions only where the safe sequence puts them."],
-    [I.route, "Mandatory safe sequence", "Every plan must contain heartbeat → outage → SQL failover → reroute → verify → measure → fail back, in that order."],
-    [I.user, "Human approval gates", "A named approver signs off the plan; the DB team gives the go for the forced failover; the app team approves failback; a human approves any fix. Plans without these gates are rejected."],
+    [I.lock, "Allowlisted actions", "Only the engine writes, and only 15 known actions (outage, start app, SQL failover, endpoint on/off, health waits, ASR test). Agent tools only read: probes, settings, status."],
+    [I.route, "Mandatory safe sequence", "Every plan must contain heartbeat → outage → SQL failover → reroute → verify → measure → fail back, in that order. Plan safety rules are enforced by the engine."],
+    [I.user, "Human approval gates", "A named approver signs off the plan; the engine requires the DB team's 'go' before the outage and the app team's before failback; a human approves any fix. Stale commands are refused."],
     [I.power, "Kill switch and rollback", "One click stops the drill; rollback restores the primary region and the database role."],
     [I.history, "Fallback for every agent", "Foundry agent → model deployment → deterministic rules. The screen shows which one answered."],
     [I.audit, "Full audit trail", "Every event, approval and measurement is timestamped and stored, then written into the report."],
@@ -301,9 +302,49 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
     { text: "we disabled the DR traffic endpoint mid-failover. The Validator diagnosed it from live probes, proposed the allowlisted fix, a human approved, and recovery completed in 57.4 s.", options: { color: "C9C3E6" } },
   ], { x: 0.85, y: 5.85, w: 11.6, h: 1.0, fontFace: BF, fontSize: 14, valign: "middle", margin: 0, isTextBox: true });
   footer(s);
-  s.addNotes("This is why it is safe for a bank. Models never touch Azure directly. The engine runs only allowlisted actions, in a mandatory order, with named human approvals at the risky points, a kill switch, rollback, and a fallback for every agent. We proved it with a surprise fault mid-drill: the Validator diagnosed it, proposed an allowlisted fix, a human approved, and the service recovered in 57.4 seconds.");
+  s.addNotes("This is why it is safe for a bank. Models never touch Azure directly: the tools the agents can call only read. Writes happen only in the engine, through 15 allowlisted actions, in a mandatory order. The engine enforces plan safety rules: a plan without a human go before the outage and before failback is rejected, and approvals or commands for a step that is no longer waiting are refused. Add a kill switch, rollback, and a fallback for every agent. After an internal security review we also added login throttling, output escaping, HTTPS-only payment apps, and the public feed hides approver identities. We proved it with a surprise fault mid-drill: the Validator diagnosed it, proposed an allowlisted fix, a human approved, and the service recovered in 57.4 seconds.");
 
-  // ---------- 10. Architecture ----------
+  // ---------- 10. Autopilot ----------
+  s = add(); s.background = { color: C.white };
+  title(s, "Autopilot: it checks readiness by itself",
+    "Every 10 minutes, with no one asking. It never runs during a drill, never starts a drill and never touches traffic.");
+  const loop = [
+    [I.clock, "Every 10 minutes", "A scheduled check, or press Run check now"],
+    [I.check, "7 readiness checks", "The same deterministic checks as Phase 1, with evidence"],
+    [I.search, "Agent investigates", "On a new failure, Readiness calls its read-only tools and explains the cause"],
+    [I.tools, "Propose or auto-fix", "Only the allowlisted DR-side fix; by default it waits for a human"],
+    [I.audit, "Audited", "Every check, finding and fix is stored and shown on the Overview"],
+  ];
+  loop.forEach(([ic, h, b], i) => {
+    const w = 2.22, x = 0.6 + i * (w + 0.25), y = 1.75;
+    card(s, x, y, w, 2.15);
+    circ(s, ic, x + 0.2, y + 0.2, 0.55, i === 2 ? C.teal : C.navy);
+    s.addText(h, { x: x + 0.2, y: y + 0.85, w: w - 0.35, h: 0.4, fontFace: BF, fontSize: 14, bold: true, color: C.navy, margin: 0, isTextBox: true });
+    s.addText(b, { x: x + 0.2, y: y + 1.25, w: w - 0.35, h: 0.8, fontFace: BF, fontSize: 11.5, color: C.ink, valign: "top", margin: 0, isTextBox: true });
+    if (i < loop.length - 1) s.addText("→", { x: x + w, y: y + 0.85, w: 0.25, h: 0.4, fontFace: BF, fontSize: 16, bold: true, color: C.teal, align: "center", valign: "middle", margin: 0, isTextBox: true });
+  });
+  s.addText("Three autonomy levels, chosen on the Overview", { x: 0.6, y: 4.1, w: 12.1, h: 0.4, fontFace: HF, fontSize: 17, bold: true, color: C.navy, margin: 0, isTextBox: true });
+  const levels = [
+    [I.eye, "Observe", "Alert only: the finding and the agent's explanation."],
+    [I.user, "Propose fixes (default)", "Prepares the allowlisted fix; it waits until a human clicks Approve fix."],
+    [I.bolt, "Auto-fix config drift", "Applies only the DR-side fix itself: copy a missing app setting to Southeast Asia, audited."],
+  ];
+  levels.forEach(([ic, h, b], i) => {
+    const x = 0.6 + i * 4.1, y = 4.55;
+    card(s, x, y, 3.85, 1.15, i === 1 ? C.tealLight : C.card, false);
+    circ(s, ic, x + 0.2, y + 0.25, 0.5, i === 1 ? C.teal : C.navy);
+    s.addText(h, { x: x + 0.85, y: y + 0.12, w: 2.85, h: 0.35, fontFace: BF, fontSize: 13.5, bold: true, color: C.navy, margin: 0, isTextBox: true });
+    s.addText(b, { x: x + 0.85, y: y + 0.47, w: 2.85, h: 0.62, fontFace: BF, fontSize: 11, color: C.ink, valign: "top", margin: 0, isTextBox: true });
+  });
+  card(s, 0.6, 5.9, 12.1, 0.95, C.navy, false);
+  s.addText([
+    { text: "Real event, 19 Oct 2026: ", options: { bold: true, color: C.white } },
+    { text: "a scheduled check, with no one asking, found PAYMENT_PROVIDER missing in Southeast Asia (the DR app answered HTTP 503). Had East Asia failed then, the DR site could not have taken payments.", options: { color: "C9C3E6" } },
+  ], { x: 0.85, y: 5.9, w: 11.6, h: 0.95, fontFace: BF, fontSize: 14, valign: "middle", margin: 0, isTextBox: true });
+  footer(s);
+  s.addNotes("Proving recovery once is not enough; the environment drifts between drills. So the DR Agent watches readiness by itself. Every 10 minutes, with no one asking, it runs the seven readiness checks. When a check starts failing, the Readiness agent investigates with its read-only tools and explains the cause. What happens next depends on the autonomy level: Observe only alerts; Propose fixes, the default, prepares the allowlisted fix and waits for a human to approve it; Auto-fix config drift applies only one kind of fix itself, copying a missing app setting to the Southeast Asia side, and records it in the audit trail. Autopilot never runs during a drill, never starts a drill and never touches production traffic. This is not hypothetical: on 19 October a scheduled check found the PAYMENT_PROVIDER setting missing in Southeast Asia, where the DR app was answering HTTP 503, without anyone triggering it. In production we would move this loop to an Azure Functions timer so it does not depend on the console.");
+
+  // ---------- 11. Architecture ----------
   s = add(); s.background = { color: C.white };
   title(s, "Architecture: 100% Azure, across an Azure paired region",
     "East Asia (primary) and Southeast Asia (DR). The control plane runs outside both: console in South India, its state and secrets in Central India, agents in East US 2.");
@@ -316,42 +357,47 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   });
   s.addNotes("Everything runs on Azure. Users reach Contoso Payments through Traffic Manager with priority routing. App Service runs in both regions; Azure SQL replicates through a failover group; the reports VM is protected by Azure Site Recovery. The DR console and engine sit in South India, outside both regions, and call the six agents in Azure AI Foundry. Secrets live in Key Vault with managed identities; the whole environment is Bicep with one-click up and down.");
 
-  // ---------- 11. Results ----------
+  // ---------- 12. Results ----------
   s = add(); s.background = { color: C.white };
   title(s, "Measured on live Azure, not assumed",
     "Real failovers of the payments service, East Asia → Southeast Asia, 17–19 Oct 2026. Target: RTO 30 min, RPO 15 min.");
-  const kpi = [["29.04 s", "RTO, latest drill", "29.0–40.4 s across 9 drills (median 32.7 s)"], ["2.8 s", "RPO, proven write by write", "2 of 45 acknowledged writes lost in the forced failover"],
-    ["3 min 44 s", "Failback to primary", "planned, no data loss"], ["3 min 08 s", "VM recovered by Site Recovery", "test-failover job; service verified inside the VM at 3 min 55 s"]];
+  const kpi = [["29.04 s", "RTO, 19 Oct drill, no load", "27.74–40.43 s across all 10 drills"], ["2.80 s", "RPO, proven write by write", "same drill: 2 of 45 acknowledged writes lost in the forced failover"],
+    ["1 min 43 s", "Failback to primary", "1 min 43 s – 2 min 55 s on Premium P0v3 (3 min 44 s on B1); planned"], ["3 min 08 s", "VM recovered by Site Recovery", "test-failover job; service verified inside the VM at 3 min 55 s"]];
   kpi.forEach(([v, l, x0], i) => {
     const x = 0.6 + i * 3.06;
-    card(s, x, 1.75, 2.88, 1.85);
-    s.addText(v, { x: x + 0.2, y: 1.9, w: 2.5, h: 0.75, fontFace: HF, fontSize: 30, bold: true, color: i < 2 ? C.teal : C.navy, margin: 0, isTextBox: true });
-    s.addText(l, { x: x + 0.2, y: 2.65, w: 2.5, h: 0.35, fontFace: BF, fontSize: 13, bold: true, color: C.navy, margin: 0, isTextBox: true });
-    s.addText(x0, { x: x + 0.2, y: 3.0, w: 2.55, h: 0.5, fontFace: BF, fontSize: 11, color: C.muted, valign: "top", margin: 0, isTextBox: true });
+    card(s, x, 1.7, 2.88, 1.7);
+    s.addText(v, { x: x + 0.2, y: 1.8, w: 2.5, h: 0.7, fontFace: HF, fontSize: 30, bold: true, color: i < 2 ? C.teal : C.navy, margin: 0, isTextBox: true });
+    s.addText(l, { x: x + 0.2, y: 2.5, w: 2.55, h: 0.32, fontFace: BF, fontSize: 12.5, bold: true, color: C.navy, margin: 0, isTextBox: true });
+    s.addText(x0, { x: x + 0.2, y: 2.83, w: 2.55, h: 0.52, fontFace: BF, fontSize: 10.5, color: C.muted, valign: "top", margin: 0, isTextBox: true });
   });
-  s.addText("Where the 29.04 s went (latest drill, one clock, segments add up exactly)", { x: 0.6, y: 3.9, w: 12.1, h: 0.35, fontFace: BF, fontSize: 14, bold: true, color: C.navy, margin: 0, isTextBox: true });
-  const segs = [["Outage injected", 0.714, "9F86FF"], ["SQL forced failover", 14.321, C.teal], ["Traffic Manager reroute", 3.782, "C105B2"], ["DNS + health checks reach DR", 9.478, "7C5CFF"], ["Engine bookkeeping", 0.745, "BDBDC7"]];
+  card(s, 0.6, 3.55, 12.1, 0.5, C.amberLight, false);
+  s.addText([
+    { text: "Under payment load (20 writes/s, every write checked), 19 Oct:  ", options: { bold: true, color: C.navy } },
+    { text: "RTO 27.74 s  ·  RPO 1.95 s (15 of 466 acknowledged writes lost)  ·  failback 2 min 55 s", options: { color: C.ink } },
+  ], { x: 0.85, y: 3.55, w: 11.6, h: 0.5, fontFace: BF, fontSize: 13, valign: "middle", margin: 0, isTextBox: true });
+  s.addText("Where the 29.04 s went (19 Oct drill without load, one clock, segments add up exactly)", { x: 0.6, y: 4.2, w: 12.1, h: 0.35, fontFace: BF, fontSize: 14, bold: true, color: C.navy, margin: 0, isTextBox: true });
+  const segs = [["Outage injected", 0.714, "9F86FF"], ["SQL forced failover", 14.321, C.teal], ["Traffic Manager reroute", 3.782, "C105B2"], ["DNS + health checks", 9.478, "7C5CFF"], ["Engine bookkeeping", 0.745, "BDBDC7"]];
   const total = 29.040; let bx = 0.6;
   segs.forEach(([l, v, col]) => {
     const w = 12.1 * v / total;
-    s.addShape(pres.shapes.RECTANGLE, { x: bx, y: 4.35, w, h: 0.5, fill: { color: col }, line: { color: C.white, width: 1 } });
-    if (w > 1.0) s.addText(`${v.toFixed(3)} s`, { x: bx, y: 4.35, w, h: 0.5, fontFace: BF, fontSize: 12, bold: true, color: C.white, align: "center", valign: "middle", margin: 0, isTextBox: true });
+    s.addShape(pres.shapes.RECTANGLE, { x: bx, y: 4.6, w, h: 0.45, fill: { color: col }, line: { color: C.white, width: 1 } });
+    if (w > 1.0) s.addText(`${v.toFixed(3)} s`, { x: bx, y: 4.6, w, h: 0.45, fontFace: BF, fontSize: 12, bold: true, color: C.white, align: "center", valign: "middle", margin: 0, isTextBox: true });
     bx += w;
   });
   segs.forEach(([l, v, col], i) => {
     const x = 0.6 + i * 2.42;
-    s.addShape(pres.shapes.RECTANGLE, { x, y: 5.05, w: 0.18, h: 0.18, fill: { color: col }, line: { color: col } });
-    s.addText(`${l}  ${v.toFixed(3)} s`, { x: x + 0.25, y: 4.97, w: 2.15, h: 0.4, fontFace: BF, fontSize: 10.5, color: C.ink, valign: "middle", margin: 0, isTextBox: true });
+    s.addShape(pres.shapes.RECTANGLE, { x, y: 5.21, w: 0.18, h: 0.18, fill: { color: col }, line: { color: col } });
+    s.addText(`${l}  ${v.toFixed(3)} s`, { x: x + 0.25, y: 5.13, w: 2.15, h: 0.36, fontFace: BF, fontSize: 10.5, color: C.ink, valign: "middle", margin: 0, isTextBox: true });
   });
-  card(s, 0.6, 5.6, 12.1, 1.25, C.tealLight, false);
+  card(s, 0.6, 5.65, 12.1, 1.2, C.tealLight, false);
   s.addText([
     { text: "Why judges can trust the numbers: ", options: { bold: true, color: C.navy } },
-    { text: "RTO runs from the injected outage to the first healthy check through Traffic Manager from Southeast Asia (the engine checks every second; the previous failed check is shown as the precision window). RPO: one confirmed write per second, and every write the database acknowledged until the failover completed must exist in the new primary. Chaos drill with a surprise fault: 57.4 s.", options: { color: C.ink } },
-  ], { x: 0.85, y: 5.6, w: 11.6, h: 1.25, fontFace: BF, fontSize: 12.5, valign: "middle", margin: 0, isTextBox: true });
+    { text: "RTO runs from the injected outage to the first healthy check through Traffic Manager from Southeast Asia (checked every second). RPO is proven write by write: every write the database acknowledged until the forced failover completed, including during it, must exist in the new primary. Our earlier \"RPO 0\" came from a narrower method; our own audit found it.", options: { color: C.ink } },
+  ], { x: 0.85, y: 5.65, w: 11.6, h: 1.2, fontFace: BF, fontSize: 12.5, valign: "middle", margin: 0, isTextBox: true });
   footer(s);
-  s.addNotes("These are measured, not estimated. Nine drills without chaos: RTO between 29.0 and 40.4 seconds, median 32.7, against a 30-minute target. RPO is proven write by write: in the latest drill the old primary acknowledged 6 writes while the forced failover was running, and 2 of them never reached the new primary, so 2.8 seconds of writes were lost, against a 15-minute target. That is exactly what a forced failover with asynchronous replication means, and our own audit found that our first, narrower measurement had missed it. Failback is planned and loses nothing. Site Recovery brought the reports VM up in Southeast Asia in 3 minutes 8 seconds, and we proved the service inside it at 3 minutes 55. Every second of the latest 29.04 s RTO is accounted for: 14.3 s SQL failover, 3.8 s Traffic Manager, 9.5 s DNS and health checks, and under a second each for the injection and our own bookkeeping.");
+  s.addNotes("These are measured, not estimated. Ten completed drills so far: RTO between 27.74 and 40.43 seconds, against a 30-minute target. The headline drill ran on 19 October without extra load: RTO 29.04 seconds, and the data loss proven write by write: 2 of 45 acknowledged writes never reached the new primary, so 2.8 seconds of writes were lost, against a 15-minute target. That is what a forced failover with asynchronous replication means; our first, narrower measurement had reported zero, and our own audit found it. We then ran drills under payment load: 20 confirmed database writes per second from parallel writers, every write checked. The best of those: RTO 27.74 seconds, RPO 1.95 seconds, 15 of 466 acknowledged writes lost, failback 2 minutes 55 seconds; another load drill measured RTO 36.04 seconds and RPO 1.84 seconds, 13 of 156 writes lost. For demo week we run App Service Premium P0v3, and failback dropped from 3 minutes 44 seconds on B1 to between 1 minute 43 and 2 minutes 55. Site Recovery brought the reports VM up in Southeast Asia in 3 minutes 8 seconds, and we proved the service inside it at 3 minutes 55. Every second of the 29.04 s RTO is accounted for: 14.3 s SQL failover, 3.8 s Traffic Manager, 9.5 s DNS and health checks, and under a second each for the injection and our own bookkeeping. The Results page also compares each drill with earlier ones: RTO against the median, the biggest segment change, and findings that keep coming back; the Reporter agent gets the same history.");
 
-  // ---------- 12. Cost ----------
+  // ---------- 13. Cost ----------
   s = add(); s.background = { color: C.white };
   title(s, "What it costs to prove recovery",
     "Actual Azure bills and list prices for what we built, compared with the cost of downtime.");
@@ -372,19 +418,19 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
   ], { x: 0.85, y: 4.55, w: 11.6, h: 1.15, fontFace: BF, fontSize: 16, valign: "middle", margin: 0, isTextBox: true });
   s.addText([
     { text: "Cost-aware by design: ", options: { bold: true, color: C.navy } },
-    { text: "the Architect prices every strategy from live Azure list prices and flags anything over budget; the whole environment is created and removed with one command (up.sh / down.sh), so nothing runs when it is not needed.", options: { color: C.ink } },
+    { text: "the Architect prices every strategy from live Azure list prices and flags anything over budget; the whole environment is created and removed with one command (up.sh / down.sh). For demo week only, App Service Premium P0v3 + SQL S1 (about $6.75 a day), reverted with demo-tier.sh down.", options: { color: C.ink } },
   ], { x: 0.6, y: 5.95, w: 12.1, h: 0.9, fontFace: BF, fontSize: 13, valign: "top", margin: 0, isTextBox: true });
   footer(s);
-  s.addNotes("Cost is where this gets compelling. Every AI agent call we made across two days and nine drills cost 9 cents in total, from Azure Cost Management. The entire environment so far cost $2.44. At Azure list prices the DR set-up itself is $38.26 a month. At the 2026 average of $15,000 a minute, a whole month of DR costs less than a fifth of a second of downtime.");
+  s.addNotes("Cost is where this gets compelling. Every AI agent call we made across two days and nine drills cost 9 cents in total, from Azure Cost Management. The entire environment so far cost $2.44. At Azure list prices the DR set-up itself is $38.26 a month. At the 2026 average of $15,000 a minute, a whole month of DR costs less than a fifth of a second of downtime. For demo week we temporarily upgrade to App Service Premium P0v3 and SQL Standard S1, about $6.75 a day, for faster restarts and failback; one script reverts it after the demo.");
 
   // ---------- 13. Demo + roadmap ----------
   s = add(); s.background = { color: C.white };
   title(s, "Live demo, and where it goes next", "What you will see in the next minutes, on your own phone.");
   const demo = ["Scan the QR code: Contoso Payments opens on your phone; make a payment",
-    "Readiness says NO-GO: Southeast Asia is missing a setting; one approved click fixes it",
-    "The Planner builds the drill; we approve it and inject the outage",
-    "Your phone goes red, then reconnects to Southeast Asia in about 35 s with the same balance",
-    "Failback, then the report: RTO, RPO and every second accounted for"];
+    "Autopilot already found it, unasked: Southeast Asia is missing a setting; the agent shows its tool calls; one approved click fixes it",
+    "The Planner builds the drill; we approve it and start it under payment load (20 writes/s)",
+    "The live map shows traffic and the primary database moving; your phone reconnects to Southeast Asia in about 30–40 s",
+    "Failback, then the report: RTO, RPO write by write, compared with earlier drills"];
   s.addText("The demo", { x: 0.6, y: 1.7, w: 6, h: 0.4, fontFace: HF, fontSize: 18, bold: true, color: C.navy, margin: 0, isTextBox: true });
   demo.forEach((t, i) => {
     const y = 2.2 + i * 0.86;
@@ -402,7 +448,7 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
     s.addText(b, { x: 7.5, y: y + 0.32, w: 4.95, h: 0.4, fontFace: BF, fontSize: 12, color: C.ink, margin: 0, isTextBox: true });
   });
   footer(s);
-  s.addNotes("Now the demo, on your own phone. Then the roadmap, which we keep clearly separate from what is built: scheduled drills, more Azure services as new allowlisted actions, Chaos Studio's fault library, Teams approval cards, and a resilience score across many applications.");
+  s.addNotes("Now the demo, on your own phone. Autopilot has already found a configuration gap by itself; we approve the fix, run the drill under payment load, watch it on the live map and on your phones, and finish with the report that compares this drill with earlier ones. Then the roadmap, which we keep clearly separate from what is built: scheduled drills, more Azure services as new allowlisted actions, Chaos Studio's fault library, Teams approval cards, and a resilience score across many applications.");
 
   // ---------- Sources ----------
   s = add(); s.background = { color: C.white };
@@ -421,21 +467,21 @@ const shadow = () => ({ type: "outer", color: "000000", blur: 6, offset: 2, angl
     "[11] Cockroach Labs with Wakefield Research, The State of Resilience 2025 (1,000 executives, Aug–Sep 2024). cockroachlabs.com",
     "[12] Azure Cost Management, actual cost by service in US$ (CostUSD), month to date, queried 18 Oct 2026 (our environment).",
     "[13] Azure Retail Prices API (prices.azure.com), East Asia / Southeast Asia list prices for App Service B1 Linux, SQL Database Basic, Traffic Manager, 18 Oct 2026.",
-    "Our measurements: 9 drills recorded by the DR Agent (17–18 Oct 2026); each report keeps the raw timestamps, events and approvals.",
+    "Our measurements: 10 completed drills recorded by the DR Agent (17–19 Oct 2026), including drills under payment load; each report keeps the raw timestamps, events, writes and approvals.",
   ];
   s.addText(refs.map((r, i) => ({ text: r, options: { breakLine: i < refs.length - 1 } })),
     { x: 0.6, y: 1.65, w: 12.1, h: 5.3, fontFace: BF, fontSize: 10.5, color: C.ink, valign: "top", paraSpaceAfter: 5, margin: 0, isTextBox: true });
   footer(s);
 
-  // ---------- 10. Close ----------
+  // ---------- 16. Close ----------
   s = add(); s.background = { color: C.navy };
   circ(s, I.shield, 0.6, 0.8, 1.0, C.teal);
   s.addText("Don't assume you can recover.", { x: 0.6, y: 2.2, w: 12, h: 0.9, fontFace: HF, fontSize: 44, bold: true, color: C.white, margin: 0, isTextBox: true });
   s.addText("Let the DR Agent test it for real, and prove it, whenever you need.", { x: 0.6, y: 3.1, w: 12, h: 0.8, fontFace: HF, fontSize: 30, color: "C9C3E6", margin: 0, isTextBox: true });
-  [["Real DR drills", "Fail over, measure, fail back: 10 live drills, RTO about 30 s, data loss proven write by write"], ["Built 100% on Azure", "AI Foundry, SQL failover groups, Traffic Manager, Site Recovery, Monitor"], ["Safe by design", "Allowlisted actions, human approval, kill switch, full audit trail"]].forEach(([h, b], i) => {
-    const x = 0.6 + i * 4.1;
+  [["Real DR drills", "10 live drills, RTO 27.7–40.4 s, data loss proven write by write, also under payment load"], ["Autonomous, not reckless", "Autopilot checks readiness by itself; agents investigate with read-only tools"], ["Built 100% on Azure", "AI Foundry, SQL failover groups, Traffic Manager, Site Recovery, Monitor"], ["Safe by design", "Allowlisted actions, human approval, kill switch, full audit trail"]].forEach(([h, b], i) => {
+    const x = 0.6 + i * 3.05;
     s.addText([{ text: h, options: { bold: true, fontSize: 17, color: C.white, breakLine: true } }, { text: b, options: { fontSize: 13, color: "C9C3E6" } }],
-      { x, y: 4.6, w: 3.8, h: 1.0, fontFace: BF, valign: "top", margin: 0, isTextBox: true });
+      { x, y: 4.6, w: 2.85, h: 1.3, fontFace: BF, valign: "top", margin: 0, isTextBox: true });
   });
   s.addText("Thank you  ·  Team Azure Armada", { x: 0.6, y: 6.5, w: 12.1, h: 0.45, fontFace: BF, fontSize: 15, color: "9C95BD", margin: 0, isTextBox: true });
 
