@@ -227,13 +227,27 @@
 
     // dots that travel along a path: customers' requests and each confirmed / failed database write
     // opts: r (radius), stroke / sw (ring), peak (max opacity, < 1 for a faint dot)
+    // opts.paint: the line turns the dot's colour as the dot reaches it and stays that colour until the dot has
+    // finished its whole journey (a count per line, so overlapping payments keep it painted). An inline style,
+    // because render() rewrites the line's class every poll.
+    const painted = {};
+    function paint(p, color, on) {
+        painted[p.id] = (painted[p.id] || 0) + (on ? 1 : -1);
+        if (painted[p.id] > 0) { p.style.stroke = color; p.style.strokeWidth = '3'; p.style.opacity = '1'; }
+        else { delete painted[p.id]; p.style.stroke = p.style.strokeWidth = p.style.opacity = ''; }
+    }
     function dot(pathIds, color, dur = 1.2, stopAt = 1, opts = {}) {
         let delay = 0;
         const peak = opts.peak ?? 1;
-        for (const pid of pathIds) {
-            const p = document.getElementById('p-' + pid); if (!p) continue;
+        const segs = pathIds.map(pid => document.getElementById('p-' + pid)).filter(Boolean);
+        const total = segs.length * dur * 1000;
+        for (const p of segs) {
             const c = el('circle', { r: opts.r || 5, fill: color, opacity: 0 }, dotLayer);
             if (opts.stroke) { c.setAttribute('stroke', opts.stroke); c.setAttribute('stroke-width', opts.sw || 2); }
+            if (opts.paint) {
+                const until = total - delay;
+                setTimeout(() => { paint(p, color, true); setTimeout(() => paint(p, color, false), until); }, delay);
+            }
             const len = p.getTotalLength();
             const start = performance.now() + delay;
             const step = (now) => {
@@ -376,9 +390,9 @@
         if (r !== 'A' && r !== 'B') return;
         const path = ['users', r === 'A' ? 'tmA' : 'tmB'];
         if (primary === 'A' || primary === 'B') path.push((r === 'A' ? 'a' : 'b') + primary);
-        dot(path, 'var(--pay)', PAY_SEG_S, 1, { r: 7, stroke: '#fff', sw: 2 });
+        dot(path, 'var(--pay)', PAY_SEG_S, 1, { r: 7, stroke: '#fff', sw: 2, paint: true });
         if (path.length === 3) {
-            setTimeout(() => dot([primary === 'A' ? 'replAB' : 'replBA'], 'var(--pay)', 0.9, 1, { r: 5, stroke: '#fff', sw: 1.5, peak: 0.45 }),
+            setTimeout(() => dot([primary === 'A' ? 'replAB' : 'replBA'], 'var(--pay)', 0.9, 1, { r: 5, stroke: '#fff', sw: 1.5, peak: 0.45, paint: true }),
                        path.length * PAY_SEG_S * 1000);
         }
     }
