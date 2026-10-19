@@ -66,3 +66,13 @@ def test_known_problem_is_not_reannounced(env):
 def test_never_runs_during_a_drill(env, monkeypatch):
     monkeypatch.setattr("dr_agent.engine.runner.any_running", lambda: True)
     assert autopilot.run_once("schedule")["skipped"] == "a drill is running"
+
+
+def test_pending_fix_survives_later_checks_until_resolved(env, monkeypatch):
+    fs, applied = env
+    autopilot.run_once("schedule")
+    autopilot.run_once("schedule")                      # same problem, not new: the proposal must stay
+    assert autopilot.get_state()["proposal"]["keys"] == ["PAYMENT_PROVIDER"]
+    monkeypatch.setattr(readiness, "build_checks", lambda facts: [])   # problem gone
+    autopilot.run_once("schedule")
+    assert autopilot.get_state()["proposal"] is None

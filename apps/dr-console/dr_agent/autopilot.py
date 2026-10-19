@@ -103,6 +103,8 @@ def run_once(trigger: str = "schedule", trace_id: Optional[str] = None) -> dict:
         rec["trace_id"] = run_id
         level = prev["settings"]["level"]
         proposal = rec.get("proposal") if rec.get("proposal", {}).get("status") == "awaiting approval" else None
+        if not proposal and not rec["go"]:
+            proposal = prev.get("proposal")  # the same problem is still there: its fix keeps waiting for a human
         if rec["go"]:
             proposal = None
         nxt = datetime.fromtimestamp(time.time() + 60 * prev["settings"]["interval_min"], timezone.utc).isoformat()
