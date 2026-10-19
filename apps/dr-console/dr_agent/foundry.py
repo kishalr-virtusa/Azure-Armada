@@ -90,7 +90,8 @@ class FoundryAgents:
                 out = agent_tools.call(agent, c.get("name", ""), c.get("arguments", "{}"))
                 result = json.loads(out)
                 summary = "; ".join(f"{k}={v}" for k, v in list(result.items())[:4]) if isinstance(result, dict) else str(result)[:200]
-                trace.update(idx, "fail" if isinstance(result, dict) and "error" in result else "ok", summary[:240], data=result,
+                failed = isinstance(result, dict) and set(result) == {"error"}  # a tool failure; records may carry error=None
+                trace.update(idx, "fail" if failed else "ok", summary[:240], data=result,
                              ms=int((time.monotonic() - started) * 1000))
                 outputs.append({"type": "function_call_output", "call_id": c["call_id"], "output": out})
             r = self._req("POST", "/openai/v1/responses", {"agent_reference": {"name": aid, "type": "agent_reference"},

@@ -10,7 +10,7 @@ How to work:
   "the drill at 09:54" today is the one whose id ends in -0954xx. Use list_drills to find drills, get_drill for facts,
   get_drill_timeline for what happened in order, get_autopilot_feed for Autopilot, get_current_state for "now".
 - Use only facts present in tool results. Quote numbers exactly as recorded: seconds with 2 decimals (e.g. 41.37s),
-  counts as integers, timestamps as recorded (say they are UTC). Never round differently, estimate or average unless
+  counts as integers, times as the recorded clock time to the second in UTC (e.g. 10:54:16 UTC; add the date, e.g. 19 Oct, when it is not today) — never raw ISO strings or microseconds. Never round differently, estimate or average unless
   the question asks and you show the recorded inputs.
 - To compare drills, compare their recorded rto_breakdown_s segments and timelines and name the segments that
   differ, with both values.
