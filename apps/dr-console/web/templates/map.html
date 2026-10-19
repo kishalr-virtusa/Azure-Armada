@@ -67,10 +67,6 @@
 <div class="card map-card">
     <div class="map-head">
         <h2>Contoso Payments on Azure</h2>
-        <div class="seg" role="tablist" aria-label="Service names">
-            <button class="on" data-names="azure" type="button">Azure names</button>
-            <button data-names="aws" type="button">AWS equivalents</button>
-        </div>
     </div>
     <div class="map-wrap"><svg id="map" viewBox="0 0 1200 640" role="img" aria-label="Live architecture map"></svg></div>
     <div class="legend">
@@ -131,14 +127,8 @@
                  app: ['App Service', 'payments web app'], sql: ['Azure SQL', 'failover group'], vmA: ['Reports VM', 'Windows Server'],
                  vmB: ['Site Recovery copy', 'test VM, isolated network'], regionA: 'Region A · East Asia (Hong Kong)',
                  regionB: 'Region B · Southeast Asia (Singapore)', repl: 'geo-replication', asr: 'Site Recovery', hb: 'heartbeat writes' },
-        aws: { phones: ["Customers' phones", 'Contoso Payments app'], tm: ['≈ Route 53', 'failover routing + health checks'],
-               console: ['DR Agent console', 'engine · India (≈ ap-south)'], agents: ['≈ Bedrock Agents', '6 agents · ≈ us-east'],
-               app: ['≈ Elastic Beanstalk', 'payments web app'], sql: ['≈ Aurora Global DB', 'cross-region replica'], vmA: ['Reports VM', '≈ EC2 (Windows)'],
-               vmB: ['≈ AWS DRS copy', 'Elastic Disaster Recovery drill'], regionA: 'Region A · ≈ ap-east-1 (Hong Kong)',
-               regionB: 'Region B · ≈ ap-southeast-1 (Singapore)', repl: '≈ global replication', asr: '≈ DRS replication', hb: 'heartbeat writes' },
     };
-    let names = 'azure';
-    try { names = localStorage.getItem('dra-map-names') || 'azure'; } catch (e) { /* ignore */ }
+    const names = 'azure';
 
     // ---------------------------------------------------------------- static drawing
     const linkLayer = el('g'); const regionLayer = el('g'); const nodeLayer = el('g'); const dotLayer = el('g');
@@ -199,12 +189,7 @@
         set('appA', t.app); set('appB', t.app); set('sqlA', t.sql); set('sqlB', t.sql); set('vmA', t.vmA); set('vmB', t.vmB);
         R.A.label.textContent = t.regionA; R.B.label.textContent = t.regionB;
         L.replAB_label.textContent = t.repl; L.asr_label.textContent = t.asr; L.hbA_label.textContent = t.hb;
-        document.querySelectorAll('[data-names]').forEach(b => b.classList.toggle('on', b.dataset.names === names));
     }
-    document.querySelectorAll('[data-names]').forEach(b => b.onclick = () => {
-        names = b.dataset.names; try { localStorage.setItem('dra-map-names', names); } catch (e) { /* ignore */ }
-        applyNames();
-    });
     applyNames();
 
     // dots that travel along a path: customers' requests and each confirmed / failed database write
