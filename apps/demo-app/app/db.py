@@ -157,3 +157,28 @@ def device_spent(device: str) -> tuple[float, int]:
         )
         row = cursor.fetchone()
         return float(row["spent"]), int(row["n"])
+
+
+def get_feed(after: int = 0, limit: int = 20) -> list[dict[str, Any]]:
+    """Newest payments from all phones with id > `after` (health probes excluded). Rows carry the raw device
+    id so the caller can anonymize it; it must never be sent to a browser as is."""
+    with get_cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT TOP(%s) id, amount, created_at, region, device
+            FROM transactions
+            WHERE amount > 0 AND region <> 'probe' AND id > %s
+            ORDER BY id DESC
+            """,
+            (limit, after),
+        )
+        return [
+            {
+                "id": r["id"],
+                "amount": float(r["amount"]),
+                "created_at": r["created_at"],
+                "region": r["region"],
+                "device": r["device"],
+            }
+            for r in cursor.fetchall()
+        ]

@@ -54,6 +54,22 @@
     .bar span { display: block; height: 100%; }
     .legend { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 12.5px; color: var(--body); padding: 10px 20px 14px; border-top: 1px solid var(--hairline); }
     .legend i { display: inline-block; width: 26px; height: 0; border-top: 2px dashed; vertical-align: middle; margin-right: 6px; }
+    /* customer payments: brighter green than replication lines, filled, white ring */
+    :root { --pay: #12a150; }
+    .legend b.paydot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--pay); box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--hairline-strong); vertical-align: middle; margin: 0 8px 0 4px; }
+    .node.aside .box { stroke-dasharray: 5 4; }
+    .pays-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .pays { list-style: none; margin: 12px 0 0; padding: 0; }
+    .pays li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto; gap: 12px; align-items: center; height: 40px; border-top: 1px solid var(--hairline); font-size: 13px; color: var(--body); }
+    .pays li::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--hairline-strong); }
+    .pays li.fresh::before { background: var(--pay); }
+    .pays .amt { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+    .pays .rg { font: 400 12px var(--mono); display: inline-flex; align-items: center; gap: 6px; }
+    .pays .rg::before { content: ""; width: 6px; height: 6px; background: currentColor; }
+    .pays .rg.a { color: var(--region-a, #5e2cfe); } .pays .rg.b { color: var(--region-b, #c105b2); }
+    .pays .tm { font: 400 12px var(--mono); color: var(--mute); font-variant-numeric: tabular-nums; text-align: right; min-width: 64px; }
+    .pays .empty { display: block; height: auto; padding: 12px 0 0; border: 0; color: var(--mute); }
+    .pays .empty::before { display: none; }
 </style>
 
 <header>
@@ -70,6 +86,7 @@
     </div>
     <div class="map-wrap"><svg id="map" viewBox="0 0 1200 640" role="img" aria-label="Live architecture map"></svg></div>
     <div class="legend">
+        <span><b class="paydot" aria-hidden="true"></b>a customer payment (green dot)</span>
         <span><i style="border-color: var(--accent);"></i>customer traffic / database writes (live)</span>
         <span><i style="border-color: var(--success);"></i>replication (copies data to the other region)</span>
         <span><i style="border-color: var(--hairline-strong);"></i>standby path (not in use)</span>
@@ -104,6 +121,17 @@
     <svg id="chart" viewBox="0 0 1000 190" style="width: 100%; height: auto; display: block;" role="img" aria-label="Writes per second"></svg>
 </div>
 
+<div class="card">
+    <div class="pays-head">
+        <div>
+            <h2 style="margin: 0;">Live payments</h2>
+            <p class="sub" style="margin-top: 4px;">Real customer payments, read from Azure SQL through the failover group. Each one travels the map as a green dot.</p>
+        </div>
+        <span class="caption" id="paysN" style="font-size: 12px; color: var(--mute);"></span>
+    </div>
+    <ul class="pays" id="pays" aria-live="polite"><li class="empty">Waiting for payments…</li></ul>
+</div>
+
 <div class="mkpis">
     <div class="mk"><div class="mk-l">Recovery time (RTO)</div><div class="mk-v" id="kRto">—</div><div class="mk-n" id="kRtoN">target 30 min</div></div>
     <div class="mk"><div class="mk-l">Data loss (RPO)</div><div class="mk-v" id="kRpo">—</div><div class="mk-n" id="kRpoN">checked write by write</div></div>
@@ -124,8 +152,10 @@
     const NAMES = {
         azure: { phones: ["Customers' phones", 'Contoso Payments app'], tm: ['Traffic Manager', 'sends users to a healthy region'],
                  console: ['DR Agent console', 'engine · South India'], agents: ['AI agents', 'Azure AI Foundry · East US 2'],
-                 app: ['App Service', 'payments web app'], sql: ['Azure SQL', 'failover group'], vmA: ['Reports VM', 'Windows Server'],
-                 vmB: ['Site Recovery copy', 'test VM, isolated network'], regionA: 'Region A · East Asia (Hong Kong)',
+                 app: ['App Service', 'payments web app'], sql: ['Azure SQL', 'failover group'],
+                 // the VM lane is not in the payment path: say so on the node itself (second line = sub2)
+                 vmA: ['Reports server (VM)', 'daily payments report', 'not in payment path'],
+                 vmB: ['Site Recovery copy', 'rebuilt in a drill to', 'prove VM recovery'], regionA: 'Region A · East Asia (Hong Kong)',
                  regionB: 'Region B · Southeast Asia (Singapore)', repl: 'geo-replication', asr: 'Site Recovery', hb: 'heartbeat writes' },
     };
     const names = 'azure';
@@ -146,20 +176,23 @@
     region('A', 520, 20, 660, 290, true);
     region('B', 520, 330, 660, 290, false);
     const N = {};
-    const node = (id, x, y, w = 170, h = 84) => {
-        const g = el('g', { class: 'node' }, nodeLayer);
+    // aside = not in the payment path (dashed box, two subtitle lines)
+    const node = (id, x, y, w = 170, h = 84, aside = false) => {
+        const g = el('g', { class: 'node' + (aside ? ' aside' : '') }, nodeLayer);
         el('rect', { x, y, width: w, height: h, rx: 10, class: 'box' }, g);
         const t = el('text', { x: x + 14, y: y + 26, class: 'n-title' }, g);
         const s = el('text', { x: x + 14, y: y + 44, class: 'n-sub' }, g);
+        const s2 = aside ? el('text', { x: x + 14, y: y + 60, class: 'n-sub' }, g) : null;
+        const py = aside ? y + 70 : y + 54;
         const pg = el('g', { class: 'pill-mute' }, g);
-        const pb = el('rect', { x: x + 14, y: y + 54, width: 60, height: 20, class: 'pill-bg' }, pg);
-        const pt = el('text', { x: x + 22, y: y + 68, class: 'pill-t' }, pg);
-        N[id] = { g, t, s, pg, pb, pt, x, y, w, h };
+        const pb = el('rect', { x: x + 14, y: py, width: 60, height: 20, class: 'pill-bg' }, pg);
+        const pt = el('text', { x: x + 22, y: py + 14, class: 'pill-t' }, pg);
+        N[id] = { g, t, s, s2, pg, pb, pt, x, y, w, h, aside };
     };
     node('phones', 30, 278); node('tm', 270, 278, 190);
     node('console', 30, 520, 200); node('agents', 270, 520, 190);
-    node('appA', 550, 64); node('sqlA', 770, 196); node('vmA', 990, 64, 175);
-    node('appB', 550, 470); node('sqlB', 770, 342); node('vmB', 990, 470, 175);
+    node('appA', 550, 64); node('sqlA', 770, 196); node('vmA', 990, 64, 175, 100, true);
+    node('appB', 550, 470); node('sqlB', 770, 342); node('vmB', 990, 470, 175, 100, true);
     const L = {};
     const link = (id, d, label, lx, ly) => {
         L[id] = el('path', { d, class: 'link', id: 'p-' + id }, linkLayer);
@@ -174,7 +207,7 @@
     link('hbA', 'M230 545 C 420 545, 470 320, 640 320 C 760 320, 800 300, 800 280', 'hb', 300, 600);
     link('hbB', 'M230 555 C 430 555, 480 320, 650 320 C 770 320, 805 335, 805 342');
     link('agents', 'M230 562 L270 562');
-    link('asr', 'M1077 148 L1077 470', 'asr', 1086, 316);
+    link('asr', 'M1077 164 L1077 470', 'asr', 1086, 316);
 
     function setPill(id, cls, text) {
         const n = N[id];
@@ -184,7 +217,7 @@
     }
     function applyNames() {
         const t = NAMES[names];
-        const set = (id, pair) => { N[id].t.textContent = pair[0]; N[id].s.textContent = pair[1]; };
+        const set = (id, pair) => { N[id].t.textContent = pair[0]; N[id].s.textContent = pair[1]; if (N[id].s2) N[id].s2.textContent = pair[2] || ''; };
         set('phones', t.phones); set('tm', t.tm); set('console', t.console); set('agents', t.agents);
         set('appA', t.app); set('appB', t.app); set('sqlA', t.sql); set('sqlB', t.sql); set('vmA', t.vmA); set('vmB', t.vmB);
         R.A.label.textContent = t.regionA; R.B.label.textContent = t.regionB;
@@ -193,11 +226,14 @@
     applyNames();
 
     // dots that travel along a path: customers' requests and each confirmed / failed database write
-    function dot(pathIds, color, dur = 1.2, stopAt = 1) {
+    // opts: r (radius), stroke / sw (ring), peak (max opacity, < 1 for a faint dot)
+    function dot(pathIds, color, dur = 1.2, stopAt = 1, opts = {}) {
         let delay = 0;
+        const peak = opts.peak ?? 1;
         for (const pid of pathIds) {
             const p = document.getElementById('p-' + pid); if (!p) continue;
-            const c = el('circle', { r: 5, fill: color, opacity: 0 }, dotLayer);
+            const c = el('circle', { r: opts.r || 5, fill: color, opacity: 0 }, dotLayer);
+            if (opts.stroke) { c.setAttribute('stroke', opts.stroke); c.setAttribute('stroke-width', opts.sw || 2); }
             const len = p.getTotalLength();
             const start = performance.now() + delay;
             const step = (now) => {
@@ -205,7 +241,7 @@
                 if (t < 0) { requestAnimationFrame(step); return; }
                 if (t > stopAt) { c.remove(); return; }
                 const pt = p.getPointAtLength(len * t);
-                c.setAttribute('cx', pt.x); c.setAttribute('cy', pt.y); c.setAttribute('opacity', t > stopAt - 0.1 ? 0.3 : 1);
+                c.setAttribute('cx', pt.x); c.setAttribute('cy', pt.y); c.setAttribute('opacity', t > stopAt - 0.1 ? 0.3 * peak : peak);
                 requestAnimationFrame(step);
             };
             requestAnimationFrame(step);
@@ -329,6 +365,65 @@
         dot(['users', s === 'A' ? 'tmA' : 'tmB'], ok ? 'var(--accent)' : 'var(--danger)', 0.55, ok ? 1 : 1);
     }, 1000);
 
+    // ---------------------------------------------------------------- customer payments
+    // A real payment travels: phones -> Traffic Manager -> the App Service that served it -> the SQL primary,
+    // then a fainter dot copies it to the secondary along the replication link.
+    const REGION_KEY = { 'East Asia': 'A', 'Southeast Asia': 'B' };
+    const PAY_SEG_S = 0.7;
+    let lastPayId = null, freshPays = new Set();
+    function flyPayment(p, primary) {
+        const r = p.served || REGION_KEY[p.region];
+        if (r !== 'A' && r !== 'B') return;
+        const path = ['users', r === 'A' ? 'tmA' : 'tmB'];
+        if (primary === 'A' || primary === 'B') path.push((r === 'A' ? 'a' : 'b') + primary);
+        dot(path, 'var(--pay)', PAY_SEG_S, 1, { r: 7, stroke: '#fff', sw: 2 });
+        if (path.length === 3) {
+            setTimeout(() => dot([primary === 'A' ? 'replAB' : 'replBA'], 'var(--pay)', 0.9, 1, { r: 5, stroke: '#fff', sw: 1.5, peak: 0.45 }),
+                       path.length * PAY_SEG_S * 1000);
+        }
+    }
+    function payTime(iso) {
+        const t = Date.parse(iso || '');
+        return Number.isFinite(t) ? new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+    }
+    const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+    function renderPayments(pays) {
+        const ul = document.getElementById('pays');
+        const rows = pays.slice(0, 6);
+        document.getElementById('paysN').textContent = pays.length ? `last ${rows.length} of ${pays.length} read` : '';
+        if (!rows.length) {
+            const li = document.createElement('li'); li.className = 'empty';
+            li.textContent = 'No payments yet. Make a payment on a phone and watch it travel across the map.';
+            ul.replaceChildren(li);
+            return;
+        }
+        ul.replaceChildren(...rows.map(p => {
+            const li = document.createElement('li');
+            if (freshPays.has(p.id)) li.className = 'fresh';
+            const r = p.served || REGION_KEY[p.region];
+            const span = (c, text) => { const s = document.createElement('span'); s.className = c; s.textContent = text; return s; };
+            li.append(span('amt', Number.isFinite(p.amount) ? money.format(p.amount) : '—'),
+                      span('rg' + (r === 'A' ? ' a' : r === 'B' ? ' b' : ''), `served from ${String(p.region || 'unknown')}`),
+                      span('tm', payTime(p.created_at)));
+            return li;
+        }));
+    }
+    // A payment flies once: when it is first seen and is recent (by the server's clock), so opening the page or
+    // the server's cache warming up never replays old payments as a burst.
+    let seenPays = null;
+    const PAY_RECENT_MS = 20000;
+    function handlePayments(d) {
+        const pays = Array.isArray(d.payments) ? d.payments.filter(p => p && Number.isInteger(p.id)) : [];
+        const now = Date.parse(d.server_time || '') || (Date.now() - skew);
+        const recent = (p) => { const t = Date.parse(p.created_at || ''); return Number.isFinite(t) && now - t <= PAY_RECENT_MS; };
+        const fresh = seenPays === null ? [] : pays.filter(p => !seenPays.has(p.id) && recent(p)).reverse();  // oldest first
+        freshPays = new Set(fresh.map(p => p.id));
+        fresh.slice(-6).forEach((p, i) => setTimeout(() => flyPayment(p, d.primary), i * 450));
+        seenPays = new Set([...(seenPays || []), ...pays.map(p => p.id)].slice(-200));
+        lastPayId = d.last_payment_id ?? lastPayId;
+        renderPayments(pays);
+    }
+
     // stopwatch: from the injected outage (t0) until recovery, on the server's clock
     setInterval(() => {
         const dr = state && state.drill;
@@ -386,7 +481,7 @@
             if (res.ok) {
                 const d = await res.json();
                 skew = Date.now() - Date.parse(d.server_time);
-                state = d; render(d); drawChart(d);
+                state = d; render(d); drawChart(d); handlePayments(d);
             }
         } catch (e) { /* keep last state */ }
         setTimeout(poll, 2000);

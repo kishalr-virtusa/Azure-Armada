@@ -482,6 +482,18 @@
         .unlock-btn { margin-top: 0; flex: 0 0 auto; min-height: 40px; background: var(--accent); }
         .pay-btn { font-size: 16px; font-weight: 700; min-height: 52px; }
         @media (max-width: 360px) { .brand-name { font-size: 15px; } .region-chip { font-size: 11px; } }
+        /* Live activity (all phones) */
+        .feed-head { display: flex; align-items: center; gap: 8px; }
+        .feed-live { width: 8px; height: 8px; border-radius: 50%; background: var(--have); animation: pulse 1.6s infinite; }
+        .feed-list { list-style: none; display: flex; flex-direction: column; }
+        .feed-item { display: grid; grid-template-columns: 8px 1fr; gap: 10px; align-items: start; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+        .feed-item:last-child { border-bottom: none; }
+        .feed-item::before { content: ""; width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; background: var(--line-2); }
+        .feed-item.new::before { background: var(--have); }
+        .feed-item.mine::before { background: var(--accent); }
+        .feed-who { color: var(--ink); font-weight: 600; }
+        .feed-amt { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+        .feed-meta { color: var(--ink-3); }
     </style>
 </head>
 <body>
@@ -560,6 +572,12 @@
             <ul class="txn-list" id="txnList">
                 <li style="color: var(--ink-3); text-align: center; padding: 20px 0;">Loading...</li>
             </ul>
+        </div>
+
+        <!-- Live activity: payments from every phone (anonymous) -->
+        <div class="card hide" id="feedCard">
+            <div class="card-title feed-head"><span class="feed-live" aria-hidden="true"></span>Live activity</div>
+            <ul class="feed-list" id="feedList" aria-live="polite"></ul>
         </div>
 
         <footer class="footer">
@@ -691,6 +709,7 @@
 
                 loadBalance();
                 loadTransactions();
+                loadFeed();
             } catch (e) {
                 paymentResult.className = 'payment-result error';
                 paymentResult.textContent = e.message === 'session'
@@ -746,6 +765,72 @@
                     `;
                 }).join('');
             } catch (e) { /* silent */ }
+        }
+
+        // Live activity: payments from every phone, anonymous ("Customer 3F2A"), newest first.
+        // Text is only ever set with textContent (never innerHTML), so nothing from the server is parsed as HTML.
+        const FEED_MAX = 6;
+        const feedCard = document.getElementById('feedCard');
+        const feedList = document.getElementById('feedList');
+        let feedItems = [];          // newest first, at most FEED_MAX
+        let feedLastId = 0;
+        let feedPolls = 0;
+        let feedSkew = 0;            // phone clock minus server clock, for honest "12 s ago"
+        let feedFresh = new Set();   // ids that arrived in the latest poll (briefly marked)
+
+        function agoText(iso) {
+            const t = Date.parse(iso);
+            if (!Number.isFinite(t)) return '';
+            const s = Math.max(0, Math.round((Date.now() - feedSkew - t) / 1000));
+            if (s < 5) return 'just now';
+            if (s < 60) return `${s} s ago`;
+            if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+            return formatTime(iso);
+        }
+
+        function renderFeed() {
+            feedList.replaceChildren(...feedItems.map(p => {
+                const li = document.createElement('li');
+                li.className = 'feed-item' + (p.mine ? ' mine' : feedFresh.has(p.id) ? ' new' : '');
+                const body = document.createElement('div');
+                const who = document.createElement('span');
+                who.className = 'feed-who';
+                who.textContent = p.mine ? 'You' : String(p.label || 'A customer');
+                const amt = document.createElement('span');
+                amt.className = 'feed-amt';
+                amt.textContent = formatCurrency(p.amount);
+                const meta = document.createElement('span');
+                meta.className = 'feed-meta';
+                meta.textContent = ` · served from ${String(p.region || 'our data centre')} · ${agoText(p.created_at)}`;
+                body.append(who, document.createTextNode(' paid '), amt, meta);
+                li.append(body);
+                return li;
+            }));
+            feedCard.classList.toggle('hide', feedItems.length === 0);
+        }
+
+        async function loadFeed() {
+            // every 10th poll re-reads the newest payments from scratch (ids can step back after a forced failover)
+            const full = feedPolls++ % 10 === 0;
+            try {
+                const res = await fetch('/api/feed?after=' + (full ? 0 : feedLastId), { headers: deviceHeaders, cache: 'no-store' });
+                if (!res.ok) throw new Error('feed ' + res.status);
+                const data = await res.json();
+                const rows = (data && Array.isArray(data.payments) ? data.payments : [])
+                    .filter(p => p && Number.isInteger(p.id) && typeof p.amount === 'number' && Number.isFinite(p.amount));
+                if (data && data.server_time) {
+                    const st = Date.parse(data.server_time);
+                    if (Number.isFinite(st)) feedSkew = Date.now() - st;
+                }
+                const known = new Set(feedItems.map(p => p.id));
+                feedFresh = new Set(feedPolls > 1 ? rows.filter(p => !known.has(p.id)).map(p => p.id) : []);
+                const merged = full ? rows : rows.concat(feedItems.filter(p => !rows.some(r => r.id === p.id)));
+                feedItems = merged.sort((a, b) => b.id - a.id).slice(0, FEED_MAX);
+                feedLastId = feedItems.length ? feedItems[0].id : 0;
+                renderFeed();
+            } catch (e) {
+                feedCard.classList.add('hide');   // calm: no error box for a nice-to-have card
+            }
         }
 
         // Poll live status
@@ -959,6 +1044,7 @@
             await loadConfig();
             loadBalance();
             loadTransactions();
+            loadFeed();
             checkHealth();
 
             // Start polling
@@ -966,7 +1052,7 @@
                 pollLive();
                 setInterval(pollLive, 1000);
             }
-            setInterval(() => { loadBalance(); loadTransactions(); }, 3000);
+            setInterval(() => { loadBalance(); loadTransactions(); loadFeed(); }, 3000);
             setInterval(checkHealth, 2000);
         })();
     </script>

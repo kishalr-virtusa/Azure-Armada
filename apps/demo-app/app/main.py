@@ -1,5 +1,7 @@
 """Contoso Payments Demo App - FastAPI application."""
 
+import hashlib
+import hmac
 import os
 import random
 import re
@@ -8,7 +10,7 @@ import threading
 import time
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Query, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -199,6 +201,49 @@ def balance(request: Request):
     except Exception as e:
         logger.error(f"Failed to get balance: {e}")
         raise HTTPException(status_code=503, detail="balance temporarily unavailable")
+
+
+# Shared live activity: payments from every phone, with an anonymous per-device label. The salt must be the
+# same in both regions so a customer keeps their label across a failover.
+FEED_SALT = os.getenv("FEED_SALT") or "contoso-feed-v1"
+
+
+def _customer_label(device: str | None) -> str:
+    if not device:
+        return "A customer"
+    h = hmac.new(FEED_SALT.encode(), device.encode(), hashlib.sha256).hexdigest()
+    return f"Customer {h[:4].upper()}"
+
+
+def _utc_iso(v) -> str | None:
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return (v if v.tzinfo else v.replace(tzinfo=timezone.utc)).astimezone(timezone.utc).isoformat()
+    return str(v)
+
+
+@app.get("/api/feed")
+def feed(request: Request, after: int = Query(0, ge=0)):
+    """Latest payments from all phones newer than `after` (newest first). Never returns device ids."""
+    me = _device(request)
+    try:
+        rows = db.get_feed(after, 20)
+    except Exception as e:
+        logger.error(f"Failed to get feed: {e}")
+        raise HTTPException(status_code=503, detail="activity temporarily unavailable")
+    items = []
+    for r in rows:
+        mine = bool(me) and r.get("device") == me
+        items.append({
+            "id": r["id"],
+            "amount": r["amount"],
+            "created_at": _utc_iso(r.get("created_at")),
+            "region": r["region"],
+            "label": "You" if mine else _customer_label(r.get("device")),
+            "mine": mine,
+        })
+    return {"payments": items, "server_time": datetime.now(timezone.utc).isoformat()}
 
 
 @app.get("/api/config")

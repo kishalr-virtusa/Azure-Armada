@@ -190,6 +190,47 @@ def _utc_iso(v: Any) -> Optional[str]:
 _map_cache: dict[str, Any] = {"t": 0.0, "v": None}
 _map_lock = threading.Lock()
 
+# ------------------------------------------------------------------ customer payments (for the live map)
+PAYMENTS_SQL = ("SELECT TOP 30 id, amount, created_at, region FROM dbo.transactions "
+                "WHERE amount > 0 AND region <> 'probe' AND id > %s ORDER BY id DESC")
+PAYMENTS_MAX_AGE_S = 2.0
+_REGION_KEY = {"East Asia": "A", "Southeast Asia": "B"}
+_pay_cache: dict[str, Any] = {"t": 0.0, "v": [], "busy": False}
+_pay_lock = threading.Lock()
+
+
+def read_payments(after: int = 0) -> list[dict]:
+    """Newest customer payments from Azure SQL (through the failover-group listener), newest first.
+    Never raises: any error (outage, failover in progress, not deployed) gives an empty list."""
+    try:
+        with runner._sql_connect()() as conn:
+            cur = conn.cursor()
+            cur.execute(PAYMENTS_SQL, (int(after),))
+            rows = cur.fetchall()
+        return [{"id": int(r[0]), "amount": round(float(r[1]), 2), "created_at": _utc_iso(r[2]),
+                 "region": r[3], "served": _REGION_KEY.get(r[3])} for r in rows]
+    except Exception as e:  # noqa: BLE001
+        log.info("payments unavailable: %s", e)
+        return []
+
+
+def _refresh_payments() -> None:
+    try:
+        _pay_cache.update(v=read_payments(0), t=time.monotonic())
+    finally:
+        _pay_cache["busy"] = False
+
+
+def recent_payments() -> list[dict]:
+    """Cached (~2 s) payments that never block the map: a stale cache starts one background read and the
+    last answer is returned at once (a hung SQL login during a failover cannot slow the map down)."""
+    if time.monotonic() - _pay_cache["t"] >= PAYMENTS_MAX_AGE_S:
+        with _pay_lock:
+            if not _pay_cache["busy"] and time.monotonic() - _pay_cache["t"] >= PAYMENTS_MAX_AGE_S:
+                _pay_cache["busy"] = True
+                threading.Thread(target=_refresh_payments, name="live-map-payments", daemon=True).start()
+    return list(_pay_cache["v"])
+
 
 def live_map() -> dict:
     """Latest map state, instantly. A background refresher recomputes it every ~2 s while the page is open."""
@@ -247,6 +288,10 @@ def _compute_live_map() -> dict:
     out: dict[str, Any] = {"regions": regions, "serving": serving, "primary": fog.get("primary_region"),
                            "replication": fog.get("replication_state"), "drill": None,
                            "server_time": datetime.now(timezone.utc).isoformat()}
+    pays = _safe(recent_payments)
+    pays = pays if isinstance(pays, list) else []
+    out["payments"] = pays
+    out["last_payment_id"] = pays[0]["id"] if pays else None
     ex = list_exercises()[:1]
     if ex:
         xid = ex[0]["PartitionKey"]
