@@ -44,3 +44,23 @@ def test_snapshot_drops_biggest_details_to_fit_storage():
     by = {e["title"]: e for e in snap["events"]}
     assert by["huger"]["data"] is None and by["small"]["data"] == {"a": 1} and len(snap["events"]) == 3
     assert trace.get("run-0003")["events"][2]["data"] is not None   # the live trace itself is untouched
+
+
+def test_agent_event_shows_cost_and_snapshot_totals():
+    import json
+    usage = {"input_tokens": 1000, "output_tokens": 100, "cached_tokens": 400, "reasoning_tokens": 0, "rounds": 2}
+
+    def run():
+        idx = trace.emit("agent", "Azure AI Foundry agent dra-blackbox", status="running")
+        trace.update(idx, "ok", "Answered in 1.0s", data={"agent": "dra-blackbox", "model": "gpt-4.1-mini",
+                                                         "usage": usage, "via": "foundry-agent"}, ms=1000)
+        idx = trace.emit("agent", "Azure OpenAI deployment gpt-4.1-mini (direct)", status="running")
+        trace.update(idx, "ok", data={"model": "gpt-4.1-mini", "usage": {**usage, "input_tokens": 0, "output_tokens": 0}})
+    trace.run("run-0004", run)
+    ev = trace.get("run-0004")["events"]
+    cost = (600 * 0.40 + 400 * 0.10 + 100 * 1.60) / 1e6
+    assert ev[0]["detail"] == f"Answered in 1.0s · ${cost:.4f}" and ev[0]["tokens"] == 1100
+    assert "cost_usd" not in ev[0]["data"]  # the agent's data is recorded exactly as given
+    assert "tokens" not in ev[1] and "$" not in ev[1]["detail"]  # nothing to bill
+    snap = json.loads(trace.snapshot("run-0004"))
+    assert snap["tokens"] == 1100 and abs(snap["cost_usd"] - cost) < 1e-9
