@@ -140,6 +140,17 @@ def get_conversation(conv_id: str) -> dict[str, Any] | None:
     return {"id": conv_id, "title": head.get("title") or "", "updated_at": head.get("updated_at"), "turns": turns}
 
 
+def delete_conversation(conv_id: str) -> int:
+    """Delete a conversation and all its turns. Returns how many rows were removed."""
+    client = get_table_client("exercises")
+    pk = f"bbconv-{conv_id}"
+    rows = [dict(e) for e in client.query_entities(query_filter="PartitionKey eq @pk", parameters={"pk": pk},
+                                                   select=["PartitionKey", "RowKey"])]
+    for r in sorted(rows, key=lambda r: r["RowKey"] == "bbconv"):  # the header last: a half-done delete stays listed
+        client.delete_entity(partition_key=pk, row_key=r["RowKey"])
+    return len(rows)
+
+
 # ============== Events Table ==============
 
 def add_event(

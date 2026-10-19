@@ -321,6 +321,16 @@ def api_blackbox_conversations():
     return JSONResponse(store.list_conversations(), headers={"Cache-Control": "no-store"})
 
 
+@app.delete("/api/blackbox/conversations/{conv_id}", dependencies=[api])
+def api_blackbox_delete(request: Request, conv_id: str):
+    from dr_agent.tools import store
+    n = store.delete_conversation(conv_id) if _BB_CONV.fullmatch(conv_id) else 0
+    if not n:
+        return JSONResponse({"error": "conversation not found"}, status_code=404)
+    log.info("black box conversation %s deleted by %s", conv_id, auth.current_user(request) or "console user")
+    return {"ok": True, "deleted": conv_id}
+
+
 @app.get("/api/blackbox/conversations/{conv_id}", dependencies=[api])
 def api_blackbox_conversation(conv_id: str):
     from dr_agent.tools import store

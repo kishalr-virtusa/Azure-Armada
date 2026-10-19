@@ -145,6 +145,9 @@ class _FakeTable:
             return [dict(v) for (pk, rk), v in self.rows.items() if rk == "bbconv"]
         return [dict(v) for (pk, rk), v in self.rows.items() if pk == parameters["pk"]]
 
+    def delete_entity(self, partition_key, row_key):
+        self.rows.pop((partition_key, row_key), None)
+
 
 def test_conversations_are_kept_and_listed_newest_first(monkeypatch):
     t = _FakeTable()
@@ -180,3 +183,23 @@ def test_ask_saves_the_turn_and_returns_the_conversation_id(client, monkeypatch)
     monkeypatch.setattr(store, "add_conversation_turn", lambda *a: (_ for _ in ()).throw(RuntimeError("table down")))
     assert c.post("/api/blackbox/ask", json={"question": "still answers?"}).json()["answer"] == "Kishal"
     assert c.get("/api/blackbox/conversations/not-an-id").status_code == 404
+
+
+def test_delete_removes_the_conversation_and_all_its_turns(monkeypatch):
+    t = _FakeTable()
+    monkeypatch.setattr(store, "get_table_client", lambda name: t)
+    store.add_conversation_turn("aaaaaaaaaaaa", "q1", {"answer": "a1"}, None)
+    store.add_conversation_turn("aaaaaaaaaaaa", "q2", {"answer": "a2"}, None)
+    store.add_conversation_turn("bbbbbbbbbbbb", "keep me", {"answer": "x"}, None)
+    assert store.delete_conversation("aaaaaaaaaaaa") == 3
+    assert store.get_conversation("aaaaaaaaaaaa") is None
+    assert [c["id"] for c in store.list_conversations()] == ["bbbbbbbbbbbb"]
+    assert store.delete_conversation("aaaaaaaaaaaa") == 0
+
+
+def test_delete_api_validates_the_id(client, monkeypatch):
+    calls = []
+    monkeypatch.setattr(store, "delete_conversation", lambda cid: calls.append(cid) or 2)
+    assert client.delete("/api/blackbox/conversations/aaaaaaaaaaaa").json() == {"ok": True, "deleted": "aaaaaaaaaaaa"}
+    assert client.delete("/api/blackbox/conversations/bad-id").status_code == 404
+    assert calls == ["aaaaaaaaaaaa"]                     # a malformed id never reaches storage

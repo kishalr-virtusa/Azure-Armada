@@ -29,6 +29,13 @@
     .bb-hist .ti { display: block; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .bb-hist .mt { display: block; font-size: 12px; color: var(--mute); margin-top: 2px; }
     .bb-hist .none { font-size: 13px; color: var(--mute); padding: 10px; }
+    .bb-hist .it { display: flex; align-items: center; gap: 4px; border-radius: 8px; }
+    .bb-hist .it.cur { background: var(--accent-soft); }
+    .bb-hist .it > button[data-id] { flex: 1; min-width: 0; }
+    .bb-hist .it.cur > button[data-id] { background: none; }
+    .bb-hist button.del { width: 32px; height: 32px; flex-shrink: 0; padding: 0; display: grid; place-items: center; color: var(--mute); }
+    .bb-hist button.del:hover, .bb-hist button.del:focus-visible { color: var(--danger); background: var(--danger-soft, #fdecec); }
+    .bb-hist button.del svg { width: 16px; height: 16px; }
     .bb-av { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
     .bb-av svg { width: 17px; height: 17px; }
     .bb-av.sm { width: 28px; height: 28px; }
@@ -295,6 +302,16 @@
         if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
         return new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short' });
     };
+    const TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/></svg>';
+    async function remove(id, title) {
+        if (busy || !confirm(`Delete "${title}"? This cannot be undone.`)) return;
+        try {
+            const res = await fetch(`/api/blackbox/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error();
+        } catch (e) { alert('Could not delete the conversation. Please try again.'); return; }
+        if (id === convId) { convo = []; convId = null; remember(null); render(); }  // deleted the open one: start fresh
+        openHist();
+    }
     function closeHist() { hist.hidden = true; histBtn.setAttribute('aria-expanded', 'false'); }
     async function openHist() {
         hist.hidden = false; histBtn.setAttribute('aria-expanded', 'true');
@@ -303,10 +320,13 @@
             const res = await fetch('/api/blackbox/conversations', { cache: 'no-store' });
             const list = res.ok ? await res.json() : [];
             hist.innerHTML = '<div class="h">Past conversations</div>' + (list.length ? list.map((c) =>
-                `<button type="button" role="menuitem" data-id="${esc(c.id)}" class="${c.id === convId ? 'cur' : ''}">
-                    <span class="ti">${esc(c.title)}</span>
-                    <span class="mt">${c.turns} question${c.turns === 1 ? '' : 's'} · ${esc(ago(c.updated_at))}${c.by ? ' · ' + esc(c.by) : ''}</span>
-                 </button>`).join('') : '<div class="none">No saved conversations yet.</div>');
+                `<div class="it${c.id === convId ? ' cur' : ''}">
+                    <button type="button" role="menuitem" data-id="${esc(c.id)}">
+                        <span class="ti">${esc(c.title)}</span>
+                        <span class="mt">${c.turns} question${c.turns === 1 ? '' : 's'} · ${esc(ago(c.updated_at))}${c.by ? ' · ' + esc(c.by) : ''}</span>
+                    </button>
+                    <button type="button" class="del" data-del="${esc(c.id)}" data-title="${esc(c.title)}" aria-label="Delete conversation" title="Delete conversation">${TRASH}</button>
+                 </div>`).join('') : '<div class="none">No saved conversations yet.</div>');
         } catch (e) { hist.innerHTML = '<div class="none">Could not load the history.</div>'; }
     }
     async function load(id) {
@@ -321,6 +341,9 @@
     }
     histBtn.addEventListener('click', (e) => { e.stopPropagation(); hist.hidden ? openHist() : closeHist(); });
     hist.addEventListener('click', (e) => {
+        e.stopPropagation();  // the list is re-rendered after a delete: keep it open
+        const d = e.target.closest('button[data-del]');
+        if (d) { remove(d.dataset.del, d.dataset.title); return; }
         const b = e.target.closest('button[data-id]');
         if (b && !busy) { closeHist(); load(b.dataset.id); }
     });
