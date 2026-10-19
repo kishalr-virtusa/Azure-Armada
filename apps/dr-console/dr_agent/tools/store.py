@@ -5,6 +5,9 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+import threading
+
+from azure.core.exceptions import ResourceExistsError
 from azure.identity import DefaultAzureCredential
 from azure.data.tables import TableServiceClient, TableClient
 from azure.storage.blob import BlobServiceClient, ContainerClient
@@ -101,32 +104,32 @@ def add_event(
 ) -> int:
     """Add an event to the exercise timeline. Returns the sequence number."""
     client = get_table_client("events")
-    
-    # Get next sequence number
-    events = list(client.query_entities(
-        query_filter=f"PartitionKey eq '{exercise_id}'",
-        select=["RowKey"],
-    ))
-    seq = len(events) + 1
-    
-    entity = {
-        "PartitionKey": exercise_id,
-        "RowKey": str(seq).zfill(6),
-        "ts": datetime.now(timezone.utc).isoformat(),
-        "step_id": step_id,
-        "kind": kind,
-        "message": message,
-        "data_json": json.dumps(data) if data else None,
-    }
-    client.create_entity(entity)
-    return seq
+    ts = datetime.now(timezone.utc).isoformat()  # stamped before the sequence lookup, so step times stay exact
+    # The engine thread and web requests write events concurrently: serialise per process (one worker) and, if a
+    # row key is taken anyway, move to the next number instead of losing the event.
+    with _EVENT_LOCK:
+        seq = len(list(client.query_entities(query_filter="PartitionKey eq @pk", parameters={"pk": exercise_id},
+                                             select=["RowKey"]))) + 1
+        for _ in range(5):
+            try:
+                client.create_entity({"PartitionKey": exercise_id, "RowKey": str(seq).zfill(6), "ts": ts,
+                                      "step_id": step_id, "kind": kind, "message": message,
+                                      "data_json": json.dumps(data) if data else None})
+                return seq
+            except ResourceExistsError:
+                seq += 1
+    raise RuntimeError(f"could not write event for {exercise_id}")
+
+
+_EVENT_LOCK = threading.Lock()
 
 
 def get_events(exercise_id: str, after: int = 0) -> list[dict[str, Any]]:
     """Get events for an exercise after a sequence number."""
     client = get_table_client("events")
     entities = client.query_entities(
-        query_filter=f"PartitionKey eq '{exercise_id}' and RowKey gt '{str(after).zfill(6)}'",
+        query_filter="PartitionKey eq @pk and RowKey gt @after",
+        parameters={"pk": exercise_id, "after": str(int(after)).zfill(6)},
     )
     results = []
     for e in entities:
@@ -172,11 +175,10 @@ def get_notifications(after: str | None = None, limit: int = 50) -> list[dict[st
     client = get_table_client("notifications")
     
     if after:
-        query = f"PartitionKey eq 'global' and RowKey gt '{after}'"
+        entities = client.query_entities(query_filter="PartitionKey eq 'global' and RowKey gt @after",
+                                         parameters={"after": str(after)})
     else:
-        query = "PartitionKey eq 'global'"
-    
-    entities = client.query_entities(query_filter=query)
+        entities = client.query_entities(query_filter="PartitionKey eq 'global'")
     results = []
     for e in entities:
         results.append(dict(e))
@@ -209,6 +211,13 @@ def record_heartbeat(seq: int, client_ts: datetime, acked: bool, error: str | No
         "error": error,
     }
     client.upsert_entity(entity)
+
+
+def get_heartbeats_since(min_seq: int) -> list[dict[str, Any]]:
+    """Heartbeats with seq >= min_seq (seqs are epoch milliseconds, so this is 'written since')."""
+    client = get_table_client("heartbeats")
+    return list(client.query_entities(query_filter="PartitionKey eq 'hb' and RowKey ge @min",
+                                      parameters={"min": str(int(min_seq)).zfill(12)}))
 
 
 def get_heartbeats(limit: int = 100) -> list[dict[str, Any]]:

@@ -86,7 +86,7 @@ def list_app_settings(name: str, resource_group: str | None = None, mask_secrets
     
     result = {}
     for key, value in (settings.properties or {}).items():
-        if mask_secrets and ("PASSWORD" in key.upper() or "SECRET" in key.upper() or "KEY" in key.upper()):
+        if mask_secrets and any(w in key.upper() for w in ("PASSWORD", "SECRET", "KEY", "CONNECTION", "TOKEN")):
             result[key] = "***"
         elif mask_secrets and value and value.startswith("@Microsoft.KeyVault"):
             result[key] = "[KeyVault Reference]"

@@ -50,7 +50,7 @@ def ensure_table(connect: Connect) -> None:
 
 
 class HeartbeatWriter(threading.Thread):
-    def __init__(self, connect: Connect, on_result: OnResult, interval: float = 2.0, label: str = "dr-engine"):
+    def __init__(self, connect: Connect, on_result: OnResult, interval: float = 1.0, label: str = "dr-engine"):
         super().__init__(name="heartbeat-writer", daemon=True)
         self._connect = connect
         self._on_result = on_result

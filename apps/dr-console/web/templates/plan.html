@@ -75,7 +75,7 @@
         const isAI = source === 'llm' || source === 'ai';
         const label = via === 'foundry-agent' ? 'Azure AI Foundry Agent' : 'Azure OpenAI (direct)';
         return isAI
-            ? `<span class="badge" style="background: var(--accent); color: white; border-color: var(--accent);" title="${via || ''}">${label}</span>`
+            ? `<span class="badge" style="background: var(--accent); color: white; border-color: var(--accent);" title="${AgentUI.esc(via || '')}">${label}</span>`
             : '<span class="badge" title="deterministic fallback">Rules</span>';
     }
     
@@ -115,7 +115,7 @@
         
         // Render assumptions
         const assumptionsList = document.getElementById('assumptionsList');
-        assumptionsList.innerHTML = (plan.assumptions || []).map(a => `<li>${a}</li>`).join('');
+        assumptionsList.innerHTML = (plan.assumptions || []).map(a => `<li>${AgentUI.esc(a)}</li>`).join('');
         
         // Group steps by phase
         const phases = {};
@@ -130,7 +130,7 @@
         const planSteps = document.getElementById('planSteps');
         planSteps.innerHTML = Object.entries(phases).map(([phase, steps]) => `
             <div style="margin-bottom: 24px;">
-                <h3 style="margin-bottom: 12px; text-transform: capitalize;">${phase.replace('-', ' ')}</h3>
+                <h3 style="margin-bottom: 12px; text-transform: capitalize;">${AgentUI.esc(phase.replace('-', ' '))}</h3>
                 <div class="scroll">
                     <table class="plan-table">
                         <thead>
@@ -146,16 +146,16 @@
                         <tbody>
                             ${steps.map(step => `
                                 <tr>
-                                    <td class="f">${step.id}</td>
-                                    <td>${step.title}</td>
-                                    <td><span class="chip">${step.owner_team}</span></td>
+                                    <td class="f">${AgentUI.esc(step.id)}</td>
+                                    <td>${AgentUI.esc(step.title)}</td>
+                                    <td><span class="chip">${AgentUI.esc(step.owner_team)}</span></td>
                                     <td>
                                         <span class="st ${step.type === 'human' ? 'warn' : 'info'}">
                                             ${step.type === 'human' ? 'Human' : 'Auto'}
                                         </span>
                                     </td>
-                                    <td style="font-family: monospace; font-size: 11px;">${step.action || '—'}</td>
-                                    <td style="color: var(--ink-3);">${(step.depends_on || []).join(', ') || '—'}</td>
+                                    <td style="font-family: monospace; font-size: 11px;">${AgentUI.esc(step.action || '—')}</td>
+                                    <td style="color: var(--ink-3);">${AgentUI.esc((step.depends_on || []).join(', ') || '—')}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -175,14 +175,17 @@
         if (!confirm('Are you sure you want to start the DR exercise? This will inject a real outage.')) {
             return;
         }
-        
+        const submitBtn = e.target.querySelector('button[type=submit]');
+        submitBtn.disabled = true;   // one click starts one drill
+        submitBtn.textContent = 'Starting…';
+        try { localStorage.setItem('dra-approver', (approverName || '').trim()); } catch (err) { /* ignore */ }
+
         try {
             const res = await fetch('/api/plan/approve', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     approver_name: approverName,
-                    plan: currentPlan,
                     chaos: chaos,
                 }),
             });
@@ -193,9 +196,11 @@
                 window.location.href = '/exercise/' + result.exercise_id;
             } else {
                 alert('Failed to start exercise: ' + (result.error || 'Unknown error'));
+                submitBtn.disabled = false; submitBtn.textContent = 'Approve & Start Exercise';
             }
         } catch (e) {
             alert('Failed to approve plan: ' + e.message);
+            submitBtn.disabled = false; submitBtn.textContent = 'Approve & Start Exercise';
         }
     });
     

@@ -35,8 +35,7 @@ fi
 
 for p in Microsoft.Web Microsoft.Sql Microsoft.Network Microsoft.Storage Microsoft.KeyVault \
          Microsoft.CognitiveServices Microsoft.OperationalInsights Microsoft.Insights \
-         Microsoft.Communication Microsoft.Consumption Microsoft.Compute Microsoft.RecoveryServices \
-         Microsoft.Chaos Microsoft.LoadTestService Microsoft.Search; do
+         Microsoft.Communication Microsoft.Consumption Microsoft.Compute Microsoft.RecoveryServices; do
   az provider register -n "$p" -o none
 done
 
@@ -64,6 +63,10 @@ echo "== 4/4 Smoke test"
 "$DIR/smoke.sh" || echo "WARNING: smoke test reported problems (apps may still be warming up; re-run smoke.sh in 2 min)"
 
 echo
-echo "UP. Console: https://${CONSOLE_APP_NAME:-azure-armada}.azurewebsites.net (Microsoft Entra ID sign-in;"
-echo "    add teammates with: $DIR/entra-auth.sh add-user <user@tenant>)."
+if [[ "${ENTRA_SIGNIN:-false}" == "true" ]]; then
+  echo "UP. Console: https://${CONSOLE_APP_NAME:-azure-armada}.azurewebsites.net (Microsoft Entra ID sign-in;"
+  echo "    add teammates with: $DIR/entra-auth.sh add-user <user@tenant>)."
+else
+  echo "UP. Console: https://${CONSOLE_APP_NAME:-azure-armada}.azurewebsites.net (passcode sign-in: CONSOLE_PASSCODE in $SECRETS_FILE)"
+fi
 echo "    Phones (team, private): https://${CONSOLE_APP_NAME:-azure-armada}.azurewebsites.net/pay?code=\$APP_ACCESS_CODE (see $SECRETS_FILE)"

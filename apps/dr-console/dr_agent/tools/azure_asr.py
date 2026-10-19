@@ -68,7 +68,7 @@ class AsrTestFailover:
     def __init__(self, sub: str, rg: str, suffix: str, recovery_rg: str = "rg-dra-recovery",
                  vm: str = "dra-vm-reports", loc_a: str = "eastasia", loc_b: str = "southeastasia"):
         self.arm = Arm()
-        self.sub, self.recovery_rg, self.vm = sub, recovery_rg, vm
+        self.sub, self.recovery_rg, self.vm, self.loc_b = sub, recovery_rg, vm, loc_b
         vault = f"/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.RecoveryServices/vaults/dra-rsv-{suffix}"
         fab = f"asr-a2a-{loc_a}"
         self.item = f"{vault}/replicationFabrics/{fab}/replicationProtectionContainers/{fab}-container/replicationProtectedItems/{vm}"
@@ -113,10 +113,10 @@ class AsrTestFailover:
         return {"operation": r.headers.get("Azure-AsyncOperation") or r.headers.get("Location"),
                 "recovery_point": rp.rsplit("/", 1)[-1] if rp else "latest"}
 
-    def wait_done(self, operation_url: Optional[str], timeout_s: int = 1500) -> None:
+    def wait_done(self, operation_url: Optional[str], timeout_s: int = 1500, poll_s: int = 15) -> None:
         if operation_url:
             fake = httpx.Response(202, headers={"Azure-AsyncOperation": operation_url})
-            self.arm.wait(fake, timeout_s)
+            self.arm.wait(fake, timeout_s, poll_s=poll_s)
             return
         deadline = time.monotonic() + timeout_s  # fallback: watch the item until cleanup becomes possible
         while time.monotonic() < deadline:

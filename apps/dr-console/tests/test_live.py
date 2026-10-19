@@ -139,3 +139,46 @@ def test_overview_drill_stats_median_excludes_chaos(monkeypatch):
     assert st["count"] == 4 and st["count_plain"] == 3 and st["median_rto_s"] == 34.35
     assert st["best_rto_s"] == 29.76 and st["chaos_ids"] == ["ex-20261018-000002"] and st["latest_iaas_s"] == 345
     assert st["latest"]["id"] == "ex-20261018-000003"
+
+
+def test_fix_may_never_disable_the_dr_region_during_the_outage():
+    assert "disabling" in check_fix("tm_set_endpoint", {"region": "b", "enabled": "false"}, "validation")
+    assert check_fix("tm_set_endpoint", {"region": "b", "enabled": "true"}, "validation") is None
+
+
+def test_commands_only_in_the_right_state(monkeypatch):
+    from dr_agent import service
+    rows = {"ex-1": {"status": "running"}, "ex-2": {"status": "paused_failed", "diagnosis_json": ""}}
+    writes = []
+    monkeypatch.setattr(service.store, "get_exercise", lambda k: rows.get(k))
+    monkeypatch.setattr(service.store, "upsert_exercise", lambda k, d: writes.append((k, d)))
+    monkeypatch.setattr(service.store, "add_event", lambda *a, **k: None)
+    monkeypatch.setattr(service.runner, "is_running", lambda k: True)
+    assert "not possible" in service.send_command("ex-1", "retry")["error"]        # stale retry while running
+    assert "not found" in service.send_command("ex-9", "rollback")["error"]        # unknown drill
+    assert service.send_command("ex-2", "retry", "Kishal") == {"ok": True}
+    assert writes == [("ex-2", {"command": "retry"})]
+
+
+def test_only_the_waiting_step_can_be_confirmed(monkeypatch):
+    from dr_agent import service
+    monkeypatch.setattr(service.store, "get_exercise", lambda k: {"status": "waiting_human", "waiting_step": "pre-4"})
+    monkeypatch.setattr(service.store, "upsert_exercise", lambda k, d: None)
+    assert "not waiting" in service.confirm_step("ex-1", "fb-1", "Kishal")["error"]   # no approving failback early
+    assert service.confirm_step("ex-1", "pre-4", "Kishal") == {"ok": True}
+
+
+def test_public_feed_hides_approver_identities():
+    from dr_agent import service
+    assert "kishal" not in service._public_message({"kind": "approval", "message": "Confirmed by kishalr@virtusa.com"}).lower()
+    assert service._public_message({"kind": "diagnosis", "message": "SQL error 40613 on server x"}).startswith("Validator")
+
+
+def test_login_lockout_after_repeated_failures(monkeypatch):
+    from web import auth
+    monkeypatch.setattr(auth.time, "sleep", lambda s: None)
+    auth._fails.clear()
+    for _ in range(auth.PER_IP):
+        auth.login_failed("10.0.0.9")
+    assert auth.login_blocked("10.0.0.9") > 0 and auth.login_blocked("10.0.0.10") == 0
+    auth._fails.clear()

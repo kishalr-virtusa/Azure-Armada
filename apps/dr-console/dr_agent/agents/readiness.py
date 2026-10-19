@@ -119,8 +119,11 @@ def build_checks(facts: dict) -> list[Check]:
     if "asr" in facts:
         checks.append(asr_check(facts["asr"]))
     if "keyvault_ok" in facts:
+        kv = facts.get("keyvault") or {}
         checks.append(Check(name="Key Vault reachable", status="pass" if facts["keyvault_ok"] else "fail",
-                            detail="secrets resolvable" if facts["keyvault_ok"] else "Key Vault not reachable"))
+                            detail=(f"secret read from {kv.get('vault', 'Key Vault')} with the managed identity"
+                                    if facts["keyvault_ok"] else f"Key Vault not reachable: {kv.get('error', 'unknown')}"),
+                            evidence={k: v for k, v in kv.items() if k != "error"}))
     return checks
 
 

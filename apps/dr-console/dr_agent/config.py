@@ -65,7 +65,7 @@ def load_config() -> Config:
         sql_fog_name=os.getenv("SQL_FOG_NAME", ""),
         
         azure_openai_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", ""),
-        azure_openai_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini"),
+        azure_openai_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1-mini"),
         
         storage_account_name=os.getenv("STORAGE_ACCOUNT_NAME", ""),
         storage_table_endpoint=os.getenv("STORAGE_TABLE_ENDPOINT", ""),

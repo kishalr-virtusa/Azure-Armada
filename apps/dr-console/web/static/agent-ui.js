@@ -147,5 +147,17 @@
         return `<pre class="kv-pre">${esc(md)}</pre>`;
     }
 
-    window.AgentUI = { esc, renderData, runWithTrace, renderMarkdown, showSaved, rememberName };
+    /** Approver for the audit trail: the remembered name, or ask once. Returns null if the user cancels. */
+    function approverName() {
+        let n = '';
+        try { n = localStorage.getItem('dra-approver') || ''; } catch (e) { /* storage blocked */ }
+        if (!n) {
+            n = (window.prompt('Your name, for the audit trail:') || '').trim();
+            if (!n) return null;
+            try { localStorage.setItem('dra-approver', n); } catch (e) { /* ignore */ }
+        }
+        return n;
+    }
+
+    window.AgentUI = { esc, renderData, runWithTrace, renderMarkdown, showSaved, rememberName, approverName };
 })();

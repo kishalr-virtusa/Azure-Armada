@@ -468,7 +468,7 @@
     .chaos-btn:disabled { color: var(--mute) !important; }
     body:not(.drill-active) .big-kpis { display: none !important; }
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="/static/vendor/qrcode.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -737,7 +737,7 @@
 
         // Current step + progress
         if (data.current_step) {
-            document.getElementById('currentStep').innerHTML = `<strong>Now:</strong> ${data.current_step}`;
+            document.getElementById('currentStep').innerHTML = `<strong>Now:</strong> ${AgentUI.esc(data.current_step)}`;
         } else {
             document.getElementById('currentStep').textContent = 'Waiting for exercise...';
         }
@@ -749,9 +749,9 @@
         // Timeline
         if (data.timeline && data.timeline.length > 0) {
             document.getElementById('timelineList').innerHTML = data.timeline.slice(-8).reverse().map(e => `
-                <div class="timeline-item ${e.kind}">
+                <div class="timeline-item ${AgentUI.esc(e.kind)}">
                     <div class="timeline-time">${formatTime(e.ts)}</div>
-                    <div class="timeline-msg">${e.message}</div>
+                    <div class="timeline-msg">${AgentUI.esc(e.message)}</div>
                 </div>
             `).join('');
         }
@@ -774,11 +774,11 @@
 
         // Values
         if (data.rto_s != null) {
-            document.getElementById('rtoValue').textContent = `${Math.floor(data.rto_s)}s`;
+            document.getElementById('rtoValue').textContent = `${Number(data.rto_s).toFixed(2)}s`;
             rtoTile.className = 'big-kpi ' + (data.rto_met ? 'pass' : 'fail');
         }
         if (data.rpo_s != null) {
-            document.getElementById('rpoValue').textContent = `${data.rpo_s}s`;
+            document.getElementById('rpoValue').textContent = `${Number(data.rpo_s).toFixed(2)}s`;
             rpoTile.className = 'big-kpi ' + (data.rpo_met ? 'pass' : 'fail');
         }
     }

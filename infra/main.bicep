@@ -177,12 +177,12 @@ module webAppA 'modules/webapp.bicep' = {
     sqlAdminUser: sql.outputs.sqlAdminUsername
     appInsightsConnectionString: log.outputs.appInsightsConnectionString
     logWorkspaceId: log.outputs.workspaceId
-    allowHttp: true
+    allowHttp: false  // HTTPS only: Traffic Manager probes HTTPS on 443
     projectTag: projectTag
   }
 }
 
-// Web App B (Region B - South India)
+// Web App B (Region B - Southeast Asia, DR)
 module webAppB 'modules/webapp.bicep' = {
   name: 'webapp-b-deployment'
   scope: workloadRg
@@ -201,7 +201,7 @@ module webAppB 'modules/webapp.bicep' = {
     sqlAdminUser: sql.outputs.sqlAdminUsername
     appInsightsConnectionString: log.outputs.appInsightsConnectionString
     logWorkspaceId: log.outputs.workspaceId
-    allowHttp: true
+    allowHttp: false  // HTTPS only: Traffic Manager probes HTTPS on 443
     projectTag: projectTag
   }
 }

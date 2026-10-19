@@ -254,10 +254,10 @@
             const [mon, monCls] = MONITOR[ep.endpoint_monitor_status] || [ep.endpoint_monitor_status, 'fail'];
             return `
                 <tr>
-                    <td class="f">${region}</td>
-                    <td>${ep.priority}</td>
-                    <td><span class="st ${ep.endpoint_status === 'Enabled' ? 'pass' : 'neutral'}">${ep.endpoint_status}</span></td>
-                    <td><span class="st ${monCls}">${mon}</span></td>
+                    <td class="f">${AgentUI.esc(region)}</td>
+                    <td>${AgentUI.esc(ep.priority)}</td>
+                    <td><span class="st ${ep.endpoint_status === 'Enabled' ? 'pass' : 'neutral'}">${AgentUI.esc(ep.endpoint_status)}</span></td>
+                    <td><span class="st ${monCls}">${AgentUI.esc(mon)}</span></td>
                 </tr>`;
         }).join('');
     }
@@ -298,13 +298,13 @@
                 ? (ex.rto_s <= rtoT && ex.rpo_s <= rpoT ? '<span class="st pass">Met</span>' : '<span class="st fail">Missed</span>') : '—';
             return `
                 <tr>
-                    <td class="f">${ex.PartitionKey}${chaos.has(ex.PartitionKey) ? ' <span class="st warn" title="A surprise fault was injected mid-drill">chaos</span>' : ''}</td>
-                    <td><span class="st ${statusClass}">${ex.status}</span></td>
+                    <td class="f">${AgentUI.esc(ex.PartitionKey)}${chaos.has(ex.PartitionKey) ? ' <span class="st warn" title="A surprise fault was injected mid-drill">chaos</span>' : ''}</td>
+                    <td><span class="st ${statusClass}">${AgentUI.esc(ex.status)}</span></td>
                     <td>${ex.t0 ? new Date(ex.t0).toLocaleString() : '—'}</td>
                     <td class="num">${typeof ex.rto_s === 'number' ? formatDuration(ex.rto_s) : '—'}</td>
                     <td class="num">${typeof ex.rpo_s === 'number' ? formatDuration(ex.rpo_s) : '—'}</td>
                     <td>${met}</td>
-                    <td><a href="/results/${ex.PartitionKey}">Report</a></td>
+                    <td><a href="/results/${encodeURIComponent(ex.PartitionKey)}">Report</a></td>
                 </tr>`;
         }).join('');
     }

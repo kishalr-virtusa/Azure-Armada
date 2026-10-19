@@ -63,4 +63,12 @@ def test_balance_is_per_device_and_errors_are_not_payments():
     with mock.patch("app.db.device_spent", side_effect=Exception("failover in progress")):
         assert client.get("/api/balance", headers=h).status_code == 503
     with mock.patch("app.db.insert_transaction", side_effect=Exception("failover in progress")):
-        assert client.post("/api/txn", headers=h).status_code == 500
+        assert client.post("/api/txn", headers=h).status_code == 503
+
+
+
+def test_gate_page_escapes_the_path_and_never_redirects_off_site():
+    r = client.get('/"><script>alert(1)</script>')
+    assert r.status_code == 401 and "<script>alert(1)</script>" not in r.text
+    r = client.get(f"//evil.example/?k={access._token()}", follow_redirects=False)
+    assert r.status_code == 303 and not r.headers["location"].startswith("//")

@@ -8,6 +8,7 @@ Fail closed: if the mode cannot be read for 60 s, the app is private.
 from __future__ import annotations
 
 import asyncio
+import html
 import hashlib
 import hmac
 import logging
@@ -110,12 +111,13 @@ async def gate_middleware(request: Request, call_next):
     if ACCESS_CODE and ((code and hmac.compare_digest(code, ACCESS_CODE)) or (token and hmac.compare_digest(token, _token()))):
         # one-time link: remember the device, then drop the code from the URL (other parameters are kept)
         rest = urlencode([(k, v) for k, v in request.query_params.multi_items() if k not in ("code", "k")])
-        return _grant(RedirectResponse((path or "/") + (f"?{rest}" if rest else ""), status_code=303), request)
+        safe = "/" + path.lstrip("/\\")  # never "//host" (an open redirect to another site)
+        return _grant(RedirectResponse(safe + (f"?{rest}" if rest else ""), status_code=303), request)
     if await run_in_threadpool(has_access, request):
         return await call_next(request)
     if path.startswith("/api/"):
         return JSONResponse({"error": "private", "detail": "Contoso Payments is in private preview"}, status_code=401)
-    return HTMLResponse(GATE_HTML.format(error="", next=path), status_code=401, headers={"Cache-Control": "no-store"})
+    return HTMLResponse(GATE_HTML.format(error="", next=html.escape(path, quote=True)), status_code=401, headers={"Cache-Control": "no-store"})
 
 
 async def access_post(request: Request):
@@ -126,4 +128,4 @@ async def access_post(request: Request):
     if ACCESS_CODE and hmac.compare_digest(code, ACCESS_CODE):
         return _grant(RedirectResponse(nxt, status_code=303), request)
     await asyncio.sleep(1)  # slow down guessing
-    return HTMLResponse(GATE_HTML.format(error='<p class="err">That code is not valid.</p>', next=nxt), status_code=401)
+    return HTMLResponse(GATE_HTML.format(error='<p class="err">That code is not valid.</p>', next=html.escape(nxt, quote=True)), status_code=401)

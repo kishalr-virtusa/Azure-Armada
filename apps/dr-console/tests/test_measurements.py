@@ -25,32 +25,30 @@ def test_last_acked_before_ignores_failed_and_later_writes():
     assert last_acked_before(recs, T0 - timedelta(seconds=1)) is None
 
 
-def test_rpo_no_loss():
+def test_rpo_no_loss_counts_writes_during_failover():
+    recs = [hb(i) for i in range(10)]                       # +0 .. +18 s
+    t_fo, t_end = T0 + timedelta(seconds=10), T0 + timedelta(seconds=19)
+    r = compute_rpo(recs, t_end, {x.seq for x in recs}, t_fo)
+    assert r.rpo_s == 0 and r.lost_seqs == [] and r.checked == 10 and r.acked_during_failover == 5
+
+
+def test_rpo_counts_writes_lost_during_the_failover():
+    # the old primary acknowledged +12..+18 while the forced failover ran; they never reached the new primary
     recs = [hb(i) for i in range(10)]
-    t_fo = T0 + timedelta(seconds=19)
-    r = compute_rpo(recs, t_fo, newest_present_ts=hb(9).client_ts, present_seqs={x.seq for x in recs})
-    assert r.rpo_s == 0 and r.lost_seqs == []
+    t_fo, t_end = T0 + timedelta(seconds=11), T0 + timedelta(seconds=19)
+    present = {x.seq for x in recs[:6]}                        # +0..+10 survived
+    r = compute_rpo(recs, t_end, present, t_fo)
+    assert r.lost_seqs == [1006, 1007, 1008, 1009] and r.rpo_s == 8   # +18 lost, +10 last survivor
 
 
-def test_rpo_with_lost_tail():
-    recs = [hb(i) for i in range(10)]  # last acked at +18s
-    t_fo = T0 + timedelta(seconds=19)
-    present = {x.seq for x in recs[:7]}  # +0..+12 replicated, +14..+18 lost
-    r = compute_rpo(recs, t_fo, newest_present_ts=hb(6).client_ts, present_seqs=present)
-    assert r.rpo_s == 6
-    assert r.lost_seqs == [1007, 1008, 1009]
-
-
-def test_rpo_ignores_writes_after_failover():
-    # writes after t_fo land on the new primary and must not mask earlier loss
-    recs = [hb(i) for i in range(5)]
-    t_fo = T0 + timedelta(seconds=9)
-    r = compute_rpo(recs, t_fo, newest_present_ts=hb(2).client_ts)
-    assert r.rpo_s == 4
+def test_rpo_ignores_unacknowledged_and_later_writes():
+    recs = [hb(0), hb(1), hb(2, acked=False), hb(3)]
+    r = compute_rpo(recs, T0 + timedelta(seconds=5), {1000, 1001})  # +6 is after the window
+    assert r.rpo_s == 0 and r.checked == 2
 
 
 def test_rpo_unmeasurable():
-    assert compute_rpo([], T0, T0).rpo_s is None
+    assert compute_rpo([], T0, set()).rpo_s is None
     assert compute_rpo([hb(0)], T0 + timedelta(seconds=1), None).rpo_s is None
 
 

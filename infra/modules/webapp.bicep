@@ -34,8 +34,8 @@ param appInsightsConnectionString string
 @description('Log Analytics Workspace ID for diagnostics')
 param logWorkspaceId string
 
-@description('Allow HTTP traffic (true for Traffic Manager, false for console)')
-param allowHttp bool = true
+@description('Allow plain HTTP (not needed: Traffic Manager probes HTTPS)')
+param allowHttp bool = false
 
 @description('PAYMENT_PROVIDER app setting; empty = omitted (planted config gap)')
 param paymentProvider string = ''

@@ -35,7 +35,7 @@ PREFIX = "dra-"
 AGENTS: dict[str, tuple[str, str]] = {
     "architect": ("StrategyRec", "Phase 1: recommends a DR strategy from RTO/RPO, criticality and cost."),
     "readiness": ("ReadinessSummary", "Phase 1: go/no-go summary of deterministic readiness checks."),
-    "runbook": ("RunbookReview", "Phase 2: reviews the DR runbook against the live inventory."),
+    "runbook": ("RunbookReview", "Phase 1: reviews the DR runbook against the live inventory."),
     "planner": ("ExercisePlan", "Phase 2: builds the ordered, allowlisted DR exercise plan."),
     "validator": ("Diagnosis", "Phase 2: diagnoses a failed exercise step and proposes retry/rollback."),
     "reporter": ("ReportNarrative", "Phase 2: writes the exercise report and remediation backlog."),

@@ -166,6 +166,9 @@ class ExerciseRunner(threading.Thread):
             validate_plan(plan)
             done = set(json.loads(m.get("completed_steps_json") or "[]"))
             self.update(status="running", started_at=m.get("started_at") or iso(utcnow()))
+            hb_steps = {s.action: s.id for s in plan.steps if s.action in ("start_heartbeat", "stop_heartbeat")}
+            if hb_steps.get("start_heartbeat") in done and hb_steps.get("stop_heartbeat") not in done:
+                self.restore_heartbeat()
             if not done:
                 self.event("info", "Exercise started")
                 self.notify("info", "DR exercise started",
@@ -181,14 +184,14 @@ class ExerciseRunner(threading.Thread):
         except RolledBack:
             pass  # status already set by rollback()
         except Killed:
-            self.update(status="killed", current_step="")
+            self.update(status="killed", current_step="", finished_at=iso(utcnow()))
             self.event("error", "Kill switch activated: engine stopped. Use Rollback to restore the primary region.")
             self.notify("failure", "DR exercise stopped (kill switch)", "Rollback is available in the console.")
             self.clear_command()
             self.wait_for_rollback_after_kill()
         except Exception as e:  # noqa: BLE001
             log.exception("exercise crashed")
-            self.update(status="failed", error=f"{type(e).__name__}: {e}"[:1000])
+            self.update(status="failed", error=f"{type(e).__name__}: {e}"[:1000], finished_at=iso(utcnow()))
             self.event("error", f"Engine error: {e}", data={"trace": traceback.format_exc()[-2000:]})
         finally:
             self.stop_heartbeat()
@@ -203,7 +206,7 @@ class ExerciseRunner(threading.Thread):
                 self.rollback()
                 return
             if c == "abandon":
-                self.update(status="aborted")
+                self.update(status="aborted", finished_at=iso(utcnow()))
                 return
             time.sleep(1)
 
@@ -256,6 +259,7 @@ class ExerciseRunner(threading.Thread):
 
     def handle_failure(self, step: PlanStep, err: str) -> str:
         from dr_agent.agents import validator
+        self.clear_command()  # a stale retry/rollback from an earlier failure must not approve this one unseen
         recent = store.get_events(self.xid)[-15:]
         diag = validator.run(step, err, recent, {"A": _safe(lambda: _probe("A")), "B": _safe(lambda: _probe("B")),
                                                  "tm": _safe(lambda: _probe("tm"))})
@@ -294,16 +298,19 @@ class ExerciseRunner(threading.Thread):
             return self.start_heartbeat()
         if a == "inject_outage":
             from dr_agent.tools.azure_webapp import stop_webapp_region
-            t0 = utcnow()
+            t0 = parse_dt(self.meta().get("t0")) or utcnow()
             res = stop_webapp_region(p["region"])
             self.update(t0=t0)
             self.notify("info", "Outage injected", f"Region {p['region']} ({REGION_NAMES[p['region']]}) web app stopped. RTO clock started.")
             return {"t0": iso(t0), **_jsonable(res)}
         if a == "sql_failover":
             target, forced = p["target_region"], p["allow_data_loss"].lower() == "true"
-            if forced and not self.rolling_back:
+            if forced and not self.rolling_back and not self.meta().get("t_failover"):
                 self.update(t_failover=utcnow())
             res = _fog().failover(target, forced)
+            if forced and not self.rolling_back:
+                # RPO checks every write acknowledged until this moment, including those made during the failover
+                self.update(t_failover_done=utcnow())
             return res
         if a == "tm_set_endpoint":
             from dr_agent.tools.azure_trafficmanager import set_endpoint_region
@@ -325,7 +332,8 @@ class ExerciseRunner(threading.Thread):
             from dr_agent.tools.azure_asr import AsrTestFailover
             started = utcnow()
             res = AsrTestFailover.from_env().start()
-            self.update(iaas_started=started, iaas_operation=res.get("operation") or "")
+            self.update(iaas_started=started, iaas_operation=res.get("operation") or "", iaas_failover_done="")
+            threading.Thread(target=self._watch_asr, args=(res.get("operation") or None,), daemon=True).start()
             return {"started": iso(started), "recovery_point": res.get("recovery_point")}
         if a == "asr_verify_recovery":
             from dr_agent.tools.azure_asr import AsrTestFailover
@@ -333,12 +341,18 @@ class ExerciseRunner(threading.Thread):
             if not m.get("iaas_started"):
                 raise StepFailed("ASR test failover was not started")
             asr = AsrTestFailover.from_env()
-            asr.wait_done(m.get("iaas_operation") or None, int(p.get("timeout_s", 1200)))
+            done = parse_dt(self.meta().get("iaas_failover_done"))
+            if not done:  # the watcher has not seen the job finish yet: wait for it here
+                asr.wait_done(m.get("iaas_operation") or None, int(p.get("timeout_s", 1200)))
+                done = parse_dt(self.meta().get("iaas_failover_done")) or utcnow()
             res = asr.verify()
-            secs = round((utcnow() - parse_dt(m["iaas_started"])).total_seconds(), 1)
+            if (res.get("location") or "").lower() != asr.loc_b.lower():
+                raise StepFailed(f"recovered VM is in {res.get('location')}, expected {asr.loc_b}")
+            secs = round((done - parse_dt(m["iaas_started"])).total_seconds(), 1)
             self.update(iaas_recovered_s=secs, iaas_result_json=json.dumps(res))
-            self.event("measurement", f"IaaS: reports VM recovered by Azure Site Recovery in {M.fmt_duration(secs)} "
-                                      f"(service OK in {res.get('location')})", step.id, {"iaas_recovered_s": secs, **res})
+            self.event("measurement", f"IaaS: Azure Site Recovery brought the reports VM up in Southeast Asia in "
+                                      f"{M.fmt_duration(secs)} (test failover job); service verified inside the VM",
+                       step.id, {"iaas_recovered_s": secs, "job_done": iso(done), **res})
             return {"iaas_recovered_s": secs, **res}
         if a == "asr_test_cleanup":
             from dr_agent.tools.azure_asr import AsrTestFailover
@@ -392,6 +406,15 @@ class ExerciseRunner(threading.Thread):
         if isinstance(ep, dict) and ep.get("endpoint_status") == "Disabled":
             raise StepFailed(f"Traffic Manager endpoint {ENDPOINTS[region]} (Region {region}) is Disabled, so Traffic "
                              f"Manager has no endpoint to route users to Region {region}.")
+
+    def _watch_asr(self, operation: Optional[str]) -> None:
+        """Record when the ASR test-failover job completes (polled every 5 s), independent of the drill's pace."""
+        from dr_agent.tools.azure_asr import AsrTestFailover
+        try:
+            AsrTestFailover.from_env().wait_done(operation, 1500, poll_s=5)
+            self.update(iaas_failover_done=utcnow())
+        except Exception as e:  # noqa: BLE001 - the verify step reports the failure
+            log.warning("ASR watcher: %s", e)
 
     # ------------------------------------------------------------ chaos + remediation
     def maybe_chaos(self, phase: str) -> None:
@@ -464,10 +487,12 @@ class ExerciseRunner(threading.Thread):
         return {"txn": txn}
 
     # ------------------------------------------------------------ heartbeat / RPO
-    def start_heartbeat(self) -> dict:
+    def start_heartbeat(self, resumed: bool = False) -> dict:
         from dr_agent.tools.heartbeat import HeartbeatWriter, ensure_table
         connect = _sql_connect()
         ensure_table(connect)
+        if not resumed:
+            self.update(hb_started=utcnow())
 
         def on_result(seq, ts, acked, error):
             self.heartbeats.append(M.HeartbeatRecord(seq, ts, acked))
@@ -477,11 +502,25 @@ class ExerciseRunner(threading.Thread):
                 pass
         self.hb_writer = HeartbeatWriter(connect, on_result, interval=HEARTBEAT_INTERVAL_S)
         self.hb_writer.start()
+        if resumed:
+            return {"resumed": True}
         self.sleep(5)
         acked = sum(1 for h in self.heartbeats if h.acked)
         if not acked:
             raise StepFailed("heartbeat writer could not write to the database")
         return {"acked": acked}
+
+    def restore_heartbeat(self) -> None:
+        """After a console restart mid-drill: reload this drill's heartbeats from storage and restart the writer,
+        so the RPO is still measured over every write."""
+        started = parse_dt(self.meta().get("hb_started"))
+        if not started:
+            return
+        rows = store.get_heartbeats_since(int(started.timestamp() * 1000))
+        self.heartbeats = [M.HeartbeatRecord(int(r["RowKey"]), parse_dt(r["client_ts"]), bool(r.get("acked"))) for r in rows]
+        self.heartbeats.sort(key=lambda h: h.client_ts)
+        self.start_heartbeat(resumed=True)
+        self.event("info", f"Console restarted: heartbeat writer resumed; {len(rows)} earlier writes restored from storage")
 
     def stop_heartbeat(self) -> dict:
         if self.hb_writer:
@@ -495,11 +534,14 @@ class ExerciseRunner(threading.Thread):
         t_fo = parse_dt(m.get("t_failover"))
         if not t_fo:
             raise StepFailed("no failover timestamp recorded")
-        newest, present = newest_present(_sql_connect(), t_fo)
-        res = M.compute_rpo(self.heartbeats, t_fo, newest, present)
+        t_end = parse_dt(m.get("t_failover_done")) or utcnow()
+        _, present = newest_present(_sql_connect(), t_end)
+        res = M.compute_rpo(self.heartbeats, t_end, present, t_fo)
         prof = self.profile()
         ev = M.evaluate(_num(m.get("rto_s")), res.rpo_s, prof.rto_min, prof.rpo_min)
-        evidence = {"t_failover": iso(t_fo), "last_acked_seq": res.last_acked_seq, "last_acked_ts": iso(res.last_acked_ts),
+        evidence = {"t_failover": iso(t_fo), "t_failover_done": iso(t_end), "checked_writes": res.checked,
+                    "acked_during_failover": res.acked_during_failover, "write_interval_s": HEARTBEAT_INTERVAL_S,
+                    "last_acked_seq": res.last_acked_seq, "last_acked_ts": iso(res.last_acked_ts),
                     "newest_present_ts": iso(res.newest_present_ts), "lost_writes": len(res.lost_seqs), "note": res.note}
         self.update(rpo_s=res.rpo_s, rpo_met=ev["rpo_met"], rpo_evidence_json=json.dumps(evidence))
         self.event("measurement", f"RPO {M.fmt_duration(res.rpo_s)} (target {prof.rpo_min} min): "
@@ -520,6 +562,16 @@ class ExerciseRunner(threading.Thread):
             if _fog().status().get("primary_region") != "A":
                 _fog().failover("A", False)
             set_endpoint_region("A", True)
+            set_endpoint_region("B", True)  # a chaos fault may have disabled the DR endpoint
+            if self.meta().get("iaas_started"):
+                try:
+                    from dr_agent.tools.azure_asr import AsrTestFailover
+                    AsrTestFailover.from_env().cleanup()
+                except Exception as e:  # noqa: BLE001 - report, but finish restoring production
+                    self.event("error", f"ASR test cleanup during rollback failed: {e}"[:300])
+            deadline = time.monotonic() + 300
+            while time.monotonic() < deadline and _safe(lambda: _probe("tm")).get("region_key") != "A":
+                time.sleep(5)
             self.stop_heartbeat()
             self.update(status="rolled_back", current_step="", finished_at=iso(utcnow()))
             self.event("info", "Rollback complete: Region A is primary again")
@@ -557,6 +609,8 @@ def check_fix(action: str, params: dict, phase: str) -> Optional[str]:
         return "enabled must be true/false"
     if phase in ("outage", "failover", "validation") and params["region"].upper() == "A":
         return "Region A must stay down during the outage"
+    if phase in ("outage", "failover", "validation") and params.get("enabled") == "false":
+        return "disabling the DR region during the outage is not allowed"
     return None
 
 
@@ -590,6 +644,21 @@ def start(exercise_id: str) -> None:
         r.start()
 
 
+def start_rollback(exercise_id: str) -> None:
+    """Roll back an exercise whose runner is gone (crash, restart). Counts as running, so no drill starts meanwhile."""
+    with _LOCK:
+        if any(r.is_alive() for r in _RUNNERS.values()):
+            raise RuntimeError("another exercise is running")
+        t = threading.Thread(target=ExerciseRunner(exercise_id).rollback, daemon=True, name=f"rollback-{exercise_id}")
+        _RUNNERS[exercise_id] = t
+        t.start()
+
+
+def any_running() -> bool:
+    with _LOCK:
+        return any(r.is_alive() for r in _RUNNERS.values())
+
+
 def is_running(exercise_id: str) -> bool:
     r = _RUNNERS.get(exercise_id)
     return bool(r and r.is_alive())
@@ -598,11 +667,20 @@ def is_running(exercise_id: str) -> bool:
 def resume_interrupted() -> list[str]:
     """Called at app startup: restart runners for exercises that were mid-flight when the app restarted."""
     resumed = []
-    for e in store.list_exercises(20):
+    recent = sorted((e for e in store.list_exercises(1000) if e.get("PartitionKey", "").startswith("ex-")),
+                    key=lambda e: e["PartitionKey"], reverse=True)[:20]   # newest first
+    for e in recent:
         xid = e["PartitionKey"]
         full = store.get_exercise(xid) or {}
-        if full.get("status") in ("running", "waiting_human") and not is_running(xid):
+        status = full.get("status")
+        if is_running(xid):
+            continue
+        if status in ("running", "waiting_human", "paused_failed"):
             store.add_event(xid, "info", "Console restarted: resuming exercise")
             start(xid)
+            resumed.append(xid)
+        elif status == "rolling_back":
+            store.add_event(xid, "info", "Console restarted: resuming rollback")
+            start_rollback(xid)
             resumed.append(xid)
     return resumed

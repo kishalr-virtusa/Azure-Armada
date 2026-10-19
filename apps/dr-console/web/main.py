@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from pathlib import Path
 from urllib.parse import urlencode
 from typing import Optional
@@ -19,7 +20,17 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 log = logging.getLogger("dr-console")
 
 BASE = Path(__file__).parent
-app = FastAPI(title="DR Agent Console")
+app = FastAPI(title="DR Agent Console", docs_url=None, redoc_url=None, openapi_url=None)
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    resp = await call_next(request)
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    resp.headers.setdefault("X-Frame-Options", "DENY")            # the console is never framed
+    resp.headers.setdefault("Content-Security-Policy", "frame-ancestors 'none'")
+    return resp
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 templates = Jinja2Templates(directory=BASE / "templates")
 
@@ -68,8 +79,9 @@ def _register_foundry_agents() -> None:
 
 @app.exception_handler(Exception)
 async def _errors(request: Request, exc: Exception):
-    log.exception("unhandled error on %s", request.url.path)
-    return JSONResponse({"error": f"{type(exc).__name__}: {exc}"[:500]}, status_code=500)
+    ref = secrets.token_hex(4)
+    log.exception("unhandled error %s on %s", ref, request.url.path)
+    return JSONResponse({"error": f"internal error (ref {ref}); details are in the console log"}, status_code=500)
 
 
 # ------------------------------------------------------------------ auth + pages
@@ -133,21 +145,32 @@ def login_page(request: Request, error: Optional[str] = None):
     return templates.TemplateResponse(request, "login.html", {"error": error})
 
 
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for", "")  # App Service front end
+    return (fwd.split(",")[0].split(":")[0].strip() if fwd else "") or (request.client.host if request.client else "?")
+
+
 @app.post("/login")
-def login(passcode: str = Form(...)):
+def login(request: Request, passcode: str = Form(...)):
+    ip = _client_ip(request)
+    wait = auth.login_blocked(ip)
+    if wait:
+        return RedirectResponse(f"/login?error=Too+many+attempts.+Try+again+in+{max(1, wait // 60)}+min", status_code=303)
     if not auth.verify_passcode(passcode):
+        auth.login_failed(ip)
         return RedirectResponse("/login?error=Invalid+passcode", status_code=303)
+    auth.login_succeeded(ip)
     resp = RedirectResponse("/", status_code=303)
     auth.create_session(resp)
     return resp
 
 
 @app.get("/logout")
-def logout():
+def logout(request: Request):
     if auth.entra_enabled():
         return RedirectResponse("/.auth/logout?post_logout_redirect_uri=/", status_code=303)
     resp = RedirectResponse("/login", status_code=303)
-    auth.logout(resp)
+    auth.logout(resp, request)
     return resp
 
 
@@ -182,6 +205,8 @@ def exercise_latest(request: Request):
 
 @app.get("/exercise/{xid}", response_class=HTMLResponse)
 def exercise_page(request: Request, xid: str):
+    if not auth.verify_session(request):  # before any storage or DNS work
+        return RedirectResponse("/login", status_code=303)
     from dr_agent.models import AppProfile
     from dr_agent.tools import store
     m = store.get_exercise(xid) or {}
@@ -193,6 +218,8 @@ def exercise_page(request: Request, xid: str):
 @app.get("/results", response_class=HTMLResponse)
 @app.get("/results/{xid}", response_class=HTMLResponse)
 async def results_page(request: Request, xid: Optional[str] = None):
+    if not auth.verify_session(request):
+        return RedirectResponse("/login", status_code=303)
     ctx = await run_in_threadpool(service.results_context, xid)
     return _page(request, "results.html", "results", **ctx)
 
@@ -327,7 +354,8 @@ async def api_generate_plan(request: Request):
 
 @app.post("/api/plan/approve", dependencies=[api])
 async def api_approve(request: Request, data: dict = Body(...)):
-    return await run_in_threadpool(service.approve_and_start, _who(request, data.get("approver_name")), data.get("plan"),
+    # the approved plan is always the saved one the Planner produced and the approver reviewed, never a client copy
+    return await run_in_threadpool(service.approve_and_start, _who(request, data.get("approver_name")), None,
                                    bool(data.get("chaos")))
 
 
@@ -375,8 +403,8 @@ def api_chaos(xid: str):
 
 
 @app.post("/api/exercise/{xid}/{cmd}", dependencies=[api])
-def api_command(xid: str, cmd: str):
-    return service.send_command(xid, cmd)
+def api_command(request: Request, xid: str, cmd: str, data: Optional[dict] = Body(None)):
+    return service.send_command(xid, cmd, _who(request, (data or {}).get("by")))
 
 
 @app.post("/api/notifications/test-email", dependencies=[api])

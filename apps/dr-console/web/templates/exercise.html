@@ -265,7 +265,7 @@
                     const fixParams = data.diagnosis.fix_params || [];
                     if (fixParams.length > 0) {
                         document.getElementById('fixParamsList').innerHTML = fixParams.map(p => 
-                            `<div style="margin-top:4px;"><code>${p.key}</code> = <code>${p.value}</code></div>`
+                            `<div style="margin-top:4px;"><code>${AgentUI.esc(p.key)}</code> = <code>${AgentUI.esc(p.value)}</code></div>`
                         ).join('');
                     } else {
                         document.getElementById('fixParamsList').innerHTML = '';
@@ -344,7 +344,7 @@
                 const item = document.createElement('div');
                 item.className = 'timeline-item ' + getEventClass(event.kind);
                 item.innerHTML = `
-                    <div class="tl-msg">${event.message}</div>
+                    <div class="tl-msg">${AgentUI.esc(event.message)}</div>
                     <div class="tl-meta">${formatTime(event.ts)} · ${event.step_id || 'system'}</div>
                     ${event.kind === 'measurement' ? `<div style="font-size: 12px; color: var(--ink-2);">${formatMeasurement(event.data)}</div>` : ''}
                 `;
@@ -429,14 +429,26 @@
     function formatMeasurement(data) {
         if (!data) return '';
         if (data.rto_s !== undefined) {
-            return `RTO: ${Math.floor(data.rto_s / 60)}m ${Math.floor(data.rto_s % 60)}s`;
+            return `RTO: ${data.rto_s < 60 ? data.rto_s.toFixed(2) + 's' : Math.floor(data.rto_s / 60) + 'm ' + (data.rto_s % 60).toFixed(2) + 's'}`;
         }
         if (data.rpo_s !== undefined) {
-            return `RPO: ${data.rpo_s}s`;
+            return `RPO: ${Number(data.rpo_s).toFixed(2)}s`;
         }
         return JSON.stringify(data);
     }
     
+    // Every approval and command carries the approver's name (remembered in this browser) for the audit trail,
+    // and any refusal from the engine (wrong state, stale click) is shown instead of silently ignored.
+    async function act(path) {
+        const by = AgentUI.approverName();
+        if (by === null) throw new Error('an approver name is required');
+        const res = await fetch(`/api/exercise/${exerciseId}/${path}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ by }) });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok || out.error) throw new Error(out.error || out.detail || `HTTP ${res.status}`);
+        return out;
+    }
+
     async function confirmStep() {
         if (!currentHumanStep) return;
         
@@ -445,9 +457,7 @@
         btn.textContent = 'Confirming...';
         
         try {
-            await fetch(`/api/exercise/${exerciseId}/confirm/${currentHumanStep.id}`, {
-                method: 'POST',
-            });
+            await act(`confirm/${currentHumanStep.id}`);
             document.getElementById('humanStepBox').classList.add('hide');
             currentHumanStep = null;
         } catch (e) {
@@ -464,7 +474,7 @@
         }
         
         try {
-            await fetch(`/api/exercise/${exerciseId}/kill`, { method: 'POST' });
+            await act('kill');
             alert('Exercise killed. Offering rollback...');
         } catch (e) {
             alert('Failed to kill exercise: ' + e.message);
@@ -477,7 +487,7 @@
         }
         
         try {
-            await fetch(`/api/exercise/${exerciseId}/rollback`, { method: 'POST' });
+            await act('rollback');
             alert('Rollback initiated.');
         } catch (e) {
             alert('Failed to rollback: ' + e.message);
@@ -490,7 +500,7 @@
         }
         
         try {
-            await fetch(`/api/exercise/${exerciseId}/retry`, { method: 'POST' });
+            await act('retry');
             document.getElementById('pausedFailedBanner').classList.add('hide');
         } catch (e) {
             alert('Failed to retry step: ' + e.message);
@@ -503,7 +513,7 @@
         }
         
         try {
-            await fetch(`/api/exercise/${exerciseId}/continue`, { method: 'POST' });
+            await act('continue');
             document.getElementById('pausedFailedBanner').classList.add('hide');
         } catch (e) {
             alert('Failed to continue exercise: ' + e.message);
@@ -549,11 +559,7 @@
         
         try {
             // The retry endpoint with fix approval
-            await fetch(`/api/exercise/${exerciseId}/retry`, { 
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ approve_fix: true })
-            });
+            await act('retry');
             document.getElementById('pausedFailedBanner').classList.add('hide');
         } catch (e) {
             alert('Failed to apply fix: ' + e.message);

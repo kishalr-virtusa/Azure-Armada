@@ -81,7 +81,12 @@ def get_status(max_age_s: float = 5.0) -> dict:
 # One-glance answer to "can we recover right now, and when did we last prove it?" for the Overview.
 # The live checks are the deterministic readiness checks (no AI call); they take several seconds, so they run in
 # the background and the page shows the last result with its age.
-_summary: dict[str, Any] = {"t": 0.0, "v": None, "busy": False}
+_summary: dict[str, Any] = {"t": 0.0, "v": None, "busy": False, "dirty": False}
+
+
+def _invalidate_summary() -> None:
+    """Make the Overview re-check now; if a check is already running, run another one right after it."""
+    _summary.update(t=0.0, dirty=True)
 _summary_lock = threading.Lock()
 SUMMARY_MAX_AGE_S = 45.0
 
@@ -133,13 +138,16 @@ def _compute_summary() -> dict:
 
 
 def _refresh_summary() -> None:
-    try:
-        v = _compute_summary()
-        _summary.update(t=time.monotonic(), v=v)
-    except Exception as e:  # noqa: BLE001
-        log.warning("overview summary failed: %s", e)
-    finally:
-        _summary["busy"] = False
+    while True:
+        _summary["dirty"] = False
+        try:
+            v = _compute_summary()
+            _summary.update(t=0.0 if _summary["dirty"] else time.monotonic(), v=v)
+        except Exception as e:  # noqa: BLE001
+            log.warning("overview summary failed: %s", e)
+        if not _summary["dirty"]:
+            break
+    _summary["busy"] = False
 
 
 def overview_summary() -> dict:
@@ -190,6 +198,21 @@ def recommend_strategy() -> dict:
     return {**res.output.model_dump(), **meta}
 
 
+def _keyvault_check() -> dict:
+    """Live call to Key Vault (secret read with the managed identity; the value is discarded)."""
+    import os as _os
+    from azure.identity import DefaultAzureCredential
+    from azure.keyvault.secrets import SecretClient
+    suffix = _os.environ.get("RESOURCE_SUFFIX") or config.webapp_a_name.rsplit("-", 1)[-1]
+    vault = _os.environ.get("KEY_VAULT_NAME") or f"dra-kv-{suffix}"
+    started = time.monotonic()
+    try:
+        SecretClient(f"https://{vault}.vault.azure.net", DefaultAzureCredential()).get_secret("console-passcode")
+        return {"ok": True, "vault": vault, "latency_ms": int((time.monotonic() - started) * 1000)}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "vault": vault, "error": f"{type(e).__name__}: {e}"[:200]}
+
+
 def gather_readiness_facts() -> dict:
     from dr_agent.tools.azure_trafficmanager import get_profile_status
     from dr_agent.tools.azure_webapp import list_app_settings
@@ -222,7 +245,9 @@ def gather_readiness_facts() -> dict:
             lambda: __import__("dr_agent.tools.azure_asr", fromlist=["x"]).AsrTestFailover.from_env().status(),
             summary=lambda r: str(r.get("health") or r.get("state") or ""))
     facts["asr"] = asr if "error" not in asr else {"protected": False, "state": asr["error"]}
-    facts["keyvault_ok"] = bool(config.console_passcode)  # resolved via Key Vault reference at startup
+    facts["keyvault"] = s("tool", "Key Vault: read a secret with the console's managed identity", _keyvault_check,
+                          summary=lambda r: f"{r.get('vault')} answered in {r.get('latency_ms')} ms" if r.get("ok") else "")
+    facts["keyvault_ok"] = bool(facts["keyvault"].get("ok"))
     return facts
 
 
@@ -249,7 +274,7 @@ def fix_progress() -> dict:
     app_ok = bool(probe.get("ok")) and probe.get("db_ok") is not False
     tm_ok = ep.get("endpoint_monitor_status") == "Online"
     if app_ok and tm_ok:
-        _summary.update(t=0.0)
+        _invalidate_summary()
     return {"app_ok": app_ok, "app_detail": "healthy" if app_ok else (probe.get("reason") or probe.get("error") or "restarting"),
             "tm_ok": tm_ok, "tm_detail": ep.get("endpoint_monitor_status") or "unknown", "done": app_ok and tm_ok}
 
@@ -307,7 +332,7 @@ def apply_parity_fix(keys: list[str], approver: str) -> dict:
     notify("success", "Configuration drift fixed",
            f"Copied {', '.join(copied) or 'nothing'} to Region B (approved by {approver}).", link="/phase1", send_email=False)
     store.upsert_exercise(PHASE1, {"fix_json": json.dumps({"copied": copied, "approved_by": approver, "at": _now_iso()})})
-    _summary.update(t=0.0)  # the Overview verdict re-checks now instead of within 45 s
+    _invalidate_summary()  # the Overview re-checks now instead of within 45 s
     return {"success": True, "copied": copied, "approved_by": approver,
             "message": (f"Copied {', '.join(copied)} to Southeast Asia (approved by {approver})." if copied
                         else "Nothing to copy: Southeast Asia already has these settings.")
@@ -363,8 +388,12 @@ def approve_and_start(approver: str, plan_data: Optional[dict] = None, chaos: bo
         validate_plan(plan)
     except PlanError as e:
         return {"error": f"plan rejected by safety validation: {e}"}
+    if runner.any_running():  # check before writing anything, so a second click cannot leave a ghost drill
+        return {"error": "another exercise is already running"}
     p1 = _phase1()
     xid = "ex-" + datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    if store.get_exercise(xid):
+        return {"error": "an exercise was started this second; refresh to see it"}
     now = datetime.now(timezone.utc).isoformat()
     store.upsert_exercise(xid, {
         "status": "approved", "plan_json": plan.model_dump_json(),
@@ -428,23 +457,52 @@ def arm_chaos(xid: str) -> dict:
 
 def confirm_step(xid: str, step_id: str, by: str) -> dict:
     m = store.get_exercise(xid) or {}
+    # only the step the engine is actually waiting for can be confirmed (no approving failback in advance)
+    if m.get("status") != "waiting_human" or m.get("waiting_step") != step_id:
+        return {"error": f"step {step_id} is not waiting for confirmation"}
     conf = json.loads(m.get("confirmations_json") or "{}")
     conf[step_id] = {"by": by or "console user", "at": datetime.now(timezone.utc).isoformat()}
     store.upsert_exercise(xid, {"confirmations_json": json.dumps(conf)})
     return {"ok": True}
 
 
-def send_command(xid: str, cmd: str) -> dict:
+# Which commands make sense in which state. Anything else is refused, so a stale click (double-click, an old tab)
+# can never approve a later failure or roll back the wrong drill.
+COMMANDS_BY_STATUS = {
+    "running": {"kill"}, "waiting_human": {"kill"},
+    "paused_failed": {"kill", "retry", "continue", "rollback"},
+    "killed": {"rollback", "abandon"}, "failed": {"rollback"},
+}
+
+
+def send_command(xid: str, cmd: str, by: str = "") -> dict:
     if cmd not in ("kill", "retry", "continue", "rollback", "abandon"):
         return {"error": "unknown command"}
-    m = store.get_exercise(xid) or {}
+    m = store.get_exercise(xid)
+    if not m:
+        return {"error": "exercise not found"}
+    status = m.get("status") or ""
+    if cmd not in COMMANDS_BY_STATUS.get(status, set()):
+        return {"error": f"'{cmd}' is not possible while the exercise is {status or 'unknown'}"}
+    alive = runner.is_running(xid)
+    if cmd == "rollback" and not alive and runner.any_running():
+        return {"error": "another exercise is running; roll this one back after it finishes"}
     store.upsert_exercise(xid, {"command": cmd})
-    store.add_event(xid, "info", f"Command received: {cmd}")
+    who = f" by {by}" if by else ""
+    if cmd == "retry" and m.get("diagnosis_json"):
+        d = json.loads(m["diagnosis_json"])
+        if d.get("fix_action") and d["fix_action"] != "none":
+            approvals = json.loads(m.get("approvals_json") or "{}")
+            approvals[f"fix:{m.get('failed_step')}"] = {"by": by or "console user", "at": _now_iso(), "fix": d["fix_action"]}
+            store.upsert_exercise(xid, {"approvals_json": json.dumps(approvals)})
+            store.add_event(xid, "approval", f"Fix approved{who}: {d['fix_action']}", m.get("failed_step"))
+    store.add_event(xid, "info", f"Command received: {cmd}{who}")
     # rollback requested while no runner is alive (e.g. after a crash): run it directly
-    if cmd == "rollback" and not runner.is_running(xid) and m.get("status") not in ("completed", "rolled_back"):
-        r = runner.ExerciseRunner(xid)
-        import threading
-        threading.Thread(target=r.rollback, daemon=True).start()
+    if cmd == "rollback" and not alive:
+        try:
+            runner.start_rollback(xid)
+        except RuntimeError as e:
+            return {"error": str(e)}
     return {"ok": True}
 
 
@@ -510,6 +568,18 @@ def _bool(v: Any) -> bool:
 _live_cache: dict[str, Any] = {"t": 0.0, "v": None}
 _serving_cache: dict[str, Any] = {"t": 0.0, "v": None}
 PUBLIC_EVENT_KINDS = {"info", "measurement", "approval", "diagnosis", "chaos", "remediation"}  # no raw errors
+
+
+def _public_message(e: dict) -> str:
+    """The public feed (unauthenticated, shown on phones) never carries approver identities or raw diagnosis text."""
+    kind, msg = e.get("kind"), (e.get("message") or "")
+    if kind == "approval":
+        return "Approved by the responsible team" if msg.lower().startswith(("confirmed", "plan approved")) else "Fix approved by an operator"
+    if kind == "diagnosis":
+        return "Validator agent diagnosed the failure and proposed a fix"
+    if kind == "info" and msg.startswith("Command received"):
+        return "Operator command received"
+    return msg[:200]
 FINISHED = ("completed", "rolled_back", "aborted", "failed", "killed")
 DEFAULT_ETA_S = 45.0
 
@@ -594,7 +664,7 @@ def public_live() -> dict:
                 out.update(state="armed", headline="A DR drill is about to start. Keep paying!")
             evs = [e for e in store.get_events(xid) if e.get("kind") in PUBLIC_EVENT_KINDS][-8:]
             out["timeline"] = [{"ts": e.get("ts") or e.get("Timestamp"), "kind": e.get("kind"),
-                                "message": (e.get("message") or "")[:200]} for e in evs]
+                                "message": _public_message(e)} for e in evs]
     _live_cache.update(t=time.monotonic(), v=out)
     return out
 

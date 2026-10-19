@@ -92,7 +92,7 @@ def probe_tm(expect_region: str | None = None) -> dict[str, Any]:
         logger.warning(f"DNS resolution failed: {e}")
     
     # Probe the TM URL
-    tm_url = f"http://{config.tm_fqdn}/health"
+    tm_url = f"https://{config.tm_fqdn}/health"
     result = probe(tm_url)
     
     result["dns_cname"] = cname

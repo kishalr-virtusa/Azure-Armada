@@ -107,6 +107,8 @@
             }
         });
         
+        const _e = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
         async function loadNotifications() {
             try {
                 const url = lastNotifId 
@@ -143,10 +145,10 @@
                     
                     // Render list
                     list.innerHTML = notifs.slice(0, 10).map(n => `
-                        <div class="notif-item ${n.read ? '' : 'unread'}" onclick="openNotification('${n.RowKey}', '${n.link || ''}')">
-                            <div class="notif-kind ${n.kind}">${n.kind}</div>
-                            <div class="notif-title">${n.title}</div>
-                            <div class="notif-body">${n.body}</div>
+                        <div class="notif-item ${n.read ? '' : 'unread'}" data-id="${_e(n.RowKey)}" data-link="${_e(n.link || '')}" onclick="openNotification(this.dataset.id, this.dataset.link)">
+                            <div class="notif-kind ${_e(n.kind)}">${_e(n.kind)}</div>
+                            <div class="notif-title">${_e(n.title)}</div>
+                            <div class="notif-body">${_e(n.body)}</div>
                             <div class="notif-time">${formatTime(n.ts)}</div>
                         </div>
                     `).join('');
@@ -158,10 +160,10 @@
         
         function openNotification(id, link) {
             // Mark as read
-            fetch(`/api/notifications/${id}/read`, { method: 'POST' });
+            fetch(`/api/notifications/${encodeURIComponent(id)}/read`, { method: 'POST' });
             
-            // Navigate if link provided
-            if (link) {
+            // Navigate if link provided (console pages only)
+            if (link && link.startsWith('/') && !link.startsWith('//')) {
                 window.location.href = link;
             }
             
@@ -193,7 +195,7 @@
         setInterval(loadNotifications, 5000);
     </script>
     
-    <script src="/static/agent-ui.js?v=5"></script>
+    <script src="/static/agent-ui.js?v=6"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

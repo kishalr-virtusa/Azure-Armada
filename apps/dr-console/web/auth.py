@@ -7,9 +7,13 @@ Fallback: a shared passcode with an in-memory session (when Entra is not configu
 """
 
 import hashlib
+import hmac
+import threading
+import time
 import os
 import secrets
 from datetime import datetime, timedelta
+from typing import Optional
 
 from fastapi import Request, Response, HTTPException
 from fastapi.responses import RedirectResponse
@@ -78,11 +82,41 @@ def verify_session(request: Request) -> bool:
 
 
 def verify_passcode(passcode: str) -> bool:
-    """Verify the provided passcode."""
+    """Verify the provided passcode (timing-safe). With no passcode configured, refuse unless explicitly in dev mode."""
     if not config.console_passcode:
-        # No passcode configured, allow access (dev mode)
-        return True
-    return passcode == config.console_passcode
+        return os.environ.get("DR_DEV_MODE", "").lower() == "true"
+    return hmac.compare_digest(passcode.encode(), config.console_passcode.encode())
+
+
+# Login throttling: 5 failures per address in 10 minutes locks that address for 10 minutes; 30 failures from
+# anywhere locks the form for 5 minutes. Brute-forcing the passcode becomes impractical.
+_fail_lock = threading.Lock()
+_fails: dict[str, list[float]] = {}
+PER_IP, GLOBAL, WINDOW_S = 5, 30, 600
+
+
+def login_blocked(ip: str) -> int:
+    """Seconds until this address may try again (0 = allowed)."""
+    now = time.monotonic()
+    with _fail_lock:
+        mine = [t for t in _fails.get(ip, []) if now - t < WINDOW_S]
+        everyone = [t for ts in _fails.values() for t in ts if now - t < 300]
+        if len(mine) >= PER_IP:
+            return int(WINDOW_S - (now - mine[0])) + 1
+        if len(everyone) >= GLOBAL:
+            return int(300 - (now - min(everyone))) + 1
+    return 0
+
+
+def login_failed(ip: str) -> None:
+    with _fail_lock:
+        _fails.setdefault(ip, []).append(time.monotonic())
+    time.sleep(1)  # slow down guessing
+
+
+def login_succeeded(ip: str) -> None:
+    with _fail_lock:
+        _fails.pop(ip, None)
 
 
 def require_auth(request: Request):
@@ -91,6 +125,8 @@ def require_auth(request: Request):
         raise HTTPException(status_code=401, detail="Not authenticated")
 
 
-def logout(response: Response) -> None:
-    """Clear the session."""
+def logout(response: Response, request: Optional[Request] = None) -> None:
+    """End the session on the server (not just in the browser) and clear the cookie."""
+    if request is not None:
+        _sessions.pop(request.cookies.get(COOKIE_NAME, ""), None)
     response.delete_cookie(COOKIE_NAME)

@@ -31,6 +31,8 @@ class RpoResult:
     newest_present_ts: Optional[datetime] = None
     lost_seqs: list[int] = field(default_factory=list)
     note: str = ""
+    checked: int = 0                 # acknowledged writes checked against the new primary
+    acked_during_failover: int = 0   # of which acknowledged while the forced failover was running
 
 
 def compute_rto(t0: Optional[datetime], t_recovered: Optional[datetime]) -> Optional[float]:
@@ -50,32 +52,40 @@ def last_acked_before(records: Iterable[HeartbeatRecord], t: datetime) -> Option
 
 def compute_rpo(
     records: Iterable[HeartbeatRecord],
-    t_failover: datetime,
-    newest_present_ts: Optional[datetime],
-    present_seqs: Optional[set[int]] = None,
+    window_end: datetime,
+    present_seqs: Optional[set[int]],
+    t_failover: Optional[datetime] = None,
 ) -> RpoResult:
-    """Measured data loss window in seconds.
+    """Measured data loss, write by write.
 
-    records           heartbeat writes recorded by the writer (acked or not)
-    t_failover        moment the DB failover was triggered
-    newest_present_ts MAX(client_ts) in the NEW primary WHERE client_ts <= t_failover
-    present_seqs      optional: seqs found in the new primary (client_ts <= t_failover), to list lost writes
+    Every heartbeat the database ACKNOWLEDGED up to `window_end` (the moment the forced failover completed, so
+    writes acknowledged while it was running are included) must exist in the new primary. RPO is 0 only if none
+    is missing; otherwise it is the time from the last write that survived to the last write that was lost.
+
+    records       heartbeat writes recorded by the writer (acked or not)
+    window_end    end of the forced failover (writes after it go to the new primary by definition)
+    present_seqs  seqs found in the new primary
+    t_failover    start of the forced failover (only used to count writes acknowledged during it)
     """
-    records = list(records)
-    last = last_acked_before(records, t_failover)
-    if last is None:
-        return RpoResult(rpo_s=None, note="no acknowledged heartbeat before failover; cannot measure RPO")
-    if newest_present_ts is None:
-        return RpoResult(rpo_s=None, last_acked_seq=last.seq, last_acked_ts=last.client_ts,
-                         note="no heartbeat rows found in the new primary; data missing or table not replicated")
-    rpo = max(0.0, (last.client_ts - newest_present_ts).total_seconds())
-    lost: list[int] = []
-    if present_seqs is not None:
-        lost = sorted(r.seq for r in records
-                      if r.acked and r.client_ts <= t_failover and r.seq not in present_seqs)
-    note = "no acknowledged writes lost" if rpo == 0 and not lost else f"{len(lost)} acknowledged write(s) lost"
-    return RpoResult(rpo_s=rpo, last_acked_seq=last.seq, last_acked_ts=last.client_ts,
-                     newest_present_ts=newest_present_ts, lost_seqs=lost, note=note)
+    acked = sorted((r for r in records if r.acked and r.client_ts <= window_end), key=lambda r: r.client_ts)
+    if not acked:
+        return RpoResult(rpo_s=None, note="no acknowledged heartbeat before the failover completed; cannot measure RPO")
+    if present_seqs is None:
+        return RpoResult(rpo_s=None, last_acked_seq=acked[-1].seq, last_acked_ts=acked[-1].client_ts,
+                         note="could not read heartbeats from the new primary")
+    during = sum(1 for r in acked if t_failover is not None and r.client_ts >= t_failover)
+    lost = [r for r in acked if r.seq not in present_seqs]
+    survived = [r for r in acked if r.seq in present_seqs]
+    newest_present = survived[-1].client_ts if survived else None
+    if not lost:
+        rpo, note = 0.0, f"all {len(acked)} acknowledged writes found in the new primary ({during} acknowledged during the failover)"
+    else:
+        anchor = max((r.client_ts for r in survived if r.client_ts < lost[0].client_ts), default=lost[0].client_ts)
+        rpo = max(0.0, (lost[-1].client_ts - anchor).total_seconds())
+        note = f"{len(lost)} of {len(acked)} acknowledged write(s) missing in the new primary"
+    return RpoResult(rpo_s=rpo, last_acked_seq=acked[-1].seq, last_acked_ts=acked[-1].client_ts,
+                     newest_present_ts=newest_present, lost_seqs=[r.seq for r in lost], note=note,
+                     checked=len(acked), acked_during_failover=during)
 
 
 def evaluate(rto_s: Optional[float], rpo_s: Optional[float], rto_target_min: int, rpo_target_min: int) -> dict:

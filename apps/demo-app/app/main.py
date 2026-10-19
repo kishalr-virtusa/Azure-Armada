@@ -42,6 +42,19 @@ from app.access import access_post, gate_middleware  # noqa: E402
 from app.access import _token as _access_token, ACCESS_CODE as _ACCESS_CODE  # noqa: E402
 access_token = _access_token if _ACCESS_CODE else None
 app.middleware("http")(gate_middleware)
+
+
+# Only the DR console's presenter view may frame the app (its phone mock-up); nothing else can embed it.
+_CONSOLE_ORIGIN = "/".join(PUBLIC_URL.split("/")[:3]) if PUBLIC_URL.startswith("https://") else ""
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    resp = await call_next(request)
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    resp.headers.setdefault("Content-Security-Policy", f"frame-ancestors 'self' {_CONSOLE_ORIGIN}".strip())
+    return resp
 app.add_api_route("/access", access_post, methods=["POST"], include_in_schema=False)
 templates = Jinja2Templates(directory="app/templates")
 
@@ -129,7 +142,8 @@ def health():
         "region": REGION_NAME,
         "db_ok": check["db_ok"],
         "db_server": check.get("db_server"),
-        "db_error": (check.get("error") or "")[:300] or None,
+        # public endpoint: say what failed, not the driver's message (server names, SQL text)
+        "db_error": "database unavailable" if not check.get("db_ok") else None,
         "time": datetime.now(timezone.utc).isoformat(),
     }
     
@@ -160,7 +174,7 @@ def create_transaction(request: Request):
         return txn
     except Exception as e:
         logger.error(f"Failed to create transaction: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=503, detail="payment service temporarily unavailable")
 
 
 @app.get("/api/recent")
@@ -170,7 +184,7 @@ def recent_transactions(request: Request):
         return db.get_recent_transactions(10, _device(request))
     except Exception as e:
         logger.error(f"Failed to get transactions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=503, detail="payment service temporarily unavailable")
 
 
 @app.get("/api/balance")

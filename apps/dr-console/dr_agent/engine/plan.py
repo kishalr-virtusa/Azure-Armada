@@ -11,7 +11,7 @@ PHASES = ["pre-checks", "outage", "failover", "validation", "failback", "closure
 ALLOWED_ACTIONS: dict[str, tuple[set[str], str]] = {
     "snapshot_inventory": (set(), "Record the workload inventory + config (before/after diff)."),
     "check_fog": (set(), "Verify the SQL failover group is healthy and replicating."),
-    "start_heartbeat": (set(), "Start the 2s heartbeat writer used to measure RPO."),
+    "start_heartbeat": (set(), "Start the 1 s heartbeat writer used to measure RPO."),
     "inject_outage": ({"region"}, "Simulate a regional outage: stop the web app in `region`. Records t0."),
     "sql_failover": ({"target_region", "allow_data_loss"}, "Make `target_region` the SQL primary. Forced if allow_data_loss=true. Records t_failover."),
     "tm_set_endpoint": ({"region", "enabled"}, "Enable/disable the Traffic Manager endpoint of `region`."),
@@ -92,8 +92,67 @@ def validate_plan(plan: ExercisePlan) -> None:
             pos = idx
     if not any(s.type == "human" for s in plan.steps):
         problems.append("plan must contain at least one human approval step")
+    problems += _safety_problems(plan)
     if problems:
         raise PlanError(problems)
+
+
+# Actions that change the production topology. Each may appear ONLY where the mandatory sequence puts it (same
+# action + params, same count): no extra outage, no second forced failover, no Region A action mid-outage, no
+# disabling the DR region. Everything else in the allowlist is read-only or confined to the isolated ASR test.
+REGION_ACTIONS = {"inject_outage": ("region",), "sql_failover": ("target_region", "allow_data_loss"),
+                  "tm_set_endpoint": ("region", "enabled"), "start_webapp": ("region",)}
+PARAM_RULES = {"region": {"a", "b"}, "target_region": {"a", "b"}, "expect_region": {"a", "b"},
+               "target": {"tm", "a", "b"}, "allow_data_loss": {"true", "false"}, "enabled": {"true", "false"}}
+
+
+def _key(action: str, params: dict) -> tuple:
+    return (action, tuple(str(params.get(k, "")).strip().lower() for k in REGION_ACTIONS[action]))
+
+
+def _safety_problems(plan: ExercisePlan) -> list[str]:
+    problems: list[str] = []
+    for s in plan.steps:
+        p = {k: v.strip().lower() for k, v in s.param_dict().items()}
+        for k, allowed in PARAM_RULES.items():
+            if k in p and p[k] not in allowed:
+                problems.append(f"{s.id}: {k}={p[k]!r} is not one of {sorted(allowed)}")
+        if "timeout_s" in p and not (p["timeout_s"].isdigit() and 30 <= int(p["timeout_s"]) <= 3600):
+            problems.append(f"{s.id}: timeout_s must be a whole number of seconds between 30 and 3600")
+    expected: dict[tuple, int] = {}
+    for action, params in MANDATORY_SEQUENCE:
+        if action in REGION_ACTIONS:
+            expected[_key(action, params)] = expected.get(_key(action, params), 0) + 1
+    found: dict[tuple, int] = {}
+    for s in plan.steps:
+        if s.type == "automated" and s.action in REGION_ACTIONS:
+            k = _key(s.action, s.param_dict())
+            found[k] = found.get(k, 0) + 1
+            if k not in expected:
+                problems.append(f"{s.id}: {s.action} {dict(zip(REGION_ACTIONS[s.action], k[1]))} is not part of the safe sequence")
+    for k, n in expected.items():
+        if found.get(k, 0) > n:
+            problems.append(f"{k[0]} {dict(zip(REGION_ACTIONS[k[0]], k[1]))} appears {found[k]} times (allowed once)")
+    # mandatory steps up to failback must stop the drill when they fail (closure clean-up may continue),
+    # and humans gate the two irreversible moments
+    mandatory_idx: list[int] = []
+    pos = -1
+    for action, params in MANDATORY_SEQUENCE:
+        idx = next((i for i, st in enumerate(plan.steps) if i > pos and _matches(st, action, params)), None)
+        if idx is not None:
+            mandatory_idx.append(idx)
+            pos = idx
+            if not plan.steps[idx].abort_on_failure and plan.steps[idx].phase != "closure":
+                problems.append(f"{plan.steps[idx].id}: mandatory step must have abort_on_failure=true")
+    humans = [i for i, st in enumerate(plan.steps) if st.type == "human"]
+    outage = next((i for i, st in enumerate(plan.steps) if _matches(st, "inject_outage", {"region": "A"})), None)
+    rpo = next((i for i, st in enumerate(plan.steps) if _matches(st, "measure_rpo", {})), None)
+    failback = next((i for i, st in enumerate(plan.steps) if _matches(st, "start_webapp", {"region": "A"})), None)
+    if outage is not None and not any(i < outage for i in humans):
+        problems.append("a human 'go' approval must come before the outage and forced database failover")
+    if failback is not None and not any((rpo or 0) < i < failback for i in humans):
+        problems.append("a human approval must come between measuring RPO and starting failback")
+    return problems
 
 
 def _step(id, phase, title, team, type_, action=None, params=None, deps=(), criteria="", abort=True) -> PlanStep:
