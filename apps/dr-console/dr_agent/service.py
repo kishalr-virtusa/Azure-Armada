@@ -239,7 +239,7 @@ def live_map() -> dict:
         if not _map_cache.get("thread"):
             _map_cache["thread"] = threading.Thread(target=_map_refresher, name="live-map", daemon=True)
             _map_cache["thread"].start()
-    if not _map_cache["v"]:
+    if not _map_cache["v"] or time.monotonic() - _map_cache["t"] > 5:  # first look after an idle spell: fresh, not stale
         return _compute_live_map()
     return _map_cache["v"]
 
