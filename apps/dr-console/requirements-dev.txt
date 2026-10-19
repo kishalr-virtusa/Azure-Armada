@@ -1,0 +1,2 @@
+# Only for scripts/migrate_tables_to_cosmos.py (one-off move of the old Table Storage records)
+azure-data-tables==12.6.0

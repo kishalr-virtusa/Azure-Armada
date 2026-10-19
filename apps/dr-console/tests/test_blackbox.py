@@ -129,29 +129,7 @@ def test_ask_api_requires_auth():
 
 
 # ------------------------------------------------------------------ saved conversations
-class _FakeTable:
-    """Just enough of an Azure TableClient for the conversation store."""
-    def __init__(self):
-        self.rows = {}
-
-    def get_entity(self, partition_key, row_key):
-        return dict(self.rows[(partition_key, row_key)])
-
-    def upsert_entity(self, e):
-        self.rows[(e["PartitionKey"], e["RowKey"])] = dict(e)
-
-    def query_entities(self, query_filter, parameters=None, select=None):
-        if query_filter == "RowKey eq 'bbconv'":
-            return [dict(v) for (pk, rk), v in self.rows.items() if rk == "bbconv"]
-        return [dict(v) for (pk, rk), v in self.rows.items() if pk == parameters["pk"]]
-
-    def delete_entity(self, partition_key, row_key):
-        self.rows.pop((partition_key, row_key), None)
-
-
-def test_conversations_are_kept_and_listed_newest_first(monkeypatch):
-    t = _FakeTable()
-    monkeypatch.setattr(store, "get_table_client", lambda name: t)
+def test_conversations_are_kept_and_listed_newest_first(cosmos):
     store.add_conversation_turn("aaaaaaaaaaaa", "Who approved the failback?", {"answer": "Kishal"}, '{"events": []}', "Kishal")
     store.add_conversation_turn("aaaaaaaaaaaa", "And the one before?", {"answer": "Arasan"}, None)
     store.add_conversation_turn("bbbbbbbbbbbb", "What did Autopilot find?", {"answer": "nothing"}, "x" * 40000)
@@ -163,8 +141,8 @@ def test_conversations_are_kept_and_listed_newest_first(monkeypatch):
     assert conv["turns"][0]["trace"] == {"events": []} and conv["turns"][1]["reply"] == {"answer": "Arasan"}
     assert store.get_conversation("bbbbbbbbbbbb")["turns"][0]["trace"] is None  # too big to keep: answer still kept
     assert store.get_conversation("cccccccccccc") is None
-    # drill listings never see conversation rows
-    assert all(rk != "meta" for (pk, rk) in t.rows)
+    # conversations live in their own container: drill listings never see them
+    assert set(cosmos) == {"conversations"} and store.list_exercises() == []
 
 
 def test_ask_saves_the_turn_and_returns_the_conversation_id(client, monkeypatch):
@@ -185,9 +163,7 @@ def test_ask_saves_the_turn_and_returns_the_conversation_id(client, monkeypatch)
     assert c.get("/api/blackbox/conversations/not-an-id").status_code == 404
 
 
-def test_delete_removes_the_conversation_and_all_its_turns(monkeypatch):
-    t = _FakeTable()
-    monkeypatch.setattr(store, "get_table_client", lambda name: t)
+def test_delete_removes_the_conversation_and_all_its_turns(cosmos):
     store.add_conversation_turn("aaaaaaaaaaaa", "q1", {"answer": "a1"}, None)
     store.add_conversation_turn("aaaaaaaaaaaa", "q2", {"answer": "a2"}, None)
     store.add_conversation_turn("bbbbbbbbbbbb", "keep me", {"answer": "x"}, None)

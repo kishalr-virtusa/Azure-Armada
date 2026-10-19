@@ -35,6 +35,10 @@ class Config:
     storage_table_endpoint: str = ""
     storage_blob_endpoint: str = ""
     
+    # Cosmos DB (the console's records)
+    cosmos_endpoint: str = ""
+    cosmos_database: str = "dra"
+    
     # Console auth
     console_passcode: str = ""
     
@@ -70,6 +74,9 @@ def load_config() -> Config:
         storage_account_name=os.getenv("STORAGE_ACCOUNT_NAME", ""),
         storage_table_endpoint=os.getenv("STORAGE_TABLE_ENDPOINT", ""),
         storage_blob_endpoint=os.getenv("STORAGE_BLOB_ENDPOINT", ""),
+        
+        cosmos_endpoint=os.getenv("COSMOS_ENDPOINT", ""),
+        cosmos_database=os.getenv("COSMOS_DATABASE", "dra"),
         
         console_passcode=os.getenv("CONSOLE_PASSCODE", ""),
         

@@ -113,9 +113,7 @@ def _record(notification_id: str | None, fields: dict) -> None:
     if not notification_id:
         return
     try:
-        from azure.data.tables import UpdateMode
-        store.get_table_client("notifications").upsert_entity(
-            {"PartitionKey": "global", "RowKey": notification_id, **fields}, mode=UpdateMode.MERGE)
+        store.update_notification(notification_id, fields)
     except Exception:  # noqa: BLE001
         logger.exception("could not record email status")
 
