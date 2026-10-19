@@ -49,7 +49,7 @@ def test_foundry_agent_preferred_then_direct_then_fallback(monkeypatch):
 
     class FakeAgents:
         def __init__(self, ok): self.ok = ok
-        def invoke(self, name, instr, payload, schema):
+        def invoke(self, name, instr, payload, schema, require_tool=False):
             if not self.ok:
                 raise RuntimeError("agent down")
             return schema(x=1)

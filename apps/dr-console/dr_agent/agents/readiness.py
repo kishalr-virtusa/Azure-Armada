@@ -139,7 +139,8 @@ def fallback_summary(checks: list[Check]) -> ReadinessSummary:
 
 def run(checks: list[Check]) -> AgentResult[ReadinessReport]:
     payload = {"checks": [c.model_dump(mode="json") for c in checks]}
-    res = run_agent("readiness", prompt("readiness"), payload, ReadinessSummary, lambda: fallback_summary(checks))
+    res = run_agent("readiness", prompt("readiness"), payload, ReadinessSummary, lambda: fallback_summary(checks),
+                    require_tool=any(c.status != "pass" for c in checks))
     has_fail = any(c.status == "fail" for c in checks)
     report = ReadinessReport(checks=checks, go=res.output.go and not has_fail, summary=res.output.summary,
                              risks=res.output.risks, source=res.source)

@@ -87,7 +87,7 @@ def get_llm() -> Optional[LLM]:
 
 def run_agent(name: str, system_prompt: str, payload: dict | str, schema: Type[T],
               fallback: Callable[[], T], llm: Optional[LLM] = None,
-              validate: Optional[Callable[[T], None]] = None) -> AgentResult[T]:
+              validate: Optional[Callable[[T], None]] = None, require_tool: bool = False) -> AgentResult[T]:
     """Run one agent step. Never raises.
 
     validate: optional extra check on the model output; raise to reject it (the fallback is used instead).
@@ -117,7 +117,7 @@ def run_agent(name: str, system_prompt: str, payload: dict | str, schema: Type[T
         agents = get_agents()
         if agents is not None:
             try:
-                return _accept(agents.invoke(name, system_prompt, payload, schema), "foundry-agent")
+                return _accept(agents.invoke(name, system_prompt, payload, schema, require_tool=require_tool), "foundry-agent")
             except Exception as e:  # noqa: BLE001
                 errors.append(f"foundry-agent {type(e).__name__}: {e}"[:400])
                 log.warning("agent=%s foundry agent failed, trying direct model: %s", name, errors[-1])

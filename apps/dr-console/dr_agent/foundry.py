@@ -143,11 +143,13 @@ class FoundryAgents:
         return aid
 
     # ---------------------------------------------------------------- invocation
-    def invoke(self, name: str, instructions: str, payload: dict | str, schema: Type[T]) -> T:
+    def invoke(self, name: str, instructions: str, payload: dict | str, schema: Type[T], require_tool: bool = False) -> T:
         """Run the Foundry agent once and parse its structured reply. Raises on any failure."""
         aid = self.ensure(name, instructions, schema)
         user = payload if isinstance(payload, str) else json.dumps(payload, default=str, ensure_ascii=False)
         body = {"agent_reference": {"name": aid, "type": "agent_reference"}, "input": user}
+        if require_tool:  # something is wrong: the agent must investigate with at least one tool before answering
+            body["tool_choice"] = "required"
         model = self.reasoning_model if aid.removeprefix(PREFIX) in REASONING_AGENTS and self.reasoning_model else self.model
         idx = trace.emit("agent", f"Azure AI Foundry agent {aid} (version {self._versions.get(aid) or '?'})",
                          f"Model {model} · output must match the {schema.__name__} JSON schema", status="running",
