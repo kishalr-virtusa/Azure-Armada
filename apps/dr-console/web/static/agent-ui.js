@@ -65,8 +65,9 @@
             <button class="trace-jump hide" type="button">New steps below ↓</button>`;
     }
 
-    /** POST to an agent endpoint and show its live activity in `panel` while it runs. Returns the JSON reply. */
-    async function runWithTrace(url, panel, options = {}) {
+    /** POST to an agent endpoint and show its live activity in `panel` while it runs. Returns the JSON reply.
+        `onTrace(trace, elapsedMs)`, if given, receives the finished activity (e.g. to keep it with a chat turn). */
+    async function runWithTrace(url, panel, { onTrace, ...options } = {}) {
         const id = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
         const started = performance.now();
         panel.classList.remove('hide', 'collapsed');
@@ -115,6 +116,7 @@
             await poll();
             finished = true;
             draw();
+            if (onTrace) onTrace(last, performance.now() - started);
         }
     }
 
