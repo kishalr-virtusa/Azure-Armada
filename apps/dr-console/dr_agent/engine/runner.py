@@ -109,6 +109,20 @@ def _probe(target: str) -> dict:
     return r
 
 
+def iaas_report_summary(res: dict) -> str:
+    """What the recovered reports server proved (AsrTestFailover.verify result), as one clause."""
+    src, n, day = res.get("report_source"), res.get("payments_count"), res.get("report_date")
+    err = str(res.get("report_error") or "")[:120]
+    if src == "generated in DR":
+        return (f"the recovered server produced the daily payments report ({n} payments, {day}) in Southeast Asia, "
+                f"live from the database")
+    if src == "cached on replicated disk":
+        why = f"; live database read not possible from the isolated test network: {err}" if err else ""
+        return (f"the recovered server serves the daily payments report from its replicated disk ({n} payments, "
+                f"{day}, generated in {res.get('generated_in_region') or 'Region A'}){why}")
+    return "service verified inside the VM; no payments report available" + (f" ({err})" if err else "")
+
+
 class ExerciseRunner(threading.Thread):
     def __init__(self, exercise_id: str):
         super().__init__(name=f"exercise-{exercise_id}", daemon=True)
@@ -353,7 +367,7 @@ class ExerciseRunner(threading.Thread):
             secs = round((done - parse_dt(m["iaas_started"])).total_seconds(), 1)
             self.update(iaas_recovered_s=secs, iaas_result_json=json.dumps(res))
             self.event("measurement", f"IaaS: Azure Site Recovery brought the reports VM up in Southeast Asia in "
-                                      f"{M.fmt_duration(secs)} (test failover job); service verified inside the VM",
+                                      f"{M.fmt_duration(secs)} (test failover job); {iaas_report_summary(res)}",
                        step.id, {"iaas_recovered_s": secs, "job_done": iso(done), **res})
             return {"iaas_recovered_s": secs, **res}
         if a == "asr_test_cleanup":

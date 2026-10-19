@@ -61,6 +61,11 @@ fi
 
 echo "== 4/4 Smoke test"
 "$DIR/smoke.sh" || echo "WARNING: smoke test reported problems (apps may still be warming up; re-run smoke.sh in 2 min)"
+if [[ "${DEPLOY_IAAS:-true}" == "true" ]]; then
+  # after the smoke test: the payments app has created dbo.transactions, which the read-only SQL user is granted on
+  echo "== Reports VM: read-only SQL user + daily payments report service"
+  "$DIR/reports-vm.sh" setup || echo "WARNING: reports VM setup incomplete; re-run $DIR/reports-vm.sh setup"
+fi
 
 echo
 if [[ "${ENTRA_SIGNIN:-false}" == "true" ]]; then

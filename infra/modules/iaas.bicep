@@ -25,30 +25,12 @@ param vmSize string = 'Standard_B2als_v2' // 2 vCPU / 4 GB; Windows needs >1 GB
 var tags = { project: projectTag, tier: 'iaas' }
 var vmName = 'dra-vm-reports'
 
-// Reports service: a tiny PowerShell HTTP listener on :8080 returning the VM's region (from IMDS), started at boot
-// by a SYSTEM scheduled task. Windows is used because the ASR Linux agent only supports specific kernel builds.
-var setupScript = '''
-New-Item -ItemType Directory -Force -Path C:\reports | Out-Null
-@'
-$listener = New-Object System.Net.HttpListener
-$listener.Prefixes.Add('http://+:8080/')
-$listener.Start()
-function Get-Region { try { Invoke-RestMethod -Headers @{Metadata='true'} -TimeoutSec 2 -Uri 'http://169.254.169.254/metadata/instance/compute/location?api-version=2021-02-01&format=text' } catch { 'unknown' } }
-while ($true) {
-  $ctx = $listener.GetContext()
-  $body = @{ service = 'contoso-reports'; status = 'ok'; host = $env:COMPUTERNAME; region = (Get-Region) } | ConvertTo-Json -Compress
-  $bytes = [Text.Encoding]::UTF8.GetBytes($body)
-  $ctx.Response.ContentType = 'application/json'
-  $ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
-  $ctx.Response.Close()
-}
-'@ | Set-Content -Encoding UTF8 C:\reports\app.ps1
-$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -ExecutionPolicy Bypass -File C:\reports\app.ps1'
-Register-ScheduledTask -TaskName 'ContosoReports' -Action $action -Trigger (New-ScheduledTaskTrigger -AtStartup) -User 'SYSTEM' -RunLevel Highest -Force | Out-Null
-Start-ScheduledTask -TaskName 'ContosoReports'
-Start-Sleep -Seconds 5
-Invoke-RestMethod http://localhost:8080/health | ConvertTo-Json -Compress
-'''
+// Reports service: the Contoso daily payments report (infra/vm/reports/reports-service.ps1). A PowerShell HTTP
+// listener on :8080 (/health, /report/latest, /report/generate) started at boot by a SYSTEM scheduled task, plus
+// daily (00:05 UTC) and hourly report tasks. Windows is used because the ASR Linux agent only supports specific
+// kernel builds. This installs the service only; the read-only SQL credentials are added afterwards by
+// infra/scripts/reports-vm.sh setup (called by up.sh) - until then /report/generate answers 503 "not configured".
+var setupScript = replace(loadTextContent('../vm/reports/install-reports.ps1'), '__SERVICE_B64__', base64(loadTextContent('../vm/reports/reports-service.ps1')))
 
 // ---------------------------------------------------------------- Region A: source VM
 resource vnetA 'Microsoft.Network/virtualNetworks@2024-05-01' = {
@@ -169,14 +151,16 @@ resource vnetB 'Microsoft.Network/virtualNetworks@2024-05-01' = {
   }
 }
 
-// isolated network for test failovers: no peering, no route to production
+// isolated network for test failovers: no peering, no route to production. Default outbound (internet) access is
+// enabled explicitly (newer VNets default to private subnets) so the recovered test VM can reach Azure SQL's public
+// endpoint and generate the payments report live from Region B with its read-only database user.
 resource vnetTest 'Microsoft.Network/virtualNetworks@2024-05-01' = {
   name: 'dra-vnet-sea-test-${suffix}'
   location: locationB
   tags: tags
   properties: {
     addressSpace: { addressPrefixes: [ '10.30.0.0/16' ] }
-    subnets: [ { name: 'default', properties: { addressPrefix: '10.30.1.0/24' } } ]
+    subnets: [ { name: 'default', properties: { addressPrefix: '10.30.1.0/24', defaultOutboundAccess: true } } ]
   }
 }
 

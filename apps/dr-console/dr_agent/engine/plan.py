@@ -22,7 +22,7 @@ ALLOWED_ACTIONS: dict[str, tuple[set[str], str]] = {
     "stop_heartbeat": (set(), "Stop the heartbeat writer."),
     "generate_report": (set(), "Build the exercise report and notify stakeholders."),
     "asr_test_failover": (set(), "IaaS: start an Azure Site Recovery TEST failover of the reports VM into the isolated Region B network (non-disruptive, runs in the background)."),
-    "asr_verify_recovery": ({"timeout_s"}, "IaaS: wait for the ASR test failover, then run a command inside the recovered VM to prove the service answers from Region B."),
+    "asr_verify_recovery": ({"timeout_s"}, "IaaS: wait for the ASR test failover, then run a command inside the recovered VM to prove the reports service answers from Region B and produces the daily payments report (live from the database, else the copy on the replicated disk)."),
     "asr_test_cleanup": (set(), "IaaS: clean up the ASR test failover (deletes the test VM)."),
 }
 
@@ -183,7 +183,7 @@ def default_plan() -> ExercisePlan:
         _step("fb-5", "failback", "Re-enable Region A Traffic Manager endpoint", "network", "automated", "tm_set_endpoint", {"region": "A", "enabled": True}, ["fb-4"], "Endpoint A enabled"),
         _step("fb-6", "failback", "Wait until users are served from Region A again", "app", "automated", "wait_healthy", {"target": "tm", "expect_region": "A", "timeout_s": 900}, ["fb-5"], "TM /health OK from Region A"),
         # IaaS verification runs last so a slow ASR test failover (5-10 min) never holds up the failback
-        _step("iaas-2", "closure", "Verify the recovered reports VM serves from Region B (ASR test failover)", "infra", "automated", "asr_verify_recovery", {"timeout_s": 1200}, ["iaas-1", "fb-6"], "Recovered VM /health OK in Southeast Asia", abort=False),
+        _step("iaas-2", "closure", "Verify the recovered reports VM serves from Region B and produces the daily payments report (ASR test failover)", "infra", "automated", "asr_verify_recovery", {"timeout_s": 1200}, ["iaas-1", "fb-6"], "Recovered VM /health OK in Southeast Asia and daily payments report produced", abort=False),
         _step("iaas-3", "closure", "Clean up the ASR test failover", "infra", "automated", "asr_test_cleanup", deps=["iaas-2"], criteria="Test VM removed", abort=False),
         _step("cl-1", "closure", "Stop heartbeat writer", "dr-agent", "automated", "stop_heartbeat", deps=["fb-6"], criteria="Writer stopped", abort=False),
         _step("cl-2", "closure", "Generate report & notify stakeholders", "dr-agent", "automated", "generate_report", deps=["cl-1"], criteria="Report published", abort=False),
