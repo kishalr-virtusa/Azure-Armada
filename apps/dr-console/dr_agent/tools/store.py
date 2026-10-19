@@ -166,7 +166,8 @@ def add_conversation_turn(conv_id: str, question: str, reply: dict[str, Any], tr
 
 
 def list_conversations(limit: int = 30) -> list[dict[str, Any]]:
-    rows = _query("conversations", "SELECT c.pk, c.title, c.created_at, c.updated_at, c.turns, c.by FROM c "
+    # c["by"]: BY is a reserved word in the Cosmos DB query language
+    rows = _query("conversations", 'SELECT c.pk, c.title, c.created_at, c.updated_at, c.turns, c["by"] FROM c '
                                    "WHERE c.id = 'bbconv'")
     rows.sort(key=lambda r: r.get("updated_at") or "", reverse=True)
     return [{"id": r["pk"], "title": r.get("title") or "", "turns": int(r.get("turns") or 0),

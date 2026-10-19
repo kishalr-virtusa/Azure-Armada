@@ -9,8 +9,11 @@ from azure.cosmos.exceptions import CosmosResourceExistsError, CosmosResourceNot
 from dr_agent.tools import store
 
 # The only query shapes store.py issues; anything else fails loudly so a new query gets a test.
-_QUERY = re.compile(r"SELECT (?:TOP (?P<top>\d+) )?(?P<proj>VALUE COUNT\(1\)|\*|c\.\w+(?:, c\.\w+)*) FROM c"
+_FIELD = r'(?:c\.\w+|c\["\w+"\])'
+_QUERY = re.compile(r"SELECT (?:TOP (?P<top>\d+) )?(?P<proj>VALUE COUNT\(1\)|\*|" + _FIELD + r"(?:, " + _FIELD + r")*) FROM c"
                     r"(?: WHERE c\.id (?P<op>=|>=|>) (?P<rhs>@\w+|'[^']*'))?\s*(?:ORDER BY c\.id (?P<order>ASC|DESC))?")
+_RESERVED = {"BY", "ORDER", "SELECT", "FROM", "WHERE", "VALUE", "TOP", "IN", "AS", "AND", "OR", "NOT", "JOIN", "ASC",
+             "DESC", "BETWEEN", "EXISTS", "LIKE", "NULL", "TRUE", "FALSE", "OFFSET", "LIMIT", "GROUP", "UNDEFINED", "ARRAY"}
 _OPS = {"=": lambda a, b: a == b, ">": lambda a, b: a > b, ">=": lambda a, b: a >= b}
 _etag = itertools.count(1)
 
@@ -70,7 +73,10 @@ class FakeContainer:
             return [len(rows)]
         if m["proj"] == "*":
             return [copy.deepcopy(d) for d in rows]
-        fields = [f[2:] for f in m["proj"].split(", ")]
+        fields = [f[2:] if f.startswith("c.") else f[3:-2] for f in m["proj"].split(", ")]
+        # the real service rejects reserved words as c.<name> (this bit c.by once): they must be written c["..."]
+        bad = [f for f in m["proj"].split(", ") if f.startswith("c.") and f[2:].upper() in _RESERVED]
+        assert not bad, f"reserved word in a Cosmos DB query, write it as c[\"name\"]: {bad}"
         return [{f: d[f] for f in fields if f in d} for d in rows]  # missing fields are omitted, as in Cosmos
 
 
