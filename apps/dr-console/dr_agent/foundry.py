@@ -8,6 +8,13 @@ Registration is idempotent: a hash of (instructions, schema, model) is kept in t
 version is only created when it changes. Plain REST over httpx keeps the dependency set small.
 
 Auth: Entra ID (managed identity in App Service, `az login` locally). The console identity has "Azure AI User".
+
+Environment isolation:
+- DRA_AGENT_PREFIX: agent name prefix. Defaults to "dra-" on App Service (WEBSITE_SITE_NAME is set), otherwise
+  "dra-dev-", so a laptop or eval run gets its own dra-dev-* agents and never touches the production dra-* ones.
+- DRA_REGISTER_AGENTS: "true" (default) lets ensure() create a new agent version when the spec changed; "false"
+  never writes and invokes the latest registered version as-is. Off App Service the production prefix "dra-" is
+  never written, whatever this says.
 """
 from __future__ import annotations
 
@@ -23,13 +30,15 @@ import httpx
 from pydantic import BaseModel
 
 from dr_agent import trace
+from dr_agent.llm import ContentBlocked, DeadlineExceeded, new_usage, request_timeout, retry_delay
 
 log = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 SCOPE = "https://ai.azure.com/.default"
 API_VERSION = "v1"
-PREFIX = "dra-"
+PROD_PREFIX = "dra-"  # the agents the deployed console uses
+DEV_PREFIX = "dra-dev-"
 
 # agent name -> (output schema import path, description shown in the Foundry portal)
 AGENTS: dict[str, tuple[str, str]] = {
@@ -43,14 +52,29 @@ AGENTS: dict[str, tuple[str, str]] = {
 }
 
 
-# agents that need multi-step reasoning run on the reasoning model (REASONING_DEPLOYMENT, e.g. gpt-5-mini)
-REASONING_AGENTS = {"planner", "validator"}
+# agents that need multi-step reasoning run on the reasoning model (REASONING_DEPLOYMENT, e.g. gpt-5-mini); the
+# Validator runs on the fast model because a drill waits on its diagnosis (WS4's validator eval confirms this)
+REASONING_AGENTS = {"planner"}
+# a 400 with one of these, or an incomplete response with reason content_filter, is a content-filter block
+CONTENT_FILTER_MARKERS = ("content_filter", "ResponsibleAIPolicyViolation")
+RESOLVE_CACHE_S = 60.0
+
+
+def agent_prefix() -> str:
+    """DRA_AGENT_PREFIX, else "dra-" on App Service and "dra-dev-" anywhere else."""
+    return os.environ.get("DRA_AGENT_PREFIX") or (PROD_PREFIX if os.environ.get("WEBSITE_SITE_NAME") else DEV_PREFIX)
+
+
+def may_register(prefix: str) -> bool:
+    """Whether this process may create agent versions under `prefix` (see DRA_REGISTER_AGENTS above)."""
+    if prefix == PROD_PREFIX and not os.environ.get("WEBSITE_SITE_NAME"):
+        return False
+    return os.environ.get("DRA_REGISTER_AGENTS", "true").lower() != "false"
 
 
 def agent_id(name: str) -> str:
-    """'planner-retry' -> 'dra-planner' (retries reuse the base agent)."""
-    base = name.split("-")[0]
-    return PREFIX + base
+    """'planner-retry' -> 'dra-planner' (retries reuse the base agent); the prefix comes from agent_prefix()."""
+    return agent_prefix() + name.split("-")[0]
 
 
 def strict_schema(schema: Type[BaseModel]) -> dict:
@@ -67,44 +91,98 @@ class FoundryAgents:
         self._cred = DefaultAzureCredential()
         self._http = httpx.Client(timeout=timeout_s)
         self._ready: dict[str, str] = {}  # agent id -> spec hash registered in this process
-        self._versions: dict[str, str] = {}  # agent id -> Foundry version in use
+        self._versions: dict[str, str] = {}  # agent id -> Foundry version in use (pinned on every invoke)
+        self._hashes: dict[str, str] = {}  # agent id -> spec hash of that version
+        self._resolved: dict[str, tuple[float, str]] = {}  # agent id -> (checked at, spec hash of latest), unpinned mode
+        self._pin = True  # False once the endpoint rejects agent_reference.version
         self._lock = threading.Lock()
 
     def _headers(self) -> dict:
         return {"Authorization": f"Bearer {self._cred.get_token(SCOPE).token}", "Content-Type": "application/json"}
 
-    def _req(self, method: str, path: str, body: Optional[dict] = None, params: Optional[dict] = None) -> httpx.Response:
-        return self._http.request(method, self.endpoint + path, headers=self._headers(), json=body, params=params)
+    def _req(self, method: str, path: str, body: Optional[dict] = None, params: Optional[dict] = None,
+             deadline: Optional[float] = None) -> httpx.Response:
+        """One REST call, timed out at min(time left, 30 s) when a deadline (time.monotonic()) is given.
+        429/500/502/503 is retried once, after retry-after (at most 5 s), if the deadline leaves room for it."""
+        for attempt in range(2):
+            timeout = httpx.USE_CLIENT_DEFAULT if deadline is None else request_timeout(deadline)
+            r = self._http.request(method, self.endpoint + path, headers=self._headers(), json=body, params=params,
+                                   timeout=timeout)
+            delay = retry_delay(r.status_code, r.headers)
+            if attempt or delay is None or (deadline is not None and time.monotonic() + delay + 1 >= deadline):
+                return r
+            log.warning("foundry %s %s: HTTP %d, retrying in %.1fs", method, path, r.status_code, delay)
+            trace.emit("retry", f"Foundry returned HTTP {r.status_code}; retrying once in {delay:.0f}s", status="warn")
+            time.sleep(delay)
+        return r
 
-    def _run_tools(self, aid: str, data: dict) -> dict:
-        """While the agent asks for tools: run them (read-only, allowlisted per agent), send the results back, repeat."""
+    def _post_response(self, aid: str, body: dict, deadline: Optional[float]) -> dict:
+        """POST one Responses API round; raises ContentBlocked when Azure AI Content Safety stopped it."""
+        r = self._req("POST", "/openai/v1/responses", body, deadline=deadline)
+        if r.status_code >= 300:
+            if r.status_code == 400 and any(k in r.text for k in CONTENT_FILTER_MARKERS):
+                raise ContentBlocked(f"agent {aid}: blocked by the content filter: {r.text[:300]}")
+            raise RuntimeError(f"agent {aid} run failed: HTTP {r.status_code} {r.text[:300]}")
+        data = r.json()
+        if data.get("status") == "incomplete" and (data.get("incomplete_details") or {}).get("reason") == "content_filter":
+            raise ContentBlocked(f"agent {aid}: answer stopped by the content filter")
+        return data
+
+    def _run_tools(self, agent: str, aid: str, data: dict, evidence: list[dict], usage: dict,
+                   deadline: Optional[float] = None) -> dict:
+        """While the agent asks for tools: run them (read-only, allowlisted per agent), send the results back, repeat.
+
+        At most MAX_TOOL_CALLS calls run; once the cap is reached, any further calls get an error output and the
+        round is sent with tool_choice "none", so the model must answer with what it has. Malformed arguments become
+        an error output for the model instead of an exception. Each executed call is appended to `evidence` as
+        {tool, args, output}; each response's tokens are added to `usage`."""
         from dr_agent.agents import tools as agent_tools
-        agent, calls_made = aid.removeprefix(PREFIX), 0
-        while _tool_calls(data) and calls_made < agent_tools.MAX_TOOL_CALLS:
+        calls_made = 0
+        while _tool_calls(data):
             outputs = []
             for c in _tool_calls(data):
+                if calls_made >= agent_tools.MAX_TOOL_CALLS:
+                    outputs.append(_tool_output(c, {"error": "tool call limit reached; answer from the evidence you have"}))
+                    continue
                 calls_made += 1
-                label = f"{c.get('name')}({', '.join(str(v) for v in json.loads(c.get('arguments') or '{}').values())})"
+                try:
+                    args = json.loads(c.get("arguments") or "{}")
+                    if not isinstance(args, dict):
+                        raise ValueError("arguments must be a JSON object")
+                except ValueError:
+                    trace.emit("tool", f"AI agent called {c.get('name')} with malformed arguments",
+                               str(c.get("arguments"))[:200], status="fail")
+                    outputs.append(_tool_output(c, {"error": "invalid arguments"}))
+                    continue
+                if deadline is not None and time.monotonic() >= deadline:
+                    raise DeadlineExceeded(f"agent {aid}: deadline reached during tool calls")
+                label = f"{c.get('name')}({', '.join(str(v) for v in args.values())})"
                 idx = trace.emit("tool", f"AI agent called {label}", "read-only investigation chosen by the agent", status="running")
                 started = time.monotonic()
-                out = agent_tools.call(agent, c.get("name", ""), c.get("arguments", "{}"))
+                out = agent_tools.call(agent, c.get("name", ""), json.dumps(args))
                 result = json.loads(out)
                 summary = "; ".join(f"{k}={v}" for k, v in list(result.items())[:4]) if isinstance(result, dict) else str(result)[:200]
                 failed = isinstance(result, dict) and set(result) == {"error"}  # a tool failure; records may carry error=None
                 trace.update(idx, "fail" if failed else "ok", summary[:240], data=result,
                              ms=int((time.monotonic() - started) * 1000))
+                evidence.append({"tool": c.get("name", ""), "args": args, "output": result})
                 outputs.append({"type": "function_call_output", "call_id": c["call_id"], "output": out})
-            r = self._req("POST", "/openai/v1/responses", {"agent_reference": {"name": aid, "type": "agent_reference"},
-                                                          "previous_response_id": data["id"], "input": outputs})
-            if r.status_code >= 300:
-                raise RuntimeError(f"agent {aid} tool round failed: HTTP {r.status_code} {r.text[:300]}")
-            data = r.json()
+            body = {"agent_reference": self._reference(aid), "previous_response_id": data["id"], "input": outputs}
+            capped = calls_made >= agent_tools.MAX_TOOL_CALLS
+            if capped:
+                body["tool_choice"] = "none"
+                trace.emit("tool", f"Tool call limit ({agent_tools.MAX_TOOL_CALLS}) reached",
+                           "the agent must now answer from the evidence it has", status="warn")
+            data = self._post_response(aid, body, deadline)
+            _add_usage(usage, data)
+            if capped:
+                break
         return data
 
     # ---------------------------------------------------------------- registration
-    def ensure(self, name: str, instructions: str, schema: Type[BaseModel]) -> str:
-        """Make sure the Foundry agent exists with exactly this spec; returns the agent id."""
-        aid = agent_id(name)
+    def spec(self, name: str, instructions: str, schema: Type[BaseModel]) -> tuple[dict, str]:
+        """The agent definition this code registers, and its spec hash."""
+        base = name.split("-")[0]
         definition = {
             "kind": "prompt",
             "model": self.model,
@@ -114,64 +192,124 @@ class FoundryAgents:
                                 "schema": strict_schema(schema), "strict": True}},
         }
         from dr_agent.agents import tools as agent_tools
-        tool_defs = agent_tools.definitions(aid.removeprefix(PREFIX))
+        tool_defs = agent_tools.definitions(base)
         if tool_defs:  # read-only investigation tools the agent may call itself
             definition["tools"] = tool_defs
-        if aid.removeprefix(PREFIX) in REASONING_AGENTS and self.reasoning_model:
+        if base in REASONING_AGENTS and self.reasoning_model:
             definition["model"] = self.reasoning_model
             definition.pop("temperature")  # reasoning models only accept the default
             definition["reasoning"] = {"effort": "low"}
-        spec_hash = hashlib.sha256(json.dumps(definition, sort_keys=True).encode()).hexdigest()[:16]
+        return definition, hashlib.sha256(json.dumps(definition, sort_keys=True).encode()).hexdigest()[:16]
+
+    def ensure(self, name: str, instructions: str, schema: Type[BaseModel],
+               deadline: Optional[float] = None) -> tuple[str, str]:
+        """Make sure the Foundry agent exists with exactly this spec; returns (agent id, version to pin)."""
+        base, prefix = name.split("-")[0], agent_prefix()
+        aid = prefix + base
+        definition, spec_hash = self.spec(name, instructions, schema)
         if self._ready.get(aid) == spec_hash:
-            return aid
+            return aid, self._versions.get(aid, "")
         with self._lock:
             if self._ready.get(aid) == spec_hash:
-                return aid
-            r = self._req("GET", f"/agents/{aid}", params={"api-version": API_VERSION})
+                return aid, self._versions.get(aid, "")
+            r = self._req("GET", f"/agents/{aid}", params={"api-version": API_VERSION}, deadline=deadline)
             latest = (r.json().get("versions") or {}).get("latest") or {} if r.status_code == 200 else {}
             self._versions[aid] = str(latest.get("version") or "")
-            if (latest.get("metadata") or {}).get("spec_hash") != spec_hash:
-                base = aid.removeprefix(PREFIX)
+            self._hashes[aid] = (latest.get("metadata") or {}).get("spec_hash") or ""
+            current = self._hashes[aid] == spec_hash
+            if not current and not may_register(prefix):
+                if not latest:
+                    raise RuntimeError(f"agent {aid} is not registered and registration is off for prefix {prefix!r}")
+                log.warning("foundry agent %s spec changed but registration is off; using version %s as-is",
+                            aid, self._versions[aid])
+            elif not current:
                 body = {"definition": definition, "metadata": {"spec_hash": spec_hash, "system": "dr-agent"},
                         "description": AGENTS.get(base, ("", "DR Agent"))[1]}
-                r = self._req("POST", f"/agents/{aid}/versions", body, params={"api-version": API_VERSION})
+                r = self._req("POST", f"/agents/{aid}/versions", body, params={"api-version": API_VERSION},
+                              deadline=deadline)
                 if r.status_code >= 300:
                     raise RuntimeError(f"register {aid} failed: HTTP {r.status_code} {r.text[:300]}")
-                self._versions[aid] = str(r.json().get("version") or "")
+                self._versions[aid], self._hashes[aid] = str(r.json().get("version") or ""), spec_hash
                 log.info("foundry agent %s registered version %s", aid, self._versions[aid])
                 trace.emit("agent", f"Registered new version {self._versions[aid]} of {aid}",
                            "Instructions or output schema changed, so Foundry got a new agent version")
             self._ready[aid] = spec_hash
-        return aid
+        return aid, self._versions[aid]
+
+    def _reference(self, aid: str) -> dict:
+        """agent_reference pinned to the exact version this process registered or found."""
+        ref = {"name": aid, "type": "agent_reference"}
+        if self._pin and self._versions.get(aid):
+            ref["version"] = self._versions[aid]
+        return ref
+
+    def _verify_resolved(self, aid: str, deadline: Optional[float]) -> None:
+        """Unpinned mode: the latest version (looked up at most every 60 s) must still have the spec we pinned."""
+        checked, resolved = self._resolved.get(aid, (0.0, ""))
+        if time.monotonic() - checked > RESOLVE_CACHE_S:
+            r = self._req("GET", f"/agents/{aid}", params={"api-version": API_VERSION}, deadline=deadline)
+            latest = (r.json().get("versions") or {}).get("latest") or {} if r.status_code == 200 else {}
+            resolved = (latest.get("metadata") or {}).get("spec_hash") or ""
+            self._resolved[aid] = (time.monotonic(), resolved)
+        if resolved != self._hashes.get(aid):
+            raise RuntimeError(f"agent {aid}: latest version has spec {resolved or '?'}, expected "
+                               f"{self._hashes.get(aid) or '?'} (version {self._versions.get(aid) or '?'})")
 
     # ---------------------------------------------------------------- invocation
-    def invoke(self, name: str, instructions: str, payload: dict | str, schema: Type[T], require_tool: bool = False) -> T:
-        """Run the Foundry agent once and parse its structured reply. Raises on any failure."""
-        aid = self.ensure(name, instructions, schema)
+    def invoke(self, name: str, instructions: str, payload: dict | str, schema: Type[T], require_tool: bool = False,
+               deadline_s: Optional[float] = None, meta: Optional[dict] = None) -> T:
+        """Run the Foundry agent once, pinned to its exact version, and parse its structured reply. Raises on any
+        failure: ContentBlocked when Azure AI Content Safety stopped the run, DeadlineExceeded when out of time.
+
+        deadline_s: seconds this call may take (every HTTP request is timed out at min(time left, 30 s)).
+        meta: if given, filled with {agent, version, model, usage, response_id, rounds, evidence} as soon as the
+        run has answered, so the caller has them even when the reply then fails to parse.
+        """
+        deadline = None if deadline_s is None else time.monotonic() + deadline_s
+        base = name.split("-")[0]
+        aid, version = self.ensure(name, instructions, schema, deadline=deadline)
+        if not self._pin:
+            self._verify_resolved(aid, deadline)
         user = payload if isinstance(payload, str) else json.dumps(payload, default=str, ensure_ascii=False)
-        body = {"agent_reference": {"name": aid, "type": "agent_reference"}, "input": user}
+        body = {"agent_reference": self._reference(aid), "input": user}
         if require_tool:  # something is wrong: the agent must investigate with at least one tool before answering
             body["tool_choice"] = "required"
-        model = self.reasoning_model if aid.removeprefix(PREFIX) in REASONING_AGENTS and self.reasoning_model else self.model
-        idx = trace.emit("agent", f"Azure AI Foundry agent {aid} (version {self._versions.get(aid) or '?'})",
+        model = self.reasoning_model if base in REASONING_AGENTS and self.reasoning_model else self.model
+        idx = trace.emit("agent", f"Azure AI Foundry agent {aid} (version {version or '?'})",
                          f"Model {model} · output must match the {schema.__name__} JSON schema", status="running",
-                         data={"agent": aid, "version": self._versions.get(aid), "model": model,
+                         data={"agent": aid, "version": version, "model": model,
                                "api": "POST {project}/openai/v1/responses (agent_reference)",
                                "input_chars": len(user), "output_schema": schema.__name__})
         started = time.monotonic()
-        r = self._req("POST", "/openai/v1/responses", body)
+        usage, evidence = new_usage(), []
+        try:
+            try:
+                data = self._post_response(aid, body, deadline)
+            except RuntimeError as e:
+                if isinstance(e, ContentBlocked) or not (self._pin and _version_rejected(str(e))):
+                    raise
+                # the endpoint does not take agent_reference.version: run unpinned, checking the spec instead
+                log.warning("foundry rejects agent_reference.version; verifying spec_hash per call instead: %s", e)
+                self._pin = False
+                self._verify_resolved(aid, deadline)
+                body["agent_reference"] = self._reference(aid)
+                data = self._post_response(aid, body, deadline)
+            _add_usage(usage, data)
+            data = self._run_tools(base, aid, data, evidence, usage, deadline)
+        except Exception as e:  # noqa: BLE001
+            why = ("Blocked by Azure AI Content Safety (Prompt Shields)" if isinstance(e, ContentBlocked)
+                   else f"{type(e).__name__}: {e}"[:300])
+            trace.update(idx, "fail", why, ms=int((time.monotonic() - started) * 1000))
+            raise
         ms = int((time.monotonic() - started) * 1000)
-        if r.status_code >= 300:
-            trace.update(idx, "fail", f"HTTP {r.status_code}", ms=ms)
-            raise RuntimeError(f"agent {aid} run failed: HTTP {r.status_code} {r.text[:300]}")
-        data = r.json()
-        data = self._run_tools(aid, data)
-        usage = data.get("usage") or {}
-        reasoning = (usage.get("output_tokens_details") or {}).get("reasoning_tokens")
-        trace.update(idx, "ok", f"Answered in {ms / 1000:.1f}s · {usage.get('input_tokens', '?')} tokens in, "
-                                f"{usage.get('output_tokens', '?')} out" + (f" ({reasoning} reasoning)" if reasoning else ""),
-                     data={"agent": aid, "version": self._versions.get(aid), "model": data.get("model") or model,
-                           "response_id": data.get("id"), "status": data.get("status"), "usage": usage}, ms=ms)
+        reasoning = usage["reasoning_tokens"]
+        info = {"agent": aid, "version": version, "model": data.get("model") or model,
+                "usage": usage, "response_id": data.get("id"), "rounds": usage["rounds"]}
+        if meta is not None:
+            meta.update(info, evidence=evidence)
+        trace.update(idx, "ok", f"Answered in {ms / 1000:.1f}s · {usage['input_tokens']} tokens in, "
+                                f"{usage['output_tokens']} out" + (f" ({reasoning} reasoning)" if reasoning else ""),
+                     data={**info, "via": "foundry-agent", "status": data.get("status")}, ms=ms)
         text = "".join(c.get("text", "") for item in data.get("output", []) if item.get("type") == "message"
                        for c in item.get("content", []) if c.get("type") == "output_text")
         if not text:
@@ -181,6 +319,25 @@ class FoundryAgents:
 
 def _tool_calls(data: dict) -> list[dict]:
     return [o for o in data.get("output", []) if o.get("type") == "function_call"]
+
+
+def _tool_output(call: dict, result: dict) -> dict:
+    return {"type": "function_call_output", "call_id": call["call_id"], "output": json.dumps(result)}
+
+
+def _version_rejected(error: str) -> bool:
+    """A 400 about agent_reference.version (the endpoint predates version pinning)."""
+    return "HTTP 400" in error and "version" in error.lower() and "api-version" not in error.lower()
+
+
+def _add_usage(total: dict, data: dict) -> None:
+    """Add one Responses API reply's usage to `total`; a reply without usage still counts as a round."""
+    u = data.get("usage") or {}
+    total["rounds"] += 1
+    total["input_tokens"] += u.get("input_tokens") or 0
+    total["output_tokens"] += u.get("output_tokens") or 0
+    total["cached_tokens"] += (u.get("input_tokens_details") or {}).get("cached_tokens") or 0
+    total["reasoning_tokens"] += (u.get("output_tokens_details") or {}).get("reasoning_tokens") or 0
 
 
 _client: Optional[FoundryAgents] = None
@@ -209,7 +366,7 @@ def register_all() -> dict[str, str]:
     out = {}
     for name, (schema_name, _) in AGENTS.items():
         try:
-            out[name] = client.ensure(name, prompt(name), getattr(models, schema_name))
+            out[name] = client.ensure(name, prompt(name), getattr(models, schema_name))[0]
         except Exception as e:  # noqa: BLE001
             log.warning("foundry registration of %s failed: %s", name, e)
             out[name] = f"error: {e}"[:200]

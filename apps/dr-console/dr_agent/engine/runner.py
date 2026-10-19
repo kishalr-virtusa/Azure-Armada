@@ -278,9 +278,9 @@ class ExerciseRunner(threading.Thread):
         self.clear_command()  # a stale retry/rollback from an earlier failure must not approve this one unseen
         recent = store.get_events(self.xid)[-15:]
         diag = validator.run(step, err, recent, {"A": _safe(lambda: _probe("A")), "B": _safe(lambda: _probe("B")),
-                                                 "tm": _safe(lambda: _probe("tm"))})
+                                                 "tm": _safe(lambda: _probe("tm"))}, deadline_s=VALIDATOR_DEADLINE_S)
         self.update(status="paused_failed", failed_step=step.id, diagnosis_json=diag.output.model_dump_json(),
-                    diagnosis_source=diag.source, diagnosis_via=diag.via)
+                    diagnosis_source=diag.source, diagnosis_via=diag.via, diagnosis_version=diag.agent_version)
         self.event("diagnosis", diag.output.likely_cause, step.id, diag.output.model_dump())
         self.notify("failure", f"Step failed: {step.title}",
                     f"{diag.output.likely_cause} Recommended: {diag.output.recommended_action}.")
@@ -346,6 +346,13 @@ class ExerciseRunner(threading.Thread):
             return self.stop_heartbeat()
         if a == "asr_test_failover":
             from dr_agent.tools.azure_asr import AsrTestFailover
+            m = self.meta()
+            if m.get("iaas_started") and m.get("iaas_operation"):
+                # resumed after a console restart: the job is already running in Azure, so only watch it again
+                if not m.get("iaas_failover_done"):
+                    threading.Thread(target=self._watch_asr, args=(m["iaas_operation"],), daemon=True).start()
+                self.event("info", "ASR test failover already started before the restart; re-attached to its job", step.id)
+                return {"started": m["iaas_started"], "resumed": True}
             started = utcnow()
             res = AsrTestFailover.from_env().start()
             self.update(iaas_started=started, iaas_operation=res.get("operation") or "", iaas_failover_done="")
@@ -642,6 +649,7 @@ ENDPOINTS = {"A": "endpoint-a", "B": "endpoint-b"}
 PROBE_INTERVAL_MEASURING_S = 1    # RTO is measured to about one probe interval
 HEARTBEAT_INTERVAL_S = 1.0        # RPO resolution: one confirmed write per second
 FIX_PARAMS = {"tm_set_endpoint": {"region", "enabled"}, "start_webapp": {"region"}}
+VALIDATOR_DEADLINE_S = 25         # a paused drill waits on the diagnosis: the Validator must answer fast
 
 
 def check_fix(action: str, params: dict, phase: str) -> Optional[str]:

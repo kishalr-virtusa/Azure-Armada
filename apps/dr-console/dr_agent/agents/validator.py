@@ -27,8 +27,10 @@ def fallback(step: PlanStep, error: str) -> Diagnosis:
                      recommended_action=action, fix_action="none", fix_params=[])
 
 
-def run(step: PlanStep, error: str, recent_events: list[dict], probes: dict) -> AgentResult[Diagnosis]:
+def run(step: PlanStep, error: str, recent_events: list[dict], probes: dict,
+        deadline_s: float | None = None) -> AgentResult[Diagnosis]:
     payload = {"failed_step": step.model_dump(), "error": error,
                "recent_events": [{k: e.get(k) for k in ("ts", "kind", "step_id", "message")} for e in recent_events],
                "probes": probes}
-    return run_agent("validator", prompt("validator"), payload, Diagnosis, lambda: fallback(step, error), require_tool=True)
+    return run_agent("validator", prompt("validator"), payload, Diagnosis, lambda: fallback(step, error), require_tool=True,
+                     deadline_s=deadline_s)
