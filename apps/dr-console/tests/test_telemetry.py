@@ -71,9 +71,9 @@ def _foundry(monkeypatch, responses):
     from dr_agent.agents import tools as agent_tools
     c = object.__new__(foundry.FoundryAgents)
     c.endpoint, c.model, c.reasoning_model = "https://p", "gpt-4.1-mini", ""
-    c._ready, c._versions, c._lock = {}, {}, threading.Lock()
+    c._ready, c._versions, c._hashes, c._resolved, c._pin, c._lock = {}, {}, {}, {}, True, threading.Lock()
 
-    def req(method, path, body=None, params=None):
+    def req(method, path, body=None, params=None, deadline=None):
         if method == "GET":
             return FakeResp(200, {"versions": {"latest": {"version": "8", "metadata": {}}}})
         if path.endswith("/versions"):

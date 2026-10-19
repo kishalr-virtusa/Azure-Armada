@@ -157,7 +157,8 @@ class FoundryAgents:
                 if deadline is not None and time.monotonic() >= deadline:
                     raise DeadlineExceeded(f"agent {aid}: deadline reached during tool calls")
                 label = f"{c.get('name')}({', '.join(str(v) for v in args.values())})"
-                idx = trace.emit("tool", f"AI agent called {label}", "read-only investigation chosen by the agent", status="running")
+                idx = trace.emit("tool", f"AI agent called {label}", "read-only investigation chosen by the agent", status="running",
+                                 data={"tool": c.get("name", "")})
                 started = time.monotonic()
                 out = agent_tools.call(agent, c.get("name", ""), json.dumps(args))
                 result = json.loads(out)

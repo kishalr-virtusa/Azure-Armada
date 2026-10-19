@@ -266,7 +266,8 @@ def run_agent(name: str, system_prompt: str, payload: dict | str, schema: Type[T
             # the direct path reports no token usage yet; it counts as one round
             usage["rounds"] += 1
             meta.update(model=model)
-            idx = trace.emit("agent", f"Azure OpenAI deployment {model or 'model'} (direct)", status="running")
+            idx = trace.emit("agent", f"Azure OpenAI deployment {model or 'model'} (direct)", status="running",
+                             data={"agent": agent_id(name)})
             t0 = time.monotonic()
             try:
                 try:
