@@ -76,3 +76,52 @@ def test_recent_payments_never_blocks_and_tolerates_errors(monkeypatch):
             break
         threading.Event().wait(0.02)
     assert service._pay_cache["busy"] is False and service._pay_cache["v"] == []
+
+
+# ------------------------------------------------------------------ announced payments (instant dots)
+def _fresh_cache(monkeypatch, rows):
+    import time as _t
+    monkeypatch.setattr(service, "_pay_cache", {"t": _t.monotonic() + 3600, "v": rows, "busy": False})
+    monkeypatch.setattr(service, "_pushed", {})
+
+
+def test_announced_payment_shows_before_the_database_read(monkeypatch):
+    _fresh_cache(monkeypatch, [{"id": 7, "amount": 15.0, "created_at": "2026-10-19T08:00:01+00:00",
+                                "region": "East Asia", "served": "A"}])
+    assert service.push_payment({"id": 9, "amount": "42.5", "created_at": "2026-10-19T08:00:05", "region": "East Asia"})
+    rows = service.recent_payments()
+    assert [r["id"] for r in rows] == [9, 7]
+    assert rows[0] == {"id": 9, "amount": 42.5, "created_at": "2026-10-19T08:00:05+00:00",
+                       "region": "East Asia", "served": "A"}
+
+
+def test_announced_payment_the_database_never_confirms_expires(monkeypatch):
+    _fresh_cache(monkeypatch, [])
+    service.push_payment({"id": 9, "amount": 42.5, "created_at": "2026-10-19T08:00:05Z", "region": "Southeast Asia"})
+    service._pushed[9]["_at"] -= service.PUSH_TRUST_S + 1
+    service._pay_cache["t"] = __import__("time").monotonic() + 3600  # no new read started by the push
+    assert service.recent_payments() == []
+
+
+def test_bad_announcements_are_rejected(monkeypatch):
+    _fresh_cache(monkeypatch, [])
+    for bad in [{}, {"id": "x", "amount": 1, "created_at": "2026-10-19T08:00:05", "region": "East Asia"},
+                {"id": 1, "amount": -5, "created_at": "2026-10-19T08:00:05", "region": "East Asia"},
+                {"id": 1, "amount": 5, "created_at": "nope", "region": "East Asia"},
+                {"id": 1, "amount": 5, "created_at": "2026-10-19T08:00:05", "region": "<script>"}, None]:
+        assert service.push_payment(bad) is False
+    assert service._pushed == {}
+
+
+def test_pay_event_endpoint_requires_the_access_code(monkeypatch):
+    from fastapi.testclient import TestClient
+    from web.main import app
+    monkeypatch.setenv("APP_ACCESS_CODE", "team-code")
+    _fresh_cache(monkeypatch, [])
+    c = TestClient(app)
+    body = {"id": 5, "amount": 10, "created_at": "2026-10-19T08:00:05", "region": "East Asia"}
+    assert c.post("/public/pay-event", json=body).status_code == 403
+    assert c.post("/public/pay-event", json=body, headers={"X-Access-Code": "wrong"}).status_code == 403
+    assert c.post("/public/pay-event", json=body, headers={"X-Access-Code": "team-code"}).json() == {"ok": True}
+    monkeypatch.delenv("APP_ACCESS_CODE")
+    assert c.post("/public/pay-event", json=body, headers={"X-Access-Code": ""}).status_code == 403

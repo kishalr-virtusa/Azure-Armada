@@ -1,8 +1,10 @@
 """DR Agent Console: FastAPI app (pages + JSON API). Run: gunicorn -k uvicorn.workers.UvicornWorker web.main:app"""
 from __future__ import annotations
 
+import hmac
 import json
 import logging
+import os
 import secrets
 from pathlib import Path
 from urllib.parse import urlencode
@@ -143,6 +145,21 @@ async def public_access_mode():
     data = await run_in_threadpool(service.get_access)
     return JSONResponse({"public": data["public"], "public_until": data["public_until"]},
                         headers={"Cache-Control": "no-store"})
+
+
+@app.post("/public/pay-event")
+async def public_pay_event(request: Request):
+    """Contoso Payments announces a payment the database just confirmed (server to server, with the team access
+    code), so the live map shows it within a second."""
+    code = os.environ.get("APP_ACCESS_CODE", "")
+    if not code or not hmac.compare_digest(request.headers.get("x-access-code", ""), code):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        body = None
+    ok = isinstance(body, dict) and service.push_payment(body)
+    return JSONResponse({"ok": ok}, status_code=200 if ok else 400)
 
 
 @app.get("/login", response_class=HTMLResponse)

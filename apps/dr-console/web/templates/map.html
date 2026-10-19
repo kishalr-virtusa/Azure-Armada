@@ -484,7 +484,7 @@
                 state = d; render(d); drawChart(d); handlePayments(d);
             }
         } catch (e) { /* keep last state */ }
-        setTimeout(poll, 2000);
+        setTimeout(poll, 1000);
     }
     poll();
 })();

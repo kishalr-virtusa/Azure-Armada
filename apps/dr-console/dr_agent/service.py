@@ -221,15 +221,56 @@ def _refresh_payments() -> None:
         _pay_cache["busy"] = False
 
 
+# Payments announced by Contoso Payments the moment the database confirmed them, so the map's dot flies within
+# a second of the tap. The database read stays the source of truth: an announced payment the database does not
+# show within PUSH_TRUST_S (e.g. a write lost in a failover) disappears again.
+_pushed: dict[int, dict] = {}
+PUSH_TRUST_S = 30.0
+
+
+def push_payment(p: Any) -> bool:
+    try:
+        pid, amount, region = int(p["id"]), round(float(p["amount"]), 2), str(p.get("region") or "")
+        t = datetime.fromisoformat(str(p["created_at"]).replace("Z", "+00:00"))
+    except (KeyError, TypeError, ValueError):
+        return False
+    if pid <= 0 or not 0 < amount < 1_000_000 or region not in _REGION_KEY:
+        return False
+    t = (t if t.tzinfo else t.replace(tzinfo=timezone.utc)).astimezone(timezone.utc)
+    with _pay_lock:
+        _pushed[pid] = {"id": pid, "amount": amount, "created_at": t.isoformat(), "region": region,
+                        "served": _REGION_KEY[region], "_at": time.monotonic()}
+        for old in sorted(_pushed)[:-30]:
+            _pushed.pop(old, None)
+    _pay_cache["t"] = 0.0  # confirm it from the database on the next look
+    return True
+
+
 def recent_payments() -> list[dict]:
     """Cached (~2 s) payments that never block the map: a stale cache starts one background read and the
-    last answer is returned at once (a hung SQL login during a failover cannot slow the map down)."""
+    last answer is returned at once (a hung SQL login during a failover cannot slow the map down).
+    Payments announced by the app since the last read are merged in."""
     if time.monotonic() - _pay_cache["t"] >= PAYMENTS_MAX_AGE_S:
         with _pay_lock:
             if not _pay_cache["busy"] and time.monotonic() - _pay_cache["t"] >= PAYMENTS_MAX_AGE_S:
                 _pay_cache["busy"] = True
                 threading.Thread(target=_refresh_payments, name="live-map-payments", daemon=True).start()
-    return list(_pay_cache["v"])
+    rows = {p["id"]: p for p in _pay_cache["v"]}
+    now = time.monotonic()
+    with _pay_lock:
+        for pid, p in list(_pushed.items()):
+            if pid in rows or now - p["_at"] > PUSH_TRUST_S:
+                _pushed.pop(pid, None)
+            else:
+                rows[pid] = {k: v for k, v in p.items() if k != "_at"}
+    return sorted(rows.values(), key=lambda p: p["id"], reverse=True)[:30]
+
+
+def _with_payments(v: dict) -> dict:
+    pays = _safe(recent_payments)
+    pays = pays if isinstance(pays, list) else []
+    return {**v, "payments": pays, "last_payment_id": pays[0]["id"] if pays else None,
+            "server_time": datetime.now(timezone.utc).isoformat()}
 
 
 def live_map() -> dict:
@@ -240,8 +281,8 @@ def live_map() -> dict:
             _map_cache["thread"] = threading.Thread(target=_map_refresher, name="live-map", daemon=True)
             _map_cache["thread"].start()
     if not _map_cache["v"] or time.monotonic() - _map_cache["t"] > 5:  # first look after an idle spell: fresh, not stale
-        return _compute_live_map()
-    return _map_cache["v"]
+        return _with_payments(_compute_live_map())
+    return _with_payments(_map_cache["v"])  # payments are always current: a tap on a phone shows within a poll
 
 
 def _map_refresher() -> None:

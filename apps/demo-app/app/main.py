@@ -9,6 +9,7 @@ import logging
 import threading
 import time
 from datetime import datetime, timezone
+import httpx
 
 from fastapi import FastAPI, Query, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -165,6 +166,23 @@ def _device(request: Request) -> str | None:
     return d if _DEVICE_RE.match(d) else None
 
 
+# The DR console's live map is told about each confirmed payment at once (its database read lags by seconds).
+_PAY_EVENT_URL = DR_LIVE_URL.replace("/public/live", "/public/pay-event") if DR_LIVE_URL.endswith("/public/live") else ""
+
+
+def _announce(txn: dict) -> None:
+    if not (_PAY_EVENT_URL and _ACCESS_CODE):
+        return
+
+    def send():
+        try:
+            httpx.post(_PAY_EVENT_URL, json={k: txn.get(k) for k in ("id", "amount", "created_at", "region")},
+                       headers={"X-Access-Code": _ACCESS_CODE}, timeout=3)
+        except Exception as e:  # noqa: BLE001 - the map falls back to its database read
+            logger.info(f"pay-event not delivered: {e}")
+    threading.Thread(target=send, name="pay-event", daemon=True).start()
+
+
 @app.post("/api/txn")
 def create_transaction(request: Request):
     """Create a new random transaction."""
@@ -173,6 +191,7 @@ def create_transaction(request: Request):
         amount = round(random.uniform(10, 500), 2)
         txn = db.insert_transaction(amount, REGION_NAME, _device(request))
         logger.info(f"Transaction created: {txn['id']} for ${amount}")
+        _announce(txn)
         return txn
     except Exception as e:
         logger.error(f"Failed to create transaction: {e}")
