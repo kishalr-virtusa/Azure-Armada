@@ -554,7 +554,8 @@ def review_runbook() -> dict:
     trace.emit("input", f"Runbook {RUNBOOK_PATH.name}", f"{len(md.splitlines())} lines of markdown")
     inv = _inventory_summary()
     res = runbook.run(md, inv)
-    meta = {"source": res.source, "via": res.via, "agent_version": res.agent_version, "at": _now_iso()}
+    meta = {"source": res.source, "via": res.via, "agent_version": res.agent_version, "grounding": res.grounding,
+            "at": _now_iso()}
     saved = res.output.model_dump()
     raw = json.dumps(saved)
     if len(raw) > 30000:  # Azure Table string properties hold ~32K characters; keep valid JSON by shortening the long text

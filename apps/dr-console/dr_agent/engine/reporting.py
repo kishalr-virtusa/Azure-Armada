@@ -146,5 +146,6 @@ def build_report(xid: str) -> str:
         approvals=m.get("approvals_json", ""), grounding=grounding_note(res.grounding))
     url = store.upload_report(xid, html)
     store.upsert_exercise(xid, {"report_url": url, "remediation_json": json.dumps([r.model_dump() for r in narrative.remediation]),
-                                "report_grounding_json": json.dumps(res.grounding)})
+                                "report_grounding_json": json.dumps(res.grounding),
+                                "report_agent_version": res.agent_version, "report_via": res.via})
     return url
