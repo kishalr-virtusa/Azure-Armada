@@ -1,6 +1,6 @@
 import json
-import threading
 
+import httpx
 import pytest
 from pydantic import BaseModel
 
@@ -199,29 +199,21 @@ def test_prod_prefix_is_never_registered_off_app_service(monkeypatch):
     assert may_register("dra-")
 
 
-class FakeResp:
-    def __init__(self, status, body):
-        self.status_code, self._body, self.text = status, body, json.dumps(body)
-
-    def json(self):
-        return self._body
-
-
 def _foundry_client(monkeypatch, responses, registered_hash=None):
     """A FoundryAgents with no Azure: requests are recorded and answered from `responses` (POST /responses)."""
     from dr_agent import foundry
-    c = object.__new__(foundry.FoundryAgents)
-    c.endpoint, c.model, c.reasoning_model = "https://p", "gpt-4.1-mini", ""
-    c._ready, c._versions, c._lock, c.requests = {}, {}, threading.Lock(), []
 
-    def req(method, path, body=None, params=None):
-        c.requests.append((method, path, body))
-        if method == "GET":
-            return FakeResp(200, {"versions": {"latest": {"version": "7", "metadata": {"spec_hash": registered_hash}}}})
-        if path.endswith("/versions"):
-            return FakeResp(200, {"version": "8"})
-        return FakeResp(200, responses.pop(0))
-    c._req = req
+    def handler(request):
+        body = json.loads(request.content) if request.content else None
+        c.requests.append((request.method, request.url.path.removeprefix("/api"), body))
+        if request.method == "GET":
+            return httpx.Response(200, json={"versions": {"latest": {"version": "7", "metadata": {"spec_hash": registered_hash}}}})
+        if request.url.path.endswith("/versions"):
+            return httpx.Response(200, json={"version": "8"})
+        return httpx.Response(200, json=responses.pop(0))
+    c = foundry.FoundryAgents("https://p/api", "gpt-4.1-mini")
+    c._cred = type("Cred", (), {"get_token": lambda self, scope: type("T", (), {"token": "t"})()})()
+    c._http, c.requests = httpx.Client(transport=httpx.MockTransport(handler)), []
     return c
 
 

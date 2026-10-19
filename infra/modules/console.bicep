@@ -248,6 +248,11 @@ resource consoleApp 'Microsoft.Web/sites@2023-01-01' = {
           value: foundryProjectEndpoint
         }
         {
+          // the deployed console owns the production agents; laptops and eval runs default to dra-dev-*
+          name: 'DRA_AGENT_PREFIX'
+          value: 'dra-'
+        }
+        {
           name: 'AZURE_SUBSCRIPTION_ID'
           value: subscription().subscriptionId
         }

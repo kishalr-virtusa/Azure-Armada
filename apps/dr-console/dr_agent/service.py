@@ -401,7 +401,8 @@ def recommend_strategy() -> dict:
     res = architect.run(prof, _inventory_summary())
     from dr_agent.tools.pricing import deployed_monthly_usd
     deployed = _safe(deployed_monthly_usd)
-    meta = {"source": res.source, "via": res.via, "at": _now_iso(), "deployed_cost": deployed if "error" not in deployed else None}
+    meta = {"source": res.source, "via": res.via, "agent_version": res.agent_version, "at": _now_iso(),
+            "deployed_cost": deployed if "error" not in deployed else None}
     store.upsert_exercise(PHASE1, {"strategy_json": res.output.model_dump_json(), "strategy_meta_json": json.dumps(meta)})
     return {**res.output.model_dump(), **meta}
 
@@ -468,7 +469,7 @@ def check_readiness() -> dict:
                + (" (any fail forces NO-GO, whatever the agent says)" if n_fail else ""),
                status="fail" if n_fail else "ok")
     res = readiness.run(checks)
-    meta = {"source": res.source, "via": res.via, "at": _now_iso()}
+    meta = {"source": res.source, "via": res.via, "agent_version": res.agent_version, "at": _now_iso()}
     store.upsert_exercise(PHASE1, {"readiness_json": res.output.model_dump_json(), "readiness_meta_json": json.dumps(meta)})
     return {**res.output.model_dump(mode="json"), **meta, "fixable": _fixable(res.output)}
 
@@ -553,7 +554,7 @@ def review_runbook() -> dict:
     trace.emit("input", f"Runbook {RUNBOOK_PATH.name}", f"{len(md.splitlines())} lines of markdown")
     inv = _inventory_summary()
     res = runbook.run(md, inv)
-    meta = {"source": res.source, "via": res.via, "at": _now_iso()}
+    meta = {"source": res.source, "via": res.via, "agent_version": res.agent_version, "at": _now_iso()}
     saved = res.output.model_dump()
     raw = json.dumps(saved)
     if len(raw) > 30000:  # Azure Table string properties hold ~32K characters; keep valid JSON by shortening the long text
@@ -575,8 +576,8 @@ def generate_plan() -> dict:
                f"{len(readiness.risks) if readiness else 0} readiness risks; allowlisted actions and the mandatory safe sequence")
     res = planner.run(prof, strategy, readiness, _inventory_summary())
     store.upsert_exercise(DRAFT, {"plan_json": res.output.model_dump_json(), "source": res.source, "via": res.via,
-                                  "plan_at": _now_iso()})
-    return {**res.output.model_dump(), "source": res.source, "via": res.via}
+                                  "agent_version": res.agent_version, "plan_at": _now_iso()})
+    return {**res.output.model_dump(), "source": res.source, "via": res.via, "agent_version": res.agent_version}
 
 
 def get_draft_plan() -> dict:
@@ -584,8 +585,8 @@ def get_draft_plan() -> dict:
     raw = row.get("plan_json")
     if not raw:
         return {}
-    return {**json.loads(raw), "source": row.get("source"), "via": row.get("via"),
-            "at": row.get("plan_at"), "trace": json.loads(row["plan_trace_json"]) if row.get("plan_trace_json") else None}
+    return {**json.loads(raw), "source": row.get("source"), "via": row.get("via"), "at": row.get("plan_at"),
+            "agent_version": row.get("agent_version"), "trace": json.loads(row["plan_trace_json"]) if row.get("plan_trace_json") else None}
 
 
 LOAD_WRITES_PER_S = 20  # "under payment load" option: confirmed database writes per second during the drill
@@ -651,6 +652,7 @@ def get_exercise_view(xid: str) -> dict:
         "diagnosis": json.loads(m["diagnosis_json"]) if m.get("diagnosis_json") and raw_status == "paused_failed" else None,
         "report_url": m.get("report_url"), "error": m.get("error"), "running": runner.is_running(xid),
         "diagnosis_source": m.get("diagnosis_source"), "diagnosis_via": m.get("diagnosis_via"),
+        "diagnosis_version": m.get("diagnosis_version") or None,
         "chaos_armed": str(m.get("chaos_armed")).lower() == "true", "chaos_injected": m.get("chaos_injected") or None,
     }
 
