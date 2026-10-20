@@ -1,0 +1,14 @@
+{
+ "_note": "Frozen service.live_map() for the get_current_state tool: the steady state after the latest recorded drill (both regions healthy, East Asia serving and SQL primary). Hand-written to match records.json; live probes are not part of the record snapshot.",
+ "live_map": {
+  "server_time": "2026-10-19T14:12:41+00:00",
+  "serving": "A",
+  "primary": "A",
+  "replication": "CATCH_UP",
+  "regions": {
+   "A": {"healthy": true, "app_state": "Running", "sql_role": "Primary", "tm_enabled": true, "reason": null},
+   "B": {"healthy": true, "app_state": "Running", "sql_role": "Secondary", "tm_enabled": true, "reason": null}
+  },
+  "drill": {"id": "ex-20261019-105207", "status": "completed", "running": false, "step": null}
+ }
+}
