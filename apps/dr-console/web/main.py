@@ -21,7 +21,7 @@ from dr_agent import service
 from web import auth
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-log = logging.getLogger("dr-console")
+log = logging.getLogger("dr_agent.web")  # under dr_agent: exported to App Insights with tracebacks
 
 BASE = Path(__file__).parent
 app = FastAPI(title="DR Agent Console", docs_url=None, redoc_url=None, openapi_url=None)
