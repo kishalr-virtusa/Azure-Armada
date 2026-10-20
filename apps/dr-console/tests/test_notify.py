@@ -39,3 +39,16 @@ def test_all_channels_down_never_raises(monkeypatch):
     monkeypatch.setattr(n, "_record", lambda *a: None)
     monkeypatch.setattr(n, "_send_via_resend", lambda *a: (_ for _ in ()).throw(RuntimeError("down")))
     assert n.deliver_email("failure", "t", "b")["email_sent"] is False
+
+
+def test_acs_channel_only_when_really_configured(monkeypatch):
+    from dr_agent.config import config
+    from dr_agent.tools import notify
+    monkeypatch.setattr(notify, "_resend_key", lambda: "")
+    monkeypatch.setattr(config, "appinsights_connection_string", "")
+    for conn, sender, expected in [("placeholder", "", []), ("endpoint=https://x.communication.azure.com/;accesskey=k", "", []),
+                                   ("placeholder", "DoNotReply@x.azurecomm.net", []),
+                                   ("endpoint=https://x.communication.azure.com/;accesskey=k", "DoNotReply@x.azurecomm.net", ["acs"])]:
+        monkeypatch.setattr(config, "acs_connection_string", conn)
+        monkeypatch.setattr(config, "acs_sender", sender)
+        assert notify.email_channels() == expected

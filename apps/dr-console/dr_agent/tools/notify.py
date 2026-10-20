@@ -68,7 +68,8 @@ def notify(
 def email_channels() -> list[str]:
     """Configured channels in priority order: ACS (if allowed) -> Resend (seconds) -> Azure Monitor (1-3 min)."""
     ch = []
-    if config.acs_connection_string:
+    # ACS only when it is really set up: a placeholder secret or a missing sender would fail on every event
+    if config.acs_sender and config.acs_connection_string.lower().startswith("endpoint="):
         ch.append("acs")
     if _resend_key():
         ch.append("resend")
