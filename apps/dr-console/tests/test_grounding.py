@@ -267,3 +267,16 @@ def test_report_footer_and_exercise_row_carry_the_narrative_check(cosmos, monkey
     assert "Narrative verified against the measurements" in uploaded["html"]
     assert reporting.grounding_note({}) == "" and "not supported: x" in reporting.grounding_note(
         {"checked": 2, "supported": 1, "unsupported": ["x"], "verified": False})
+
+
+def test_a_difference_between_drills_may_match_a_recorded_change_but_not_the_metric_itself():
+    # live false positive from drill ex-20261019-162843: the reporter's "+8.5 seconds" was the recorded segment change
+    from dr_agent.agents import grounding as g
+    f = g.extract_facts({"rto_s": 40.29, "rto_target_s": 1800,
+                         "history": {"biggest_segment_change": {"segment": "DNS", "delta_s": 8.523}}})
+    ok = ["RTO regressed, mainly due to DNS and health checks segment delay (+8.5 seconds).",
+          "RTO went up by 8.5 seconds.", "The DNS step was 8.5 s slower than last time (RTO)."]
+    for text in ok:
+        assert g.check_text(text, f)[1] == [], text
+    assert g.check_text("The RTO was 8.5 seconds.", f)[1] == ['"8.5 seconds" (RTO)']
+    assert g.check_text("RTO was 40.29 seconds and met the target RTO of 30 seconds.", f)[1] == ['"30 seconds" (target RTO)']

@@ -178,6 +178,7 @@ class Claim:
     number: float = 0.0  # a duration's number as written
     metric: str = ""  # rto | rpo | failback: the metric this figure is quoted for
     target: bool = False  # quoted as a target ("target RTO of ...")
+    change: bool = False  # quoted as a difference ("+8.5 s", "by 8.5 s", "8.5 s slower"), not as the metric itself
     year: Optional[int] = None
 
 
@@ -186,6 +187,12 @@ def _mask(text: str, spans: list[tuple[int, int]]) -> str:
     for a, b in spans:
         chars[a:b] = " " * (b - a)
     return "".join(chars)
+
+
+# a duration quoted as a difference between drills: "+8.5 seconds", "(+8.5 s)", "by 8.5 s", "8.5 s slower"
+CHANGE_BEFORE = re.compile(r"(?:[+\u2212-]\s*|\bby\s+|\b(?:up|down)\s+|\b(?:increase|decrease|delay|change)d?\s+of\s+)$", re.I)
+CHANGE_AFTER = re.compile(r"\s*(?:slower|faster|longer|shorter|more|less|later|earlier)\b", re.I)
+CHANGE_PATH = re.compile(r"delta|change|diff", re.I)
 
 
 def _binding(text: str, start: int, prev_end: int) -> tuple[str, bool]:
@@ -243,7 +250,9 @@ def scan(text: str) -> list[Claim]:
     prev_end = 0
     for a, b, secs, tol, _, number in merged:
         metric, target = _binding(t, a, prev_end)
-        claims.append((a, Claim("duration", text[a:b], secs, tol, number=number, metric=metric, target=target)))
+        change = bool(CHANGE_BEFORE.search(t[max(prev_end, a - 24):a]) or CHANGE_AFTER.match(t[b:b + 24]))
+        claims.append((a, Claim("duration", text[a:b], secs, tol, number=number, metric=metric, target=target,
+                                change=change)))
         spans.append((a, b))
         prev_end = b
     t = _mask(text, spans)
@@ -269,7 +278,10 @@ def _supported(c: Claim, facts: Facts) -> bool:
             if abs(secs - c.value) > c.tol + 1e-9:
                 continue
             if c.metric and (free_text or c.metric not in path.replace("fail_back", "failback")):
-                continue  # a metric figure needs a value recorded under that metric
+                # a metric figure needs a value recorded under that metric; a difference may instead match a
+                # recorded change ("+8.5 s" = history.biggest_segment_change.delta_s)
+                if not (c.change and not free_text and CHANGE_PATH.search(path)):
+                    continue
             if c.target and "target" not in path:
                 continue  # a target needs a recorded target
             return True
