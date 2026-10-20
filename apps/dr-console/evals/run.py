@@ -550,19 +550,49 @@ def main(argv: Optional[list[str]] = None) -> int:
         "summary": summarize(rows, judged, prod),
         "cases": [{**r, "groundedness": judged.get(f"{r['id']}#{r.get('rep', 0)}")} for r in rows],
     }
-    if a.upload:
-        from evals import foundry_eval
-        url = foundry_eval.log_deterministic(result, name=f"dra-evals-{run_id}")
-        result["run"]["foundry"].append(url)
     RESULTS.mkdir(exist_ok=True)
     path = RESULTS / f"{run_id}.json"
-    path.write_text(json.dumps(result, indent=1, default=str, ensure_ascii=False) + "\n", encoding="utf-8")
     md = RESULTS / ("LATEST.md" if full and not a.model else f"{run_id}.md")
-    write_markdown(result, md)
+
+    def save() -> None:
+        path.write_text(json.dumps(result, indent=1, default=str, ensure_ascii=False) + "\n", encoding="utf-8")
+        write_markdown(result, md)
+    save()  # the paid results are on disk before anything else can fail or hang
+    if a.upload:
+        url = _upload_with_timeout(result, f"dra-evals-{run_id}", UPLOAD_TIMEOUT_S)
+        if url:
+            result["run"]["foundry"].append(url)
+            save()
     print(f"\nwrote {path.relative_to(ROOT.parent)} and {md.relative_to(ROOT.parent)} · spent ${spent:.3f}")
     print(md.read_text(encoding="utf-8").split("## Gates")[0])
     return 0
 
 
+UPLOAD_TIMEOUT_S = 180
+
+
+def _upload_with_timeout(result: dict, name: str, timeout_s: float) -> Optional[str]:
+    """Log the run to the Foundry project. Best effort: an upload that fails or hangs never loses the results."""
+    from evals import foundry_eval
+    box: dict = {}
+
+    def run() -> None:
+        try:
+            box["url"] = foundry_eval.log_deterministic(result, name=name)
+        except Exception as e:  # noqa: BLE001
+            box["error"] = f"{type(e).__name__}: {e}"
+    t = threading.Thread(target=run, name="foundry-upload", daemon=True)
+    t.start()
+    t.join(timeout_s)
+    if t.is_alive():
+        print(f"Foundry upload still running after {timeout_s:.0f} s; results are saved locally, not waiting", flush=True)
+        return None
+    if "error" in box:
+        print(f"Foundry upload failed ({box['error'][:200]}); results are saved locally", flush=True)
+    return box.get("url")
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    code = main()
+    sys.stdout.flush(), sys.stderr.flush()
+    os._exit(code)  # a hung upload's worker threads must not keep the process alive after the results are saved
