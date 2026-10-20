@@ -5,8 +5,10 @@ Overview can chart the trend.
 """
 from __future__ import annotations
 
+import copy
 import json
 import re
+import time
 from statistics import median
 from typing import Any, Optional
 
@@ -33,13 +35,29 @@ def _similar(a: str, b: str) -> bool:
     return bool(wa and wb) and len(wa & wb) / len(wa | wb) >= 0.4
 
 
+_FIELDS = ("status", "t0", "rto_s", "rpo_s", "failback_s", "chaos_injected", "rto_breakdown_json", "remediation_json")
+CACHE_S = 30.0  # finished drills never change; a new drill shows up within this
+_cache: dict[str, tuple[float, dict]] = {}
+
+
 def drill_history(current_xid: str, limit: int = 12) -> dict:
     """Earlier completed drills (newest first) and how the current one compares."""
-    ids = sorted((e["PartitionKey"] for e in store.list_exercises(1000)
-                  if e.get("PartitionKey", "").startswith("ex-") and e["PartitionKey"] < current_xid), reverse=True)
+    hit = _cache.get(current_xid)
+    if hit and time.monotonic() - hit[0] < CACHE_S:
+        return copy.deepcopy(hit[1])
+    out = _drill_history(current_xid, limit)
+    _cache.clear()  # one entry: the drill being viewed
+    _cache[current_xid] = (time.monotonic(), out)
+    return copy.deepcopy(out)
+
+
+def _drill_history(current_xid: str, limit: int) -> dict:
+    rows = {e["PartitionKey"]: e for e in store.list_exercises(1000, fields=_FIELDS)
+            if e.get("PartitionKey", "").startswith("ex-")}
+    ids = sorted((x for x in rows if x < current_xid), reverse=True)
     past = []
     for xid in ids[:limit * 2]:
-        m = store.get_exercise(xid) or {}
+        m = rows[xid]
         if m.get("status") != "completed" or _num(m.get("rto_s")) is None:
             continue
         past.append({"id": xid, "date": (m.get("t0") or "")[:16], "rto_s": _num(m.get("rto_s")), "rpo_s": _num(m.get("rpo_s")),
@@ -48,7 +66,7 @@ def drill_history(current_xid: str, limit: int = 12) -> dict:
                      "remediation": [r.get("item", "") for r in json.loads(m.get("remediation_json") or "[]")]})
         if len(past) >= limit:
             break
-    cur = store.get_exercise(current_xid) or {}
+    cur = rows.get(current_xid) or {}
     rto = _num(cur.get("rto_s"))
     plain = [p["rto_s"] for p in past if not p["chaos"]]
     med = round(median(plain), 3) if plain else None

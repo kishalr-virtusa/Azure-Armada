@@ -137,10 +137,11 @@ def upsert_exercise(exercise_id: str, data: dict[str, Any]) -> None:
 _LIST_FIELDS = ("status", "t0", "rto_s", "rpo_s")
 
 
-def list_exercises(limit: int = 50) -> list[dict[str, Any]]:
-    """List recent exercises."""
-    rows = _query("exercises", f"SELECT TOP {int(limit)} c.pk, {', '.join('c.' + f for f in _LIST_FIELDS)} FROM c")
-    results = [{"PartitionKey": r["pk"], "RowKey": "meta", **{f: r.get(f) for f in _LIST_FIELDS}} for r in rows]
+def list_exercises(limit: int = 50, fields: tuple[str, ...] = _LIST_FIELDS) -> list[dict[str, Any]]:
+    """List recent exercises with only the named fields: one query, never a read per drill."""
+    proj = ", ".join(f'c["{f}"]' for f in fields)  # bracket form: field names may be reserved words
+    rows = _query("exercises", f"SELECT TOP {int(limit)} c.pk, {proj} FROM c")
+    results = [{"PartitionKey": r["pk"], "RowKey": "meta", **{f: r.get(f) for f in fields}} for r in rows]
     return sorted(results, key=lambda x: x.get("t0") or "", reverse=True)  # selected-but-missing fields are None
 
 
