@@ -5,6 +5,7 @@ the LLM only summarises them. A "fail" always forces go=false, whatever the mode
 """
 from __future__ import annotations
 
+import dataclasses
 from typing import Any, Optional
 
 from dr_agent.agents import prompt
@@ -144,4 +145,5 @@ def run(checks: list[Check]) -> AgentResult[ReadinessReport]:
     has_fail = any(c.status == "fail" for c in checks)
     report = ReadinessReport(checks=checks, go=res.output.go and not has_fail, summary=res.output.summary,
                              risks=res.output.risks, source=res.source)
-    return AgentResult(report, res.source, res.latency_ms, res.error, res.via)
+    # every field of the agent call (agent_version, model, usage, evidence, blocked...) travels with the report
+    return dataclasses.replace(res, output=report)

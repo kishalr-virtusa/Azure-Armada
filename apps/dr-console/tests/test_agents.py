@@ -120,3 +120,18 @@ def test_pricing_falls_back_when_api_unreachable(monkeypatch):
     p = pricing.region_monthly_usd(timeout_s=0.5)
     assert p["source"] == "fallback" and p["total_usd"] == 19.5
     pricing._cache.clear()
+
+
+def test_readiness_result_keeps_the_agent_call_metadata(monkeypatch):
+    from dr_agent.llm import AgentResult
+    from dr_agent.models import ReadinessSummary
+    ev = [{"tool": "site_recovery", "args": {}, "output": {"health": "Critical"}}]
+    usage = {"input_tokens": 10, "output_tokens": 2, "cached_tokens": 0, "reasoning_tokens": 0, "rounds": 2}
+    monkeypatch.setattr(readiness, "run_agent", lambda *a, **k: AgentResult(
+        ReadinessSummary(go=True, summary="s", risks=["r"]), "llm", 7, None, "foundry-agent", agent_version="3",
+        model="gpt-4.1-mini", usage=usage, evidence=ev))
+    checks = readiness.build_checks({"keyvault_ok": False, "keyvault": {"vault": "kv"}})
+    res = readiness.run(checks)
+    assert res.output.go is False and res.output.checks == checks  # a fail still forces no-go
+    assert (res.source, res.via, res.latency_ms, res.agent_version, res.model) == ("llm", "foundry-agent", 7, "3", "gpt-4.1-mini")
+    assert res.usage == usage and res.evidence == ev
