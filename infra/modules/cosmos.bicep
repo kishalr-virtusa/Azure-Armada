@@ -6,6 +6,8 @@
 //     survives a regional outage (automatic failover on)
 //   - no keys: local auth is disabled; the console signs in with its managed identity (data-plane RBAC)
 //   - continuous backup, 7 days (free): point-in-time restore
+//   - built-in vector search (capability EnableNoSQLVectorSearch) for the Black box knowledge container
+//     (knowledge.bicep); a capability cannot be removed once enabled
 
 @description('Primary (write) region')
 param location string
@@ -72,6 +74,11 @@ resource account 'Microsoft.DocumentDB/databaseAccounts@2024-05-15' = {
     enableAutomaticFailover: true
     disableLocalAuth: true
     minimalTlsVersion: 'Tls12'
+    capabilities: [
+      {
+        name: 'EnableNoSQLVectorSearch'
+      }
+    ]
     publicNetworkAccess: 'Enabled'
     backupPolicy: {
       type: 'Continuous'
@@ -110,6 +117,18 @@ resource container 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/container
     }
   }
 }]
+
+// the Black box knowledge index: its own module (vector policy), also deployed alone by scripts/deploy-rag.sh
+module knowledge 'knowledge.bicep' = {
+  name: 'cosmos-knowledge'
+  dependsOn: [
+    container
+  ]
+  params: {
+    accountName: account.name
+    databaseName: database.name
+  }
+}
 
 resource consoleAccess 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-05-15' = if (!empty(consolePrincipalId)) {
   parent: account
