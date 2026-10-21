@@ -8,7 +8,9 @@
 //     at 505) and is meant for small corpora like this one (hundreds of chunks); diskANN pays off from ~50k vectors.
 //     Both run on provisioned (shared database) throughput; neither needs serverless.
 //   - /embedding/* is excluded from the regular range index (no write RUs spent indexing 1536 numbers)
-//   - shares the database's 500 RU/s (free tier): no extra throughput cost
+//   - its own 400 RU/s (the minimum): Cosmos DB refuses vector indexes on shared-throughput containers ("Vector
+//     Indexing is not supported for shared throughput offer"). 400 RU/s x 2 regions on top of the free 1000 RU/s
+//     is about $1.54/day (list price $0.008 per 100 RU/s per hour per region).
 // Needs the account capability EnableNoSQLVectorSearch first (cosmos.bicep sets it; deploy-rag.sh enables it on the
 // existing account). The vector policy can only be set when the container is created.
 
@@ -17,6 +19,9 @@ param accountName string
 
 @description('Database name')
 param databaseName string = 'dra'
+
+@description('Dedicated throughput (RU/s) for the knowledge container; 400 is the minimum')
+param throughput int = 400
 
 @description('Embedding dimensions (text-embedding-3-small: 1536)')
 param dimensions int = 1536
@@ -78,6 +83,9 @@ resource knowledge 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/container
           }
         ]
       }
+    }
+    options: {
+      throughput: throughput
     }
   }
 }
