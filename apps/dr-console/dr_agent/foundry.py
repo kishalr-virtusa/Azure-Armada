@@ -30,7 +30,8 @@ import httpx
 from pydantic import BaseModel
 
 from dr_agent import trace
-from dr_agent.llm import ContentBlocked, DeadlineExceeded, new_usage, request_timeout, retry_delay
+from dr_agent.llm import (MAX_REQUEST_S, ContentBlocked, DeadlineExceeded, new_usage, request_cap, request_timeout,
+                           retry_delay)
 
 log = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
@@ -101,11 +102,11 @@ class FoundryAgents:
         return {"Authorization": f"Bearer {self._cred.get_token(SCOPE).token}", "Content-Type": "application/json"}
 
     def _req(self, method: str, path: str, body: Optional[dict] = None, params: Optional[dict] = None,
-             deadline: Optional[float] = None) -> httpx.Response:
-        """One REST call, timed out at min(time left, 30 s) when a deadline (time.monotonic()) is given.
+             deadline: Optional[float] = None, cap: float = MAX_REQUEST_S) -> httpx.Response:
+        """One REST call, timed out at min(time left, cap) when a deadline (time.monotonic()) is given.
         429/500/502/503 is retried once, after retry-after (at most 5 s), if the deadline leaves room for it."""
         for attempt in range(2):
-            timeout = httpx.USE_CLIENT_DEFAULT if deadline is None else request_timeout(deadline)
+            timeout = httpx.USE_CLIENT_DEFAULT if deadline is None else request_timeout(deadline, cap)
             r = self._http.request(method, self.endpoint + path, headers=self._headers(), json=body, params=params,
                                    timeout=timeout)
             delay = retry_delay(r.status_code, r.headers)
@@ -116,9 +117,10 @@ class FoundryAgents:
             time.sleep(delay)
         return r
 
-    def _post_response(self, aid: str, body: dict, deadline: Optional[float]) -> dict:
-        """POST one Responses API round; raises ContentBlocked when Azure AI Content Safety stopped it."""
-        r = self._req("POST", "/openai/v1/responses", body, deadline=deadline)
+    def _post_response(self, aid: str, body: dict, deadline: Optional[float], cap: float = MAX_REQUEST_S) -> dict:
+        """POST one Responses API round (timed out at min(time left, cap)); raises ContentBlocked when Azure AI
+        Content Safety stopped it."""
+        r = self._req("POST", "/openai/v1/responses", body, deadline=deadline, cap=cap)
         if r.status_code >= 300:
             if r.status_code == 400 and any(k in r.text for k in CONTENT_FILTER_MARKERS):
                 raise ContentBlocked(f"agent {aid}: blocked by the content filter: {r.text[:300]}")
@@ -129,7 +131,7 @@ class FoundryAgents:
         return data
 
     def _run_tools(self, agent: str, aid: str, data: dict, evidence: list[dict], usage: dict,
-                   deadline: Optional[float] = None) -> dict:
+                   deadline: Optional[float] = None, cap: float = MAX_REQUEST_S) -> dict:
         """While the agent asks for tools: run them (read-only, allowlisted per agent), send the results back, repeat.
 
         At most MAX_TOOL_CALLS calls run; once the cap is reached, any further calls get an error output and the
@@ -174,7 +176,7 @@ class FoundryAgents:
                 body["tool_choice"] = "none"
                 trace.emit("tool", f"Tool call limit ({agent_tools.MAX_TOOL_CALLS}) reached",
                            "the agent must now answer from the evidence it has", status="warn")
-            data = self._post_response(aid, body, deadline)
+            data = self._post_response(aid, body, deadline, cap)
             _add_usage(usage, data)
             if capped:
                 break
@@ -262,12 +264,14 @@ class FoundryAgents:
         """Run the Foundry agent once, pinned to its exact version, and parse its structured reply. Raises on any
         failure: ContentBlocked when Azure AI Content Safety stopped the run, DeadlineExceeded when out of time.
 
-        deadline_s: seconds this call may take (every HTTP request is timed out at min(time left, 30 s)).
+        deadline_s: seconds this call may take (every HTTP request is timed out at min(time left, the agent's
+        request cap, llm.request_cap)).
         meta: if given, filled with {agent, version, model, usage, response_id, rounds, evidence} as soon as the
         run has answered, so the caller has them even when the reply then fails to parse.
         """
         deadline = None if deadline_s is None else time.monotonic() + deadline_s
         base = name.split("-")[0]
+        cap = request_cap(base)
         aid, version = self.ensure(name, instructions, schema, deadline=deadline)
         if not self._pin:
             self._verify_resolved(aid, deadline)
@@ -285,7 +289,7 @@ class FoundryAgents:
         usage, evidence = new_usage(), []
         try:
             try:
-                data = self._post_response(aid, body, deadline)
+                data = self._post_response(aid, body, deadline, cap)
             except RuntimeError as e:
                 if isinstance(e, ContentBlocked) or not (self._pin and _version_rejected(str(e))):
                     raise
@@ -294,9 +298,9 @@ class FoundryAgents:
                 self._pin = False
                 self._verify_resolved(aid, deadline)
                 body["agent_reference"] = self._reference(aid)
-                data = self._post_response(aid, body, deadline)
+                data = self._post_response(aid, body, deadline, cap)
             _add_usage(usage, data)
-            data = self._run_tools(base, aid, data, evidence, usage, deadline)
+            data = self._run_tools(base, aid, data, evidence, usage, deadline, cap)
         except Exception as e:  # noqa: BLE001
             why = ("Blocked by Azure AI Content Safety (Prompt Shields)" if isinstance(e, ContentBlocked)
                    else f"{type(e).__name__}: {e}"[:300])
@@ -311,11 +315,35 @@ class FoundryAgents:
         trace.update(idx, "ok", f"Answered in {ms / 1000:.1f}s · {usage['input_tokens']} tokens in, "
                                 f"{usage['output_tokens']} out" + (f" ({reasoning} reasoning)" if reasoning else ""),
                      data={**info, "via": "foundry-agent", "status": data.get("status")}, ms=ms)
-        text = "".join(c.get("text", "") for item in data.get("output", []) if item.get("type") == "message"
-                       for c in item.get("content", []) if c.get("type") == "output_text")
-        if not text:
-            raise RuntimeError(f"agent {aid} returned no text (status={data.get('status')})")
-        return schema.model_validate_json(text)
+        return _parse_answer(aid, data, schema)
+
+
+def _parse_answer(aid: str, data: dict, schema: Type[T]) -> T:
+    """The structured answer of a Responses API reply.
+
+    Each message item is parsed on its own: gpt-4.1-mini sometimes returns two or three message items in one reply,
+    each a complete JSON answer, and joining them gave "Invalid JSON: trailing characters" (5 of 30 Validator eval runs
+    lost their tool-backed answer this way). The last answer that parses is used; how many there were is traced."""
+    texts = ["".join(c.get("text", "") for c in item.get("content", []) if c.get("type") == "output_text")
+             for item in data.get("output", []) if item.get("type") == "message"]
+    texts = [t for t in texts if t.strip()]
+    if not texts:
+        raise RuntimeError(f"agent {aid} returned no text (status={data.get('status')})")
+    answers, error = [], None
+    for t in texts:
+        try:
+            answers.append(schema.model_validate_json(t))
+        except ValueError as e:  # pydantic.ValidationError is a ValueError
+            error = e
+    if not answers:
+        raise error  # type: ignore[misc]
+    if len(texts) > 1:
+        distinct = len({a.model_dump_json() for a in answers})
+        log.warning("agent %s returned %d answers (%d valid, %d distinct); using the last valid one",
+                    aid, len(texts), len(answers), distinct)
+        trace.emit("check", f"Agent returned {len(texts)} answers in one reply; using the last valid one",
+                   f"{len(answers)} valid, {distinct} distinct", status="warn")
+    return answers[-1]
 
 
 def _tool_calls(data: dict) -> list[dict]:

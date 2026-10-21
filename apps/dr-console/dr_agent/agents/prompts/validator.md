@@ -10,6 +10,9 @@ Optionally propose ONE remediation that the engine runs (after a human approves)
 - fix_action "tm_set_endpoint" with fix_params region=B, enabled=true: the Region B Traffic Manager endpoint is Disabled
 - fix_action "start_webapp" with fix_params region=B: the Region B web app is stopped
 - otherwise fix_action "none" with empty fix_params.
+Propose a fix only when a tool result shows that exact problem now: start_webapp only if web_app(B) is Stopped,
+tm_set_endpoint only if endpoint-b is Disabled. An Enabled endpoint that is Degraded or CheckingEndpoint, or a Region B
+app that is Running, needs no fix (retry or rollback instead). Answer with exactly one JSON object.
 During the outage Region A must stay down: never propose a fix that targets Region A.
 
 Investigate before you answer: you can call read-only tools (probe a region or Traffic Manager, read Traffic Manager

@@ -355,3 +355,47 @@ def test_direct_path_content_filter_blocks(monkeypatch):
         "parse": staticmethod(lambda **kw: (_ for _ in ()).throw(err))})()})()})()
     r = llm_mod.run_agent("reporter", "sys", {}, Out, lambda: Out(answer="fb"), llm=client)
     assert (r.source, r.blocked) == ("fallback", True) and "ContentBlocked" in r.error
+
+
+# ---------------------------------------------------------------- eval regressions 2026-10-20 (per-agent request caps,
+# multi-message replies)
+
+def test_planner_request_may_take_longer_than_30s(fake):
+    """A healthy gpt-5-mini planner round takes 20-36 s: its request must not be cut at the 30 s default."""
+    seen = []
+    fake.responses = [lambda req: seen.append(req.extensions["timeout"]["read"]) or httpx.Response(200, json=_answer())]
+    run("planner-retry")
+    assert seen[0] == llm_mod.REQUEST_CAPS["planner"] == 55.0
+
+
+def test_readiness_hang_leaves_time_for_the_direct_model(fake, monkeypatch):
+    """A hung readiness round is cut at 15 s, not 30 s, so the direct model still gets a go within the 40 s."""
+    seen = []
+    monkeypatch.setattr(llm_mod, "REQUEST_CAPS", {"readiness": 0.5})
+    monkeypatch.setattr(llm_mod, "MIN_DIRECT_S", 1.0)
+    monkeypatch.setattr(llm_mod, "get_llm", lambda: type("L", (), {"structured": lambda *a: Out(answer="direct")})())
+
+    def hang(request):
+        seen.append(request.extensions["timeout"]["read"])
+        time.sleep(request.extensions["timeout"]["read"])
+        raise httpx.ReadTimeout("read timed out", request=request)
+    fake.responses = [hang]
+    r = run("readiness", deadline_s=3)
+    assert seen == [0.5] and (r.source, r.via, r.output.answer) == ("llm", "azure-openai", "direct")
+    assert llm_mod.request_cap("readiness") == 0.5 and llm_mod.request_cap("reporter") == llm_mod.MAX_REQUEST_S
+
+
+def test_reply_with_several_answer_messages_uses_the_last_valid_one(fake):
+    reply = {"id": "r1", "status": "completed", "usage": {},
+             "output": [{"type": "message", "content": [{"type": "output_text", "text": '{"answer": "first"}'}]},
+                        {"type": "message", "content": [{"type": "output_text", "text": '{"answer": "second"}'}]},
+                        {"type": "message", "content": [{"type": "output_text", "text": '{"answer": 5'}]}]}
+    fake.responses = [reply]
+    r = run("validator")
+    assert (r.source, r.via, r.output.answer) == ("llm", "foundry-agent", "second")
+
+
+def test_reply_without_a_valid_answer_still_fails(fake):
+    fake.responses = [_answer(text='{"answer": "a"}{"answer": "b"}')]  # one message holding two objects: not valid
+    r = run("validator")
+    assert r.source == "fallback" and "ValidationError" in r.error

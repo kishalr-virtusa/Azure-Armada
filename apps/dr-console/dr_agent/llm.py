@@ -6,8 +6,9 @@ No API keys. The console's identity needs the "Cognitive Services OpenAI User" r
 Every agent call goes through `run_agent`, which never raises. If the model is slow, unavailable
 or returns invalid output, the agent's fallback is used, and the result records which path produced it.
 
-Each call is bounded by a per-agent deadline (DEADLINES): every HTTP request is timed out at min(time left, 30 s),
-429/500/502/503 is retried once within it, and the direct model is only tried if MIN_DIRECT_S are left.
+Each call is bounded by a per-agent deadline (DEADLINES): every HTTP request is timed out at min(time left, the agent's
+request cap: REQUEST_CAPS, else 30 s), 429/500/502/503 is retried once within it, and the direct model is only tried if
+MIN_DIRECT_S are left.
 """
 from __future__ import annotations
 
@@ -33,7 +34,14 @@ COGNITIVE_SCOPE = "https://cognitiveservices.azure.com/.default"
 DEADLINES = {"validator": 25, "blackbox": 35, "readiness": 40, "architect": 45, "reporter": 60, "runbook": 60,
              "planner": 90}
 MIN_DIRECT_S = 8.0  # the direct model is skipped when less time than this is left
-MAX_REQUEST_S = 30.0  # HTTP timeout of one model request
+MAX_REQUEST_S = 30.0  # HTTP timeout of one model request, unless the agent has its own cap below
+# Per-agent cap on ONE model request, set from measured round latencies (evals 2026-10-20/21):
+# - planner: one gpt-5-mini round takes 20-36 s, so the 30 s default cut healthy answers off (7/24 eval runs fell back
+#   with ReadTimeout at exactly 30 s, then the direct gpt-5-mini call timed out at 30 s too); 55 s keeps 1.5x headroom
+#   over the slowest healthy round and still leaves 35 s of the 90 s deadline for the direct model.
+# - readiness: a round takes 1.5-3.5 s; a hung round used to hold the whole 30 s, leaving 7.6 s of the 40 s deadline,
+#   too little for the direct model (2/24 runs fell back). At 15 s a hang leaves ~22 s for the direct model.
+REQUEST_CAPS = {"planner": 55.0, "readiness": 15.0}
 RETRY_STATUS = {429, 500, 502, 503}
 MAX_RETRY_AFTER_S = 5.0
 
@@ -47,12 +55,17 @@ class DeadlineExceeded(TimeoutError):
     """The agent's deadline has passed."""
 
 
-def request_timeout(deadline: float) -> float:
-    """HTTP timeout for one request: the time left before `deadline` (time.monotonic()), at most 30 s."""
+def request_cap(agent: str) -> float:
+    """Longest one model request of this agent may take ('planner-retry' -> the planner's cap)."""
+    return REQUEST_CAPS.get(agent.split("-")[0], MAX_REQUEST_S)
+
+
+def request_timeout(deadline: float, cap: float = MAX_REQUEST_S) -> float:
+    """HTTP timeout for one request: the time left before `deadline` (time.monotonic()), at most `cap` seconds."""
     left = deadline - time.monotonic()
     if left <= 0:
         raise DeadlineExceeded("agent deadline reached")
-    return min(left, MAX_REQUEST_S)
+    return min(left, cap)
 
 
 def retry_delay(status: Optional[int], headers: Any) -> Optional[float]:
@@ -259,7 +272,7 @@ def run_agent(name: str, system_prompt: str, payload: dict | str, schema: Type[T
         def structured(p: dict | str) -> T:
             if not isinstance(client, LLM):  # a test double takes the plain signature
                 return client.structured(system_prompt, p, schema)
-            timeout = None if deadline is None else request_timeout(deadline)
+            timeout = None if deadline is None else request_timeout(deadline, request_cap(name))
             return client.structured(system_prompt, p, schema, timeout_s=timeout, deployment=reasoning or None)
 
         def call(p: dict | str, meta: dict) -> T:

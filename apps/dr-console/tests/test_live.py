@@ -182,3 +182,45 @@ def test_login_lockout_after_repeated_failures(monkeypatch):
         auth.login_failed("10.0.0.9")
     assert auth.login_blocked("10.0.0.9") > 0 and auth.login_blocked("10.0.0.10") == 0
     auth._fails.clear()
+
+
+def _diag(fix, params):
+    from dr_agent.models import Diagnosis, Param
+    return Diagnosis(likely_cause="c", evidence=["e"], recommended_action="retry", fix_action=fix,
+                     fix_params=[Param(key=k, value=v) for k, v in params.items()])
+
+
+def test_redundant_fix_judged_from_live_evidence():
+    tm = {"tool": "traffic_manager", "args": {}, "output": {"endpoints": [
+        {"name": "endpoint-a", "enabled": "Disabled"}, {"name": "endpoint-b", "enabled": "Enabled", "health": "Degraded"}]}}
+    enable_b = _diag("tm_set_endpoint", {"region": "B", "enabled": "true"})
+    assert "Enabled" in validator.redundant_fix(enable_b, [tm], {})
+    tm_off = {**tm, "output": {"endpoints": [{"name": "endpoint-b", "enabled": "Disabled"}]}}
+    assert validator.redundant_fix(enable_b, [tm_off], {}) is None
+    assert validator.redundant_fix(enable_b, [], {}) is None  # no evidence: the fix stays for the human to judge
+
+    start_b = _diag("start_webapp", {"region": "B"})
+    running = {"tool": "web_app", "args": {"region": "B"}, "output": {"state": "Running"}}
+    stopped = {"tool": "web_app", "args": {"region": "B"}, "output": {"state": "Stopped"}}
+    assert "Running" in validator.redundant_fix(start_b, [running], {"B": {"ok": False}})
+    assert validator.redundant_fix(start_b, [stopped], {"B": {"ok": True}}) is None  # the tool beats the probe
+    assert "health probe" in validator.redundant_fix(start_b, [], {"B": {"ok": True, "status_code": 200}})
+    assert validator.redundant_fix(start_b, [], {"B": {"ok": False}}) is None
+    assert validator.redundant_fix(_diag("none", {}), [running, tm], {"B": {"ok": True}}) is None
+
+
+def test_validator_withdraws_a_no_op_fix_but_keeps_the_diagnosis(monkeypatch):
+    from dr_agent.llm import AgentResult
+    from dr_agent.models import PlanStep
+    step = PlanStep(id="v-1", phase="failover", title="t", owner_team="app", type="automated", action="wait_healthy",
+                    params=[], depends_on=[], success_criteria="", abort_on_failure=False)
+    running = {"tool": "web_app", "args": {"region": "B"}, "output": {"state": "Running"}}
+    monkeypatch.setattr(validator, "run_agent", lambda *a, **k: AgentResult(
+        _diag("start_webapp", {"region": "B"}), "llm", 1, None, "foundry-agent", evidence=[running]))
+    d = validator.run(step, "HTTP 503", [], {"B": {"ok": True}}).output
+    assert (d.fix_action, d.fix_params, d.recommended_action, d.likely_cause) == ("none", [], "retry", "c")
+    assert "not offered" in d.evidence[-1]
+    stopped = {**running, "output": {"state": "Stopped"}}
+    monkeypatch.setattr(validator, "run_agent", lambda *a, **k: AgentResult(
+        _diag("start_webapp", {"region": "B"}), "llm", 1, None, "foundry-agent", evidence=[stopped]))
+    assert validator.run(step, "HTTP 403", [], {"B": {"ok": False}}).output.fix_action == "start_webapp"
