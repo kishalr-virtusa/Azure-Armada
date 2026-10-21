@@ -137,6 +137,13 @@ ACTION_LABELS = {
     "assert": "Checks",
 }
 GAP_LABEL = "Engine between steps (bookkeeping, status writes)"
+# Inside a gap (a step failed, the drill paused, then the step was retried) these events mark who held the clock:
+# the part of the gap that ends at the marker gets the marker's label.
+GAP_MARKERS = {
+    "diagnosis": "Validator agent diagnoses the failure",
+    "approval": "Waiting for a human to approve the fix",
+    "remediation": "Approved fix applied",
+}
 
 
 def rto_breakdown(t0: Optional[datetime], t_recovered: Optional[datetime], events: list[dict]) -> list[dict]:
@@ -170,18 +177,30 @@ def rto_breakdown(t0: Optional[datetime], t_recovered: Optional[datetime], event
     # clip to the window, order by start, drop empties
     clipped = sorted(((max(s, t0), min(en, t_recovered), lb) for s, en, lb in spans if en > t0 and s < t_recovered),
                      key=lambda x: x[0])
+    markers = sorted((ts(e), GAP_MARKERS[e["kind"]]) for e in events
+                     if e.get("kind") in GAP_MARKERS and e.get("ts") and t0 < ts(e) < t_recovered)
     out: list[dict] = []
+
+    def gap(start: datetime, end: datetime) -> None:
+        """A gap between steps, split where a diagnosis, a human approval or an applied fix ended a part of it."""
+        for t, label in markers:
+            if start < t < end:
+                out.append({"label": label, "start": start, "end": t})
+                start = t
+        out.append({"label": GAP_LABEL, "start": start, "end": end})
+
     cursor = t0
     for s, en, lb in clipped:
         s = max(s, cursor)
         if en <= s:
             continue
         if s > cursor:
-            out.append({"label": GAP_LABEL, "start": cursor, "end": s})
+            gap(cursor, s)
         out.append({"label": lb, "start": s, "end": en})
         cursor = en
     if cursor < t_recovered:  # the measuring step ends after recovery is proven; anything left is still a gap
-        out.append({"label": GAP_LABEL, "start": cursor, "end": t_recovered})
+        gap(cursor, t_recovered)
+    out = [seg for seg in out if seg["end"] > seg["start"]]
     for seg in out:
         seg["seconds"] = round((seg["end"] - seg["start"]).total_seconds(), 3)
         seg["start"], seg["end"] = seg["start"].isoformat(), seg["end"].isoformat()

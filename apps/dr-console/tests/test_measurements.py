@@ -94,3 +94,26 @@ def test_write_series_buckets_per_second():
             HeartbeatRecord(3, T0 + timedelta(seconds=2), True)]
     s = write_series(recs)
     assert [(x["ok"], x["fail"]) for x in s] == [(1, 1), (0, 0), (1, 0)]
+
+
+def test_rto_gap_is_split_at_diagnosis_approval_and_fix():
+    # live case ex-20261020-112827: a human took 3 min to approve the fix; that is not "engine bookkeeping"
+    from datetime import datetime, timezone
+    from dr_agent.engine.measurements import rto_breakdown, GAP_LABEL
+    t = lambda s: datetime(2026, 10, 20, 11, 30, s, tzinfo=timezone.utc)
+    ev = [{"kind": "step_start", "step_id": "v", "ts": t(0).isoformat(), "data": {"action": "wait_healthy"}},
+          {"kind": "step_end", "step_id": "v", "ts": t(10).isoformat()},
+          {"kind": "diagnosis", "step_id": "v", "ts": t(20).isoformat()},
+          {"kind": "approval", "step_id": "v", "ts": t(50).isoformat()},
+          {"kind": "remediation", "step_id": "v", "ts": t(55).isoformat()},
+          {"kind": "step_start", "step_id": "v", "ts": t(56).isoformat(), "data": {"action": "wait_healthy"}},
+          {"kind": "step_end", "step_id": "v", "ts": t(59).isoformat()}]
+    segs = rto_breakdown(t(0), t(59), ev)
+    assert [(s["label"], s["seconds"]) for s in segs] == [
+        ("DNS and health checks until users reach Southeast Asia", 10.0),
+        ("Validator agent diagnoses the failure", 10.0),
+        ("Waiting for a human to approve the fix", 30.0),
+        ("Approved fix applied", 5.0),
+        (GAP_LABEL, 1.0),
+        ("DNS and health checks until users reach Southeast Asia", 3.0)]
+    assert sum(s["seconds"] for s in segs) == 59.0
