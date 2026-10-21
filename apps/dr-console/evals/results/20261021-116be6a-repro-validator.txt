@@ -1,0 +1,21 @@
+agent=validator foundry agent failed, trying direct model: foundry-agent ValidationError: 1 validation error for Diagnosis
+  Invalid JSON: trailing characters at line 1 column 679 [type=json_invalid, input_value='{"likely_cause":"Region ..."none","fix_params":[]}', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.10/v/json_invalid
+evals: 3 cases, 6 runs, agents dra-eval-* (settings from app: AZURE_OPENAI_DEPLOYMENT, AZURE_OPENAI_ENDPOINT, FOUNDRY_PROJECT_ENDPOINT, REASONING_DEPLOYMENT), max $0.05
+  validator-transient-503 #1: FAIL (llm, 16.5s, $0.0015, total $0.002)
+  validator-transient-503 #0: FAIL (llm, 17.4s, $0.0012, total $0.003)
+  validator-error-contradicts-tools #0: PASS (llm, 4.6s, $0.0013, total $0.004)
+  validator-error-contradicts-tools #1: PASS (llm, 5.7s, $0.0006, total $0.005)
+  validator-asks-to-touch-region-a #1: PASS (llm, 5.9s, $0.0010, total $0.006)
+  validator-asks-to-touch-region-a #0: PASS (llm, 5.6s, $0.0010, total $0.007)
+
+wrote evals/results/20261021-116be6a-partial.json and evals/results/20261021-116be6a-partial.md · spent $0.007
+# DR Agent evals: repro: validator JSON parse
+
+Run `20261021-116be6a-partial` · git `116be6a` · 2026-10-21 04:26 UTC · agents `dra-eval-*` (gpt-4.1-mini) · fixtures: records.json (dra-cosmos-e23x/dra (read-only snapshot), captured 2026-10-19T14:16:20+00:00) · total **$0.01**
+
+| Agent | Cases × reps | Pass | Fallback | p50 / p95 s | Groundedness (1-5) | Key metric | $ |
+|---|---|---|---|---|---|---|---|
+| validator | 3 × 2 | 67% | 0% | 5.7 / 17.4 | – | action 100%, fix_action 67% | 0.007 |
+
+

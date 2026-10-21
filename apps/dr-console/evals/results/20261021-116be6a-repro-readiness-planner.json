@@ -1,0 +1,2552 @@
+{
+ "run": {
+  "id": "20261021-116be6a-partial",
+  "label": "repro: readiness+planner timeouts",
+  "git_sha": "116be6a",
+  "started_utc": "2026-10-21 04:27 UTC",
+  "finished_utc": "2026-10-21 04:30 UTC",
+  "prefix": "dra-eval-",
+  "models": [
+   "gpt-4.1-mini",
+   "gpt-5-mini"
+  ],
+  "agents": [
+   "readiness",
+   "planner"
+  ],
+  "reps": 2,
+  "cases": {
+   "readiness": 2,
+   "planner": 2
+  },
+  "fixture": "records.json (dra-cosmos-e23x/dra (read-only snapshot), captured 2026-10-19T14:16:20+00:00)",
+  "spent_usd": 0.018455,
+  "max_usd": 0.08,
+  "judge": null,
+  "foundry": [],
+  "command": "python -m evals.run --agents readiness,planner --only asr-critical,keyvault,planner-notes,planner-no-risks --reps 2 --max-usd 0.08 --no-judge --label repro: readiness+planner timeouts"
+ },
+ "summary": {
+  "readiness": {
+   "runs": 4,
+   "cases": 2,
+   "pass_rate": 1.0,
+   "schema_rate": 1.0,
+   "fallback_rate": 0.0,
+   "throttled": 0,
+   "latency_p50_s": 4.77,
+   "latency_p95_s": 6.32,
+   "tokens_in": 9818,
+   "tokens_out": 464,
+   "cost_usd": 0.003,
+   "agent_versions": [
+    "2"
+   ],
+   "models": [
+    "gpt-4.1-mini"
+   ],
+   "model_go_rate": 1.0,
+   "final_go_rate": 1.0,
+   "risks_named_rate": 1.0,
+   "investigated_rate": 1.0,
+   "gates": {
+    "schema 100%": true,
+    "fallback <= 5%": true
+   }
+  },
+  "planner": {
+   "runs": 4,
+   "cases": 2,
+   "pass_rate": 0.5,
+   "schema_rate": 1.0,
+   "fallback_rate": 0.5,
+   "throttled": 0,
+   "latency_p50_s": 29.59,
+   "latency_p95_s": 61.45,
+   "tokens_in": 10652,
+   "tokens_out": 6387,
+   "cost_usd": 0.0154,
+   "agent_versions": [
+    "2"
+   ],
+   "models": [
+    "gpt-5-mini"
+   ],
+   "first_pass_rate": 0.5,
+   "final_valid_rate": 0.5,
+   "mean_attempts": 1.0,
+   "gates": {
+    "schema 100%": true,
+    "fallback <= 5%": false,
+    "first-pass >= 80%": false,
+    "final 100%": false
+   }
+  },
+  "_production_failures": []
+ },
+ "cases": [
+  {
+   "id": "readiness-asr-critical",
+   "agent": "readiness",
+   "kind": "scenario",
+   "source": "llm",
+   "via": "foundry-agent",
+   "error": null,
+   "output": {
+    "checks": [
+     {
+      "name": "SQL failover group",
+      "status": "pass",
+      "detail": "Region A primary, replicating to Region B (lag 0s).",
+      "evidence": {
+       "primary_region": "A",
+       "replication_lag_s": 0,
+       "replication_state": {
+        "A": "CATCH_UP",
+        "B": "CATCH_UP"
+       }
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Region A app health (direct)",
+      "status": "pass",
+      "detail": "healthy",
+      "evidence": {
+       "db_ok": true,
+       "db_server": "dra-sql-eas-e23x",
+       "latency_ms": 240,
+       "ok": true,
+       "region": "East Asia",
+       "region_key": "A",
+       "status_code": 200
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Region B app health (direct)",
+      "status": "pass",
+      "detail": "healthy",
+      "evidence": {
+       "db_ok": true,
+       "db_server": "dra-sql-sea-e23x",
+       "latency_ms": 240,
+       "ok": true,
+       "region": "Southeast Asia",
+       "region_key": "B",
+       "status_code": 200
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Traffic Manager endpoints",
+      "status": "pass",
+      "detail": "both endpoints enabled and Online",
+      "evidence": {
+       "endpoints": [
+        {
+         "enabled": true,
+         "monitor_status": "Online",
+         "name": "endpoint-a"
+        },
+        {
+         "enabled": true,
+         "monitor_status": "Online",
+         "name": "endpoint-b"
+        }
+       ]
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "App settings parity (A vs B)",
+      "status": "pass",
+      "detail": "5 settings identical across regions",
+      "evidence": {
+       "compared_keys": 5,
+       "different_values": {},
+       "missing_in_region_a": [],
+       "missing_in_region_b": []
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Azure Site Recovery (reports VM)",
+      "status": "warn",
+      "detail": "Protected; the IaaS test failover will be skipped",
+      "evidence": {
+       "health": "Critical",
+       "initial_replication_pct": null,
+       "protected": true,
+       "rpo_s": 84037,
+       "state": "Protected",
+       "test_failover": null
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Key Vault reachable",
+      "status": "pass",
+      "detail": "secret read from dra-kv-e23x with the managed identity",
+      "evidence": {
+       "latency_ms": 300,
+       "ok": true,
+       "vault": "dra-kv-e23x"
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     }
+    ],
+    "go": true,
+    "summary": "All critical systems including SQL failover, app health in both regions, Traffic Manager endpoints, app settings parity, and Key Vault access are functioning well. The Azure Site Recovery for the reports VM is protected but currently in a critical health state, so the IaaS test failover will be skipped. This does not prevent the DR exercise but is a risk to note.",
+    "risks": [
+     "Azure Site Recovery health is critical; IaaS test failover will be skipped"
+    ],
+    "source": "llm"
+   },
+   "grade": {
+    "schema_ok": true,
+    "llm": true,
+    "model_go_ok": true,
+    "final_go_ok": true,
+    "risks_named": true,
+    "risk_keywords_missing": [],
+    "investigated": true,
+    "no_needless_tools": true,
+    "pass": true
+   },
+   "calls": [
+    {
+     "name": "readiness",
+     "source": "llm",
+     "via": "foundry-agent",
+     "error": null,
+     "latency_ms": 6316,
+     "model": "gpt-4.1-mini",
+     "agent_version": "2",
+     "usage": {
+      "input_tokens": 2472,
+      "output_tokens": 121,
+      "cached_tokens": 1152,
+      "reasoning_tokens": 0,
+      "rounds": 2
+     },
+     "cost_usd": 0.000837,
+     "blocked": false,
+     "tools": [
+      "site_recovery"
+     ]
+    }
+   ],
+   "latency_ms": 6317,
+   "usage": {
+    "input_tokens": 2472,
+    "output_tokens": 121,
+    "cached_tokens": 1152,
+    "reasoning_tokens": 0,
+    "rounds": 2
+   },
+   "cost_usd": 0.000837,
+   "model": "gpt-4.1-mini",
+   "agent_version": "2",
+   "throttled": false,
+   "rep": 0,
+   "groundedness": null
+  },
+  {
+   "id": "readiness-asr-critical",
+   "agent": "readiness",
+   "kind": "scenario",
+   "source": "llm",
+   "via": "foundry-agent",
+   "error": null,
+   "output": {
+    "checks": [
+     {
+      "name": "SQL failover group",
+      "status": "pass",
+      "detail": "Region A primary, replicating to Region B (lag 0s).",
+      "evidence": {
+       "primary_region": "A",
+       "replication_lag_s": 0,
+       "replication_state": {
+        "A": "CATCH_UP",
+        "B": "CATCH_UP"
+       }
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Region A app health (direct)",
+      "status": "pass",
+      "detail": "healthy",
+      "evidence": {
+       "db_ok": true,
+       "db_server": "dra-sql-eas-e23x",
+       "latency_ms": 240,
+       "ok": true,
+       "region": "East Asia",
+       "region_key": "A",
+       "status_code": 200
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Region B app health (direct)",
+      "status": "pass",
+      "detail": "healthy",
+      "evidence": {
+       "db_ok": true,
+       "db_server": "dra-sql-sea-e23x",
+       "latency_ms": 240,
+       "ok": true,
+       "region": "Southeast Asia",
+       "region_key": "B",
+       "status_code": 200
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Traffic Manager endpoints",
+      "status": "pass",
+      "detail": "both endpoints enabled and Online",
+      "evidence": {
+       "endpoints": [
+        {
+         "enabled": true,
+         "monitor_status": "Online",
+         "name": "endpoint-a"
+        },
+        {
+         "enabled": true,
+         "monitor_status": "Online",
+         "name": "endpoint-b"
+        }
+       ]
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "App settings parity (A vs B)",
+      "status": "pass",
+      "detail": "5 settings identical across regions",
+      "evidence": {
+       "compared_keys": 5,
+       "different_values": {},
+       "missing_in_region_a": [],
+       "missing_in_region_b": []
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Azure Site Recovery (reports VM)",
+      "status": "warn",
+      "detail": "Protected; the IaaS test failover will be skipped",
+      "evidence": {
+       "health": "Critical",
+       "initial_replication_pct": null,
+       "protected": true,
+       "rpo_s": 84037,
+       "state": "Protected",
+       "test_failover": null
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Key Vault reachable",
+      "status": "pass",
+      "detail": "secret read from dra-kv-e23x with the managed identity",
+      "evidence": {
+       "latency_ms": 300,
+       "ok": true,
+       "vault": "dra-kv-e23x"
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     }
+    ],
+    "go": true,
+    "summary": "All critical systems are healthy and ready for the DR exercise, including SQL failover, app health in both regions, Traffic Manager endpoints, app settings parity, and Key Vault access. The Azure Site Recovery for the reports VM is protected but in a critical health state, so the IaaS test failover will be skipped as a precaution. This does not block the overall readiness for the DR exercise.",
+    "risks": [
+     "Azure Site Recovery for reports VM is in critical health; IaaS test failover will be skipped"
+    ],
+    "source": "llm"
+   },
+   "grade": {
+    "schema_ok": true,
+    "llm": true,
+    "model_go_ok": true,
+    "final_go_ok": true,
+    "risks_named": true,
+    "risk_keywords_missing": [],
+    "investigated": true,
+    "no_needless_tools": true,
+    "pass": true
+   },
+   "calls": [
+    {
+     "name": "readiness",
+     "source": "llm",
+     "via": "foundry-agent",
+     "error": null,
+     "latency_ms": 6073,
+     "model": "gpt-4.1-mini",
+     "agent_version": "2",
+     "usage": {
+      "input_tokens": 2472,
+      "output_tokens": 131,
+      "cached_tokens": 1152,
+      "reasoning_tokens": 0,
+      "rounds": 2
+     },
+     "cost_usd": 0.000853,
+     "blocked": false,
+     "tools": [
+      "site_recovery"
+     ]
+    }
+   ],
+   "latency_ms": 6074,
+   "usage": {
+    "input_tokens": 2472,
+    "output_tokens": 131,
+    "cached_tokens": 1152,
+    "reasoning_tokens": 0,
+    "rounds": 2
+   },
+   "cost_usd": 0.000853,
+   "model": "gpt-4.1-mini",
+   "agent_version": "2",
+   "throttled": false,
+   "rep": 1,
+   "groundedness": null
+  },
+  {
+   "id": "readiness-keyvault-down",
+   "agent": "readiness",
+   "kind": "scenario",
+   "source": "llm",
+   "via": "foundry-agent",
+   "error": null,
+   "output": {
+    "checks": [
+     {
+      "name": "SQL failover group",
+      "status": "pass",
+      "detail": "Region A primary, replicating to Region B (lag 0s).",
+      "evidence": {
+       "primary_region": "A",
+       "replication_lag_s": 0,
+       "replication_state": {
+        "A": "CATCH_UP",
+        "B": "CATCH_UP"
+       }
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Region A app health (direct)",
+      "status": "pass",
+      "detail": "healthy",
+      "evidence": {
+       "db_ok": true,
+       "db_server": "dra-sql-eas-e23x",
+       "latency_ms": 240,
+       "ok": true,
+       "region": "East Asia",
+       "region_key": "A",
+       "status_code": 200
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Region B app health (direct)",
+      "status": "pass",
+      "detail": "healthy",
+      "evidence": {
+       "db_ok": true,
+       "db_server": "dra-sql-sea-e23x",
+       "latency_ms": 240,
+       "ok": true,
+       "region": "Southeast Asia",
+       "region_key": "B",
+       "status_code": 200
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Traffic Manager endpoints",
+      "status": "pass",
+      "detail": "both endpoints enabled and Online",
+      "evidence": {
+       "endpoints": [
+        {
+         "enabled": true,
+         "monitor_status": "Online",
+         "name": "endpoint-a"
+        },
+        {
+         "enabled": true,
+         "monitor_status": "Online",
+         "name": "endpoint-b"
+        }
+       ]
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "App settings parity (A vs B)",
+      "status": "pass",
+      "detail": "5 settings identical across regions",
+      "evidence": {
+       "compared_keys": 5,
+       "different_values": {},
+       "missing_in_region_a": [],
+       "missing_in_region_b": []
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Azure Site Recovery (reports VM)",
+      "status": "pass",
+      "detail": "Protected, replication healthy, RPO 312s",
+      "evidence": {
+       "health": "Normal",
+       "protected": true,
+       "rpo_s": 312,
+       "state": "Protected",
+       "test_failover": null
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Key Vault reachable",
+      "status": "fail",
+      "detail": "Key Vault not reachable: 403 Forbidden",
+      "evidence": {
+       "vault": "dra-kv-e23x"
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     }
+    ],
+    "go": false,
+    "summary": "The DR exercise cannot proceed because the Key Vault is not reachable, returning a 403 Forbidden error. All other systems including SQL failover, app health in both regions, Traffic Manager endpoints, app settings parity, and Azure Site Recovery are healthy and ready. The Key Vault access issue must be resolved before the exercise can safely proceed.",
+    "risks": [
+     "Key Vault dra-kv-e23x not reachable (403 Forbidden)"
+    ],
+    "source": "llm"
+   },
+   "grade": {
+    "schema_ok": true,
+    "llm": true,
+    "model_go_ok": true,
+    "final_go_ok": true,
+    "risks_named": true,
+    "risk_keywords_missing": [],
+    "investigated": true,
+    "no_needless_tools": true,
+    "pass": true
+   },
+   "calls": [
+    {
+     "name": "readiness",
+     "source": "llm",
+     "via": "foundry-agent",
+     "error": null,
+     "latency_ms": 4241,
+     "model": "gpt-4.1-mini",
+     "agent_version": "2",
+     "usage": {
+      "input_tokens": 2437,
+      "output_tokens": 114,
+      "cached_tokens": 2176,
+      "reasoning_tokens": 0,
+      "rounds": 2
+     },
+     "cost_usd": 0.000504,
+     "blocked": false,
+     "tools": [
+      "probe"
+     ]
+    }
+   ],
+   "latency_ms": 4241,
+   "usage": {
+    "input_tokens": 2437,
+    "output_tokens": 114,
+    "cached_tokens": 2176,
+    "reasoning_tokens": 0,
+    "rounds": 2
+   },
+   "cost_usd": 0.000504,
+   "model": "gpt-4.1-mini",
+   "agent_version": "2",
+   "throttled": false,
+   "rep": 0,
+   "groundedness": null
+  },
+  {
+   "id": "readiness-keyvault-down",
+   "agent": "readiness",
+   "kind": "scenario",
+   "source": "llm",
+   "via": "foundry-agent",
+   "error": null,
+   "output": {
+    "checks": [
+     {
+      "name": "SQL failover group",
+      "status": "pass",
+      "detail": "Region A primary, replicating to Region B (lag 0s).",
+      "evidence": {
+       "primary_region": "A",
+       "replication_lag_s": 0,
+       "replication_state": {
+        "A": "CATCH_UP",
+        "B": "CATCH_UP"
+       }
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Region A app health (direct)",
+      "status": "pass",
+      "detail": "healthy",
+      "evidence": {
+       "db_ok": true,
+       "db_server": "dra-sql-eas-e23x",
+       "latency_ms": 240,
+       "ok": true,
+       "region": "East Asia",
+       "region_key": "A",
+       "status_code": 200
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Region B app health (direct)",
+      "status": "pass",
+      "detail": "healthy",
+      "evidence": {
+       "db_ok": true,
+       "db_server": "dra-sql-sea-e23x",
+       "latency_ms": 240,
+       "ok": true,
+       "region": "Southeast Asia",
+       "region_key": "B",
+       "status_code": 200
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Traffic Manager endpoints",
+      "status": "pass",
+      "detail": "both endpoints enabled and Online",
+      "evidence": {
+       "endpoints": [
+        {
+         "enabled": true,
+         "monitor_status": "Online",
+         "name": "endpoint-a"
+        },
+        {
+         "enabled": true,
+         "monitor_status": "Online",
+         "name": "endpoint-b"
+        }
+       ]
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "App settings parity (A vs B)",
+      "status": "pass",
+      "detail": "5 settings identical across regions",
+      "evidence": {
+       "compared_keys": 5,
+       "different_values": {},
+       "missing_in_region_a": [],
+       "missing_in_region_b": []
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Azure Site Recovery (reports VM)",
+      "status": "pass",
+      "detail": "Protected, replication healthy, RPO 312s",
+      "evidence": {
+       "health": "Normal",
+       "protected": true,
+       "rpo_s": 312,
+       "state": "Protected",
+       "test_failover": null
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     },
+     {
+      "name": "Key Vault reachable",
+      "status": "fail",
+      "detail": "Key Vault not reachable: 403 Forbidden",
+      "evidence": {
+       "vault": "dra-kv-e23x"
+      },
+      "checked_at": "2026-10-19T10:12:00"
+     }
+    ],
+    "go": false,
+    "summary": "The DR exercise cannot proceed because the Key Vault is not reachable, returning a 403 Forbidden error. All other systems including SQL failover, app health in both regions, Traffic Manager, app settings parity, and Azure Site Recovery are healthy and ready.",
+    "risks": [
+     "Key Vault dra-kv-e23x not reachable (403 Forbidden)"
+    ],
+    "source": "llm"
+   },
+   "grade": {
+    "schema_ok": true,
+    "llm": true,
+    "model_go_ok": true,
+    "final_go_ok": true,
+    "risks_named": true,
+    "risk_keywords_missing": [],
+    "investigated": true,
+    "no_needless_tools": true,
+    "pass": true
+   },
+   "calls": [
+    {
+     "name": "readiness",
+     "source": "llm",
+     "via": "foundry-agent",
+     "error": null,
+     "latency_ms": 4771,
+     "model": "gpt-4.1-mini",
+     "agent_version": "2",
+     "usage": {
+      "input_tokens": 2437,
+      "output_tokens": 98,
+      "cached_tokens": 1024,
+      "reasoning_tokens": 0,
+      "rounds": 2
+     },
+     "cost_usd": 0.000824,
+     "blocked": false,
+     "tools": [
+      "probe"
+     ]
+    }
+   ],
+   "latency_ms": 4772,
+   "usage": {
+    "input_tokens": 2437,
+    "output_tokens": 98,
+    "cached_tokens": 1024,
+    "reasoning_tokens": 0,
+    "rounds": 2
+   },
+   "cost_usd": 0.000824,
+   "model": "gpt-4.1-mini",
+   "agent_version": "2",
+   "throttled": false,
+   "rep": 1,
+   "groundedness": null
+  },
+  {
+   "id": "planner-no-risks",
+   "agent": "planner",
+   "kind": "plan",
+   "source": "llm",
+   "via": "foundry-agent",
+   "error": null,
+   "output": {
+    "steps": [
+     {
+      "id": "pre-1",
+      "phase": "pre-checks",
+      "title": "Snapshot inventory & configuration",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "snapshot_inventory",
+      "params": [],
+      "depends_on": [],
+      "success_criteria": "Inventory and config captured for rg-dra-workload and listed resources",
+      "abort_on_failure": true
+     },
+     {
+      "id": "pre-2",
+      "phase": "pre-checks",
+      "title": "Verify SQL failover group replication is healthy (dra-fog-e23x)",
+      "owner_team": "db",
+      "type": "automated",
+      "action": "check_fog",
+      "params": [],
+      "depends_on": [
+       "pre-1"
+      ],
+      "success_criteria": "dra-fog-e23x shows primary in Region A and replication CATCH_UP",
+      "abort_on_failure": true
+     },
+     {
+      "id": "pre-3",
+      "phase": "pre-checks",
+      "title": "Start ASR test failover of the reports VM into isolated Region B network (background)",
+      "owner_team": "infra",
+      "type": "automated",
+      "action": "asr_test_failover",
+      "params": [],
+      "depends_on": [
+       "pre-2"
+      ],
+      "success_criteria": "ASR test failover job started for dra-vm-reports into Southeast Asia test network",
+      "abort_on_failure": false
+     },
+     {
+      "id": "pre-4",
+      "phase": "pre-checks",
+      "title": "DB team confirms go for forced failover",
+      "owner_team": "db",
+      "type": "human",
+      "action": null,
+      "params": [],
+      "depends_on": [
+       "pre-2"
+      ],
+      "success_criteria": "DB team approval recorded (console/Slack) to proceed with forced failover",
+      "abort_on_failure": true
+     },
+     {
+      "id": "pre-5",
+      "phase": "pre-checks",
+      "title": "Start heartbeat writer (1s) for RPO measurement",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "start_heartbeat",
+      "params": [],
+      "depends_on": [
+       "pre-4"
+      ],
+      "success_criteria": "Heartbeat writes every 1s observed",
+      "abort_on_failure": true
+     },
+     {
+      "id": "out-1",
+      "phase": "outage",
+      "title": "Inject outage: stop Region A web app (dra-app-eas-e23x)",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "inject_outage",
+      "params": [
+       {
+        "key": "region",
+        "value": "A"
+       }
+      ],
+      "depends_on": [
+       "pre-5"
+      ],
+      "success_criteria": "Region A /health fails (dra-app-eas-e23x stopped) and t0 recorded",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fo-1",
+      "phase": "failover",
+      "title": "Forced SQL failover to Region B (paymentsdb via dra-fog-e23x)",
+      "owner_team": "db",
+      "type": "automated",
+      "action": "sql_failover",
+      "params": [
+       {
+        "key": "target_region",
+        "value": "B"
+       },
+       {
+        "key": "allow_data_loss",
+        "value": "true"
+       }
+      ],
+      "depends_on": [
+       "out-1"
+      ],
+      "success_criteria": "Region B (dra-sql-sea-e23x) becomes SQL primary; t_failover recorded",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fo-2",
+      "phase": "failover",
+      "title": "Disable Region A Traffic Manager endpoint (dra-tm-e23x)",
+      "owner_team": "network",
+      "type": "automated",
+      "action": "tm_set_endpoint",
+      "params": [
+       {
+        "key": "region",
+        "value": "A"
+       },
+       {
+        "key": "enabled",
+        "value": "false"
+       }
+      ],
+      "depends_on": [
+       "fo-1"
+      ],
+      "success_criteria": "Traffic Manager endpoint A disabled (traffic directed to endpoint-b)",
+      "abort_on_failure": true
+     },
+     {
+      "id": "val-1",
+      "phase": "validation",
+      "title": "Wait until Traffic Manager serves users from Region B",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "wait_healthy",
+      "params": [
+       {
+        "key": "target",
+        "value": "tm"
+       },
+       {
+        "key": "expect_region",
+        "value": "B"
+       },
+       {
+        "key": "timeout_s",
+        "value": "900"
+       }
+      ],
+      "depends_on": [
+       "fo-2"
+      ],
+      "success_criteria": "dra-tm-e23x /health OK confirming Region B is serving users",
+      "abort_on_failure": true
+     },
+     {
+      "id": "val-2",
+      "phase": "validation",
+      "title": "Functional check: submit a payment via Traffic Manager",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "functional_txn_check",
+      "params": [],
+      "depends_on": [
+       "val-1"
+      ],
+      "success_criteria": "Payment accepted via dra-tm-e23x and read back from paymentsdb on Region B",
+      "abort_on_failure": true
+     },
+     {
+      "id": "val-3",
+      "phase": "validation",
+      "title": "Measure RPO from heartbeat vs new primary",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "measure_rpo",
+      "params": [],
+      "depends_on": [
+       "val-2"
+      ],
+      "success_criteria": "RPO computed and compared to target (<=15 minutes desired)",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-1",
+      "phase": "failback",
+      "title": "App team approves failback to Region A",
+      "owner_team": "app",
+      "type": "human",
+      "action": null,
+      "params": [],
+      "depends_on": [
+       "val-3"
+      ],
+      "success_criteria": "App team confirms readiness to bring Region A back (console/Slack)",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-2",
+      "phase": "failback",
+      "title": "Start Region A web app (dra-app-eas-e23x)",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "start_webapp",
+      "params": [
+       {
+        "key": "region",
+        "value": "A"
+       }
+      ],
+      "depends_on": [
+       "fb-1"
+      ],
+      "success_criteria": "dra-app-eas-e23x running in East Asia",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-3",
+      "phase": "failback",
+      "title": "Wait for Region A to be healthy directly",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "wait_healthy",
+      "params": [
+       {
+        "key": "target",
+        "value": "A"
+       },
+       {
+        "key": "expect_region",
+        "value": "A"
+       },
+       {
+        "key": "timeout_s",
+        "value": "600"
+       }
+      ],
+      "depends_on": [
+       "fb-2"
+      ],
+      "success_criteria": "dra-app-eas-e23x /health OK from East Asia",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-4",
+      "phase": "failback",
+      "title": "Planned SQL failover back to Region A (make A primary)",
+      "owner_team": "db",
+      "type": "automated",
+      "action": "sql_failover",
+      "params": [
+       {
+        "key": "target_region",
+        "value": "A"
+       },
+       {
+        "key": "allow_data_loss",
+        "value": "false"
+       }
+      ],
+      "depends_on": [
+       "fb-3"
+      ],
+      "success_criteria": "Region A (dra-sql-eas-e23x) is SQL primary again",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-5",
+      "phase": "failback",
+      "title": "Re-enable Region A Traffic Manager endpoint",
+      "owner_team": "network",
+      "type": "automated",
+      "action": "tm_set_endpoint",
+      "params": [
+       {
+        "key": "region",
+        "value": "A"
+       },
+       {
+        "key": "enabled",
+        "value": "true"
+       }
+      ],
+      "depends_on": [
+       "fb-4"
+      ],
+      "success_criteria": "Traffic Manager endpoint A enabled",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-6",
+      "phase": "failback",
+      "title": "Wait until users are served from Region A again via Traffic Manager",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "wait_healthy",
+      "params": [
+       {
+        "key": "target",
+        "value": "tm"
+       },
+       {
+        "key": "expect_region",
+        "value": "A"
+       },
+       {
+        "key": "timeout_s",
+        "value": "900"
+       }
+      ],
+      "depends_on": [
+       "fb-5"
+      ],
+      "success_criteria": "dra-tm-e23x /health OK confirming Region A is serving users",
+      "abort_on_failure": true
+     },
+     {
+      "id": "iaas-2",
+      "phase": "closure",
+      "title": "Verify recovered reports VM serves from Region B and produces daily payments report (ASR test verify)",
+      "owner_team": "infra",
+      "type": "automated",
+      "action": "asr_verify_recovery",
+      "params": [
+       {
+        "key": "timeout_s",
+        "value": "1200"
+       }
+      ],
+      "depends_on": [
+       "pre-3",
+       "fb-6"
+      ],
+      "success_criteria": "Recovered VM in Southeast Asia answers /health and produces daily payments report",
+      "abort_on_failure": false
+     },
+     {
+      "id": "iaas-3",
+      "phase": "closure",
+      "title": "Clean up the ASR test failover (remove test VM)",
+      "owner_team": "infra",
+      "type": "automated",
+      "action": "asr_test_cleanup",
+      "params": [],
+      "depends_on": [
+       "iaas-2"
+      ],
+      "success_criteria": "ASR test VM removed and resources cleaned",
+      "abort_on_failure": false
+     },
+     {
+      "id": "cl-1",
+      "phase": "closure",
+      "title": "Stop heartbeat writer",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "stop_heartbeat",
+      "params": [],
+      "depends_on": [
+       "fb-6"
+      ],
+      "success_criteria": "Heartbeat writer stopped",
+      "abort_on_failure": false
+     },
+     {
+      "id": "cl-2",
+      "phase": "closure",
+      "title": "Generate exercise report and notify stakeholders",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "generate_report",
+      "params": [],
+      "depends_on": [
+       "cl-1",
+       "iaas-3"
+      ],
+      "success_criteria": "Exercise report published for Contoso Payments and stakeholders notified",
+      "abort_on_failure": false
+     }
+    ],
+    "assumptions": [
+     "Region A = East Asia (primary) and Region B = Southeast Asia (warm standby).",
+     "SQL FOG dra-fog-e23x is configured across dra-sql-eas-e23x (A) and dra-sql-sea-e23x (B).",
+     "Outage is simulated by stopping dra-app-eas-e23x; production network remains unaffected.",
+     "ASR test failover uses dra-vm-reports and runs non-disruptively in an isolated Southeast Asia test network."
+    ]
+   },
+   "grade": {
+    "schema_ok": true,
+    "llm": true,
+    "first_pass": true,
+    "final_valid": true,
+    "attempts": 1,
+    "problems": [],
+    "pass": true
+   },
+   "calls": [
+    {
+     "name": "planner",
+     "source": "llm",
+     "via": "foundry-agent",
+     "error": null,
+     "latency_ms": 29591,
+     "model": "gpt-5-mini",
+     "agent_version": "2",
+     "usage": {
+      "input_tokens": 5320,
+      "output_tokens": 3134,
+      "cached_tokens": 0,
+      "reasoning_tokens": 256,
+      "rounds": 1
+     },
+     "cost_usd": 0.007598,
+     "blocked": false,
+     "tools": []
+    }
+   ],
+   "latency_ms": 29592,
+   "usage": {
+    "input_tokens": 5320,
+    "output_tokens": 3134,
+    "cached_tokens": 0,
+    "reasoning_tokens": 256,
+    "rounds": 1
+   },
+   "cost_usd": 0.007598,
+   "model": "gpt-5-mini",
+   "agent_version": "2",
+   "throttled": false,
+   "rep": 0,
+   "groundedness": null
+  },
+  {
+   "id": "planner-no-risks",
+   "agent": "planner",
+   "kind": "plan",
+   "source": "fallback",
+   "via": "fallback",
+   "error": "foundry-agent ReadTimeout: The read operation timed out; APITimeoutError: Request timed out.",
+   "output": {
+    "steps": [
+     {
+      "id": "pre-1",
+      "phase": "pre-checks",
+      "title": "Snapshot inventory & configuration",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "snapshot_inventory",
+      "params": [],
+      "depends_on": [],
+      "success_criteria": "Inventory captured",
+      "abort_on_failure": true
+     },
+     {
+      "id": "pre-2",
+      "phase": "pre-checks",
+      "title": "Verify SQL failover group replication is healthy",
+      "owner_team": "db",
+      "type": "automated",
+      "action": "check_fog",
+      "params": [],
+      "depends_on": [
+       "pre-1"
+      ],
+      "success_criteria": "Region A primary, replication CATCH_UP/SEEDED",
+      "abort_on_failure": true
+     },
+     {
+      "id": "iaas-1",
+      "phase": "pre-checks",
+      "title": "Start ASR test failover of the reports VM (isolated network)",
+      "owner_team": "infra",
+      "type": "automated",
+      "action": "asr_test_failover",
+      "params": [],
+      "depends_on": [
+       "pre-2"
+      ],
+      "success_criteria": "Test failover job started",
+      "abort_on_failure": false
+     },
+     {
+      "id": "pre-3",
+      "phase": "pre-checks",
+      "title": "DB team confirms go for forced failover",
+      "owner_team": "db",
+      "type": "human",
+      "action": null,
+      "params": [],
+      "depends_on": [
+       "pre-2"
+      ],
+      "success_criteria": "Confirmed in console",
+      "abort_on_failure": true
+     },
+     {
+      "id": "pre-4",
+      "phase": "pre-checks",
+      "title": "Start heartbeat writer (RPO measurement)",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "start_heartbeat",
+      "params": [],
+      "depends_on": [
+       "pre-3"
+      ],
+      "success_criteria": "Heartbeats acknowledged",
+      "abort_on_failure": true
+     },
+     {
+      "id": "out-1",
+      "phase": "outage",
+      "title": "Inject outage: stop Region A web app",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "inject_outage",
+      "params": [
+       {
+        "key": "region",
+        "value": "A"
+       }
+      ],
+      "depends_on": [
+       "pre-4"
+      ],
+      "success_criteria": "Region A /health fails",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fo-1",
+      "phase": "failover",
+      "title": "Forced SQL failover to Region B",
+      "owner_team": "db",
+      "type": "automated",
+      "action": "sql_failover",
+      "params": [
+       {
+        "key": "target_region",
+        "value": "B"
+       },
+       {
+        "key": "allow_data_loss",
+        "value": "true"
+       }
+      ],
+      "depends_on": [
+       "out-1"
+      ],
+      "success_criteria": "Region B is SQL primary",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fo-2",
+      "phase": "failover",
+      "title": "Disable Region A Traffic Manager endpoint",
+      "owner_team": "network",
+      "type": "automated",
+      "action": "tm_set_endpoint",
+      "params": [
+       {
+        "key": "region",
+        "value": "A"
+       },
+       {
+        "key": "enabled",
+        "value": "false"
+       }
+      ],
+      "depends_on": [
+       "fo-1"
+      ],
+      "success_criteria": "Endpoint A disabled",
+      "abort_on_failure": true
+     },
+     {
+      "id": "val-1",
+      "phase": "validation",
+      "title": "Wait until users are served from Region B",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "wait_healthy",
+      "params": [
+       {
+        "key": "target",
+        "value": "tm"
+       },
+       {
+        "key": "expect_region",
+        "value": "B"
+       },
+       {
+        "key": "timeout_s",
+        "value": "900"
+       }
+      ],
+      "depends_on": [
+       "fo-2"
+      ],
+      "success_criteria": "TM /health OK from Region B with db_ok",
+      "abort_on_failure": true
+     },
+     {
+      "id": "val-2",
+      "phase": "validation",
+      "title": "Functional check: make a payment via Traffic Manager",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "functional_txn_check",
+      "params": [],
+      "depends_on": [
+       "val-1"
+      ],
+      "success_criteria": "Payment written and read back",
+      "abort_on_failure": true
+     },
+     {
+      "id": "val-3",
+      "phase": "validation",
+      "title": "Measure RPO from heartbeats",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "measure_rpo",
+      "params": [],
+      "depends_on": [
+       "val-2"
+      ],
+      "success_criteria": "RPO computed",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-1",
+      "phase": "failback",
+      "title": "App team approves failback",
+      "owner_team": "app",
+      "type": "human",
+      "action": null,
+      "params": [],
+      "depends_on": [
+       "val-3"
+      ],
+      "success_criteria": "Confirmed in console",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-2",
+      "phase": "failback",
+      "title": "Start Region A web app",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "start_webapp",
+      "params": [
+       {
+        "key": "region",
+        "value": "A"
+       }
+      ],
+      "depends_on": [
+       "fb-1"
+      ],
+      "success_criteria": "Region A running",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-3",
+      "phase": "failback",
+      "title": "Wait for Region A to be healthy (direct)",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "wait_healthy",
+      "params": [
+       {
+        "key": "target",
+        "value": "A"
+       },
+       {
+        "key": "expect_region",
+        "value": "A"
+       },
+       {
+        "key": "timeout_s",
+        "value": "600"
+       }
+      ],
+      "depends_on": [
+       "fb-2"
+      ],
+      "success_criteria": "Region A /health OK",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-4",
+      "phase": "failback",
+      "title": "Planned SQL failover back to Region A",
+      "owner_team": "db",
+      "type": "automated",
+      "action": "sql_failover",
+      "params": [
+       {
+        "key": "target_region",
+        "value": "A"
+       },
+       {
+        "key": "allow_data_loss",
+        "value": "false"
+       }
+      ],
+      "depends_on": [
+       "fb-3"
+      ],
+      "success_criteria": "Region A is SQL primary",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-5",
+      "phase": "failback",
+      "title": "Re-enable Region A Traffic Manager endpoint",
+      "owner_team": "network",
+      "type": "automated",
+      "action": "tm_set_endpoint",
+      "params": [
+       {
+        "key": "region",
+        "value": "A"
+       },
+       {
+        "key": "enabled",
+        "value": "true"
+       }
+      ],
+      "depends_on": [
+       "fb-4"
+      ],
+      "success_criteria": "Endpoint A enabled",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-6",
+      "phase": "failback",
+      "title": "Wait until users are served from Region A again",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "wait_healthy",
+      "params": [
+       {
+        "key": "target",
+        "value": "tm"
+       },
+       {
+        "key": "expect_region",
+        "value": "A"
+       },
+       {
+        "key": "timeout_s",
+        "value": "900"
+       }
+      ],
+      "depends_on": [
+       "fb-5"
+      ],
+      "success_criteria": "TM /health OK from Region A",
+      "abort_on_failure": true
+     },
+     {
+      "id": "iaas-2",
+      "phase": "closure",
+      "title": "Verify the recovered reports VM serves from Region B and produces the daily payments report (ASR test failover)",
+      "owner_team": "infra",
+      "type": "automated",
+      "action": "asr_verify_recovery",
+      "params": [
+       {
+        "key": "timeout_s",
+        "value": "1200"
+       }
+      ],
+      "depends_on": [
+       "iaas-1",
+       "fb-6"
+      ],
+      "success_criteria": "Recovered VM /health OK in Southeast Asia and daily payments report produced",
+      "abort_on_failure": false
+     },
+     {
+      "id": "iaas-3",
+      "phase": "closure",
+      "title": "Clean up the ASR test failover",
+      "owner_team": "infra",
+      "type": "automated",
+      "action": "asr_test_cleanup",
+      "params": [],
+      "depends_on": [
+       "iaas-2"
+      ],
+      "success_criteria": "Test VM removed",
+      "abort_on_failure": false
+     },
+     {
+      "id": "cl-1",
+      "phase": "closure",
+      "title": "Stop heartbeat writer",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "stop_heartbeat",
+      "params": [],
+      "depends_on": [
+       "fb-6"
+      ],
+      "success_criteria": "Writer stopped",
+      "abort_on_failure": false
+     },
+     {
+      "id": "cl-2",
+      "phase": "closure",
+      "title": "Generate report & notify stakeholders",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "generate_report",
+      "params": [],
+      "depends_on": [
+       "cl-1"
+      ],
+      "success_criteria": "Report published",
+      "abort_on_failure": false
+     }
+    ],
+    "assumptions": [
+     "Region A (East Asia) is primary and Region B (Southeast Asia) is a warm standby.",
+     "The IaaS reports VM is replicated by Azure Site Recovery; it is validated with a non-disruptive TEST failover.",
+     "The outage is simulated by stopping the Region A web app; the database is failed over as if Region A were lost.",
+     "No production systems are affected; this runs on the demo environment."
+    ]
+   },
+   "grade": {
+    "schema_ok": true,
+    "llm": false,
+    "first_pass": false,
+    "final_valid": false,
+    "attempts": 1,
+    "problems": [
+     "foundry-agent ReadTimeout: The read operation timed out; APITimeoutError: Request timed out."
+    ],
+    "pass": false
+   },
+   "calls": [
+    {
+     "name": "planner",
+     "source": "fallback",
+     "via": "fallback",
+     "error": "foundry-agent ReadTimeout: The read operation timed out; APITimeoutError: Request timed out.",
+     "latency_ms": 61448,
+     "model": "",
+     "agent_version": "",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cached_tokens": 0,
+      "reasoning_tokens": 0,
+      "rounds": 1
+     },
+     "cost_usd": 0.0,
+     "blocked": false,
+     "tools": []
+    }
+   ],
+   "latency_ms": 61449,
+   "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cached_tokens": 0,
+    "reasoning_tokens": 0,
+    "rounds": 1
+   },
+   "cost_usd": 0.0,
+   "model": "",
+   "agent_version": "",
+   "throttled": false,
+   "rep": 1,
+   "groundedness": null
+  },
+  {
+   "id": "planner-notes",
+   "agent": "planner",
+   "kind": "plan",
+   "source": "llm",
+   "via": "foundry-agent",
+   "error": null,
+   "output": {
+    "steps": [
+     {
+      "id": "pre-1",
+      "phase": "pre-checks",
+      "title": "Snapshot inventory & configuration",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "snapshot_inventory",
+      "params": [],
+      "depends_on": [],
+      "success_criteria": "Inventory for rg-dra-workload and resources captured",
+      "abort_on_failure": true
+     },
+     {
+      "id": "pre-2",
+      "phase": "pre-checks",
+      "title": "Verify SQL failover group (dra-fog-e23x) is healthy and replicating",
+      "owner_team": "db",
+      "type": "automated",
+      "action": "check_fog",
+      "params": [],
+      "depends_on": [
+       "pre-1"
+      ],
+      "success_criteria": "dra-fog-e23x shows primary=A (East Asia) and secondaries CATCH_UP",
+      "abort_on_failure": true
+     },
+     {
+      "id": "pre-3",
+      "phase": "pre-checks",
+      "title": "Start ASR test failover of the reports VM (isolated network) in background",
+      "owner_team": "infra",
+      "type": "automated",
+      "action": "asr_test_failover",
+      "params": [],
+      "depends_on": [
+       "pre-2"
+      ],
+      "success_criteria": "ASR test failover job for dra-vm-reports started into Southeast Asia test network",
+      "abort_on_failure": false
+     },
+     {
+      "id": "pre-4",
+      "phase": "pre-checks",
+      "title": "DB team confirms go for forced failover",
+      "owner_team": "db",
+      "type": "human",
+      "action": null,
+      "params": [],
+      "depends_on": [
+       "pre-2"
+      ],
+      "success_criteria": "DB team records approval to proceed with forced failover to Region B",
+      "abort_on_failure": true
+     },
+     {
+      "id": "pre-5",
+      "phase": "pre-checks",
+      "title": "Start heartbeat writer (1s) for RPO measurement",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "start_heartbeat",
+      "params": [],
+      "depends_on": [
+       "pre-4"
+      ],
+      "success_criteria": "Heartbeat process writing 1s ticks to paymentsdb confirmed",
+      "abort_on_failure": true
+     },
+     {
+      "id": "out-1",
+      "phase": "outage",
+      "title": "Inject outage: stop Region A web app (dra-app-eas-e23x)",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "inject_outage",
+      "params": [
+       {
+        "key": "region",
+        "value": "A"
+       }
+      ],
+      "depends_on": [
+       "pre-5"
+      ],
+      "success_criteria": "Region A /health becomes unavailable (simulated outage of dra-app-eas-e23x)",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fo-1",
+      "phase": "failover",
+      "title": "Forced SQL failover to Region B (make Southeast Asia primary)",
+      "owner_team": "db",
+      "type": "automated",
+      "action": "sql_failover",
+      "params": [
+       {
+        "key": "target_region",
+        "value": "B"
+       },
+       {
+        "key": "allow_data_loss",
+        "value": "true"
+       }
+      ],
+      "depends_on": [
+       "out-1"
+      ],
+      "success_criteria": "dra-fog-e23x shows Region B (Southeast Asia) as SQL primary",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fo-2",
+      "phase": "failover",
+      "title": "Disable Region A Traffic Manager endpoint",
+      "owner_team": "network",
+      "type": "automated",
+      "action": "tm_set_endpoint",
+      "params": [
+       {
+        "key": "region",
+        "value": "A"
+       },
+       {
+        "key": "enabled",
+        "value": "false"
+       }
+      ],
+      "depends_on": [
+       "fo-1"
+      ],
+      "success_criteria": "Traffic Manager endpoint A (dra-app-eas-e23x) disabled",
+      "abort_on_failure": true
+     },
+     {
+      "id": "val-1",
+      "phase": "validation",
+      "title": "Wait until Traffic Manager serves users from Region B",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "wait_healthy",
+      "params": [
+       {
+        "key": "target",
+        "value": "tm"
+       },
+       {
+        "key": "expect_region",
+        "value": "B"
+       },
+       {
+        "key": "timeout_s",
+        "value": "900"
+       }
+      ],
+      "depends_on": [
+       "fo-2"
+      ],
+      "success_criteria": "TM /health reports Region B and application /health OK from Southeast Asia",
+      "abort_on_failure": true
+     },
+     {
+      "id": "val-2",
+      "phase": "validation",
+      "title": "Functional payment check via Traffic Manager (post-failover)",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "functional_txn_check",
+      "params": [],
+      "depends_on": [
+       "val-1"
+      ],
+      "success_criteria": "Payment POST accepted and read back from paymentsdb on Region B primary",
+      "abort_on_failure": true
+     },
+     {
+      "id": "val-3",
+      "phase": "validation",
+      "title": "Measure RPO using heartbeat vs new primary",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "measure_rpo",
+      "params": [],
+      "depends_on": [
+       "val-2"
+      ],
+      "success_criteria": "RPO computed and within acceptable test limits (documented)",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-1",
+      "phase": "failback",
+      "title": "App team approves failback to Region A",
+      "owner_team": "app",
+      "type": "human",
+      "action": null,
+      "params": [],
+      "depends_on": [
+       "val-3"
+      ],
+      "success_criteria": "App team confirms Region A is ready and approves planned failback",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-2",
+      "phase": "failback",
+      "title": "Start Region A web app (dra-app-eas-e23x)",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "start_webapp",
+      "params": [
+       {
+        "key": "region",
+        "value": "A"
+       }
+      ],
+      "depends_on": [
+       "fb-1"
+      ],
+      "success_criteria": "dra-app-eas-e23x service started in East Asia",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-3",
+      "phase": "failback",
+      "title": "Wait for Region A application health (direct)",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "wait_healthy",
+      "params": [
+       {
+        "key": "target",
+        "value": "A"
+       },
+       {
+        "key": "expect_region",
+        "value": "A"
+       },
+       {
+        "key": "timeout_s",
+        "value": "600"
+       }
+      ],
+      "depends_on": [
+       "fb-2"
+      ],
+      "success_criteria": "Region A /health OK (dra-app-eas-e23x responding)",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-4",
+      "phase": "failback",
+      "title": "Planned SQL failover back to Region A (make East Asia primary)",
+      "owner_team": "db",
+      "type": "automated",
+      "action": "sql_failover",
+      "params": [
+       {
+        "key": "target_region",
+        "value": "A"
+       },
+       {
+        "key": "allow_data_loss",
+        "value": "false"
+       }
+      ],
+      "depends_on": [
+       "fb-3"
+      ],
+      "success_criteria": "dra-fog-e23x shows Region A as SQL primary with no data loss",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-5",
+      "phase": "failback",
+      "title": "Re-enable Region A Traffic Manager endpoint",
+      "owner_team": "network",
+      "type": "automated",
+      "action": "tm_set_endpoint",
+      "params": [
+       {
+        "key": "region",
+        "value": "A"
+       },
+       {
+        "key": "enabled",
+        "value": "true"
+       }
+      ],
+      "depends_on": [
+       "fb-4"
+      ],
+      "success_criteria": "Traffic Manager endpoint A enabled and ready",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-6",
+      "phase": "failback",
+      "title": "Wait until Traffic Manager serves users from Region A again",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "wait_healthy",
+      "params": [
+       {
+        "key": "target",
+        "value": "tm"
+       },
+       {
+        "key": "expect_region",
+        "value": "A"
+       },
+       {
+        "key": "timeout_s",
+        "value": "900"
+       }
+      ],
+      "depends_on": [
+       "fb-5"
+      ],
+      "success_criteria": "TM /health OK from East Asia and users routed to dra-app-eas-e23x",
+      "abort_on_failure": true
+     },
+     {
+      "id": "closure-iaas-verify",
+      "phase": "closure",
+      "title": "Verify the recovered reports VM serves from Region B and produces the daily payments report (ASR test failover verification)",
+      "owner_team": "infra",
+      "type": "automated",
+      "action": "asr_verify_recovery",
+      "params": [
+       {
+        "key": "timeout_s",
+        "value": "1200"
+       }
+      ],
+      "depends_on": [
+       "pre-3",
+       "fb-6"
+      ],
+      "success_criteria": "Recovered VM in Southeast Asia responds and produces daily payments report",
+      "abort_on_failure": false
+     },
+     {
+      "id": "closure-iaas-clean",
+      "phase": "closure",
+      "title": "Clean up the ASR test failover (remove test VM)",
+      "owner_team": "infra",
+      "type": "automated",
+      "action": "asr_test_cleanup",
+      "params": [],
+      "depends_on": [
+       "closure-iaas-verify"
+      ],
+      "success_criteria": "ASR test VM removed and resources cleaned",
+      "abort_on_failure": false
+     },
+     {
+      "id": "cl-1",
+      "phase": "closure",
+      "title": "Stop heartbeat writer",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "stop_heartbeat",
+      "params": [],
+      "depends_on": [
+       "fb-6"
+      ],
+      "success_criteria": "Heartbeat stopped and final timestamps recorded",
+      "abort_on_failure": false
+     },
+     {
+      "id": "cl-2",
+      "phase": "closure",
+      "title": "Functional payment check after failback (Payments team requested second check)",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "functional_txn_check",
+      "params": [],
+      "depends_on": [
+       "cl-1"
+      ],
+      "success_criteria": "Second payment POST accepted and read back from paymentsdb on Region A primary",
+      "abort_on_failure": false
+     },
+     {
+      "id": "cl-3",
+      "phase": "closure",
+      "title": "Generate exercise report & notify stakeholders",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "generate_report",
+      "params": [],
+      "depends_on": [
+       "cl-2",
+       "closure-iaas-clean"
+      ],
+      "success_criteria": "Exercise report published to stakeholders (includes RPO, RTO, ASR results)",
+      "abort_on_failure": false
+     }
+    ],
+    "assumptions": [
+     "Region A = East Asia (primary), Region B = Southeast Asia (DR warm-standby).",
+     "Traffic Manager endpoint A points to dra-app-eas-e23x, endpoint B to dra-app-sea-e23x; FQDN dra-tm-e23x.trafficmanager.net used for functional checks.",
+     "SQL Failover Group dra-fog-e23x covers paymentsdb with primary initially in Region A.",
+     "ASR test failover is non-disruptive and runs in an isolated test network in Southeast Asia.",
+     "Heartbeat writer measures RPO against the active SQL primary; paymentsdb is used for functional transactions."
+    ]
+   },
+   "grade": {
+    "schema_ok": true,
+    "llm": true,
+    "first_pass": true,
+    "final_valid": true,
+    "attempts": 1,
+    "problems": [],
+    "pass": true
+   },
+   "calls": [
+    {
+     "name": "planner",
+     "source": "llm",
+     "via": "foundry-agent",
+     "error": null,
+     "latency_ms": 26624,
+     "model": "gpt-5-mini",
+     "agent_version": "2",
+     "usage": {
+      "input_tokens": 5332,
+      "output_tokens": 3253,
+      "cached_tokens": 0,
+      "reasoning_tokens": 192,
+      "rounds": 1
+     },
+     "cost_usd": 0.007839,
+     "blocked": false,
+     "tools": []
+    }
+   ],
+   "latency_ms": 26625,
+   "usage": {
+    "input_tokens": 5332,
+    "output_tokens": 3253,
+    "cached_tokens": 0,
+    "reasoning_tokens": 192,
+    "rounds": 1
+   },
+   "cost_usd": 0.007839,
+   "model": "gpt-5-mini",
+   "agent_version": "2",
+   "throttled": false,
+   "rep": 0,
+   "groundedness": null
+  },
+  {
+   "id": "planner-notes",
+   "agent": "planner",
+   "kind": "plan",
+   "source": "fallback",
+   "via": "fallback",
+   "error": "foundry-agent ReadTimeout: The read operation timed out; APITimeoutError: Request timed out.",
+   "output": {
+    "steps": [
+     {
+      "id": "pre-1",
+      "phase": "pre-checks",
+      "title": "Snapshot inventory & configuration",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "snapshot_inventory",
+      "params": [],
+      "depends_on": [],
+      "success_criteria": "Inventory captured",
+      "abort_on_failure": true
+     },
+     {
+      "id": "pre-2",
+      "phase": "pre-checks",
+      "title": "Verify SQL failover group replication is healthy",
+      "owner_team": "db",
+      "type": "automated",
+      "action": "check_fog",
+      "params": [],
+      "depends_on": [
+       "pre-1"
+      ],
+      "success_criteria": "Region A primary, replication CATCH_UP/SEEDED",
+      "abort_on_failure": true
+     },
+     {
+      "id": "iaas-1",
+      "phase": "pre-checks",
+      "title": "Start ASR test failover of the reports VM (isolated network)",
+      "owner_team": "infra",
+      "type": "automated",
+      "action": "asr_test_failover",
+      "params": [],
+      "depends_on": [
+       "pre-2"
+      ],
+      "success_criteria": "Test failover job started",
+      "abort_on_failure": false
+     },
+     {
+      "id": "pre-3",
+      "phase": "pre-checks",
+      "title": "DB team confirms go for forced failover",
+      "owner_team": "db",
+      "type": "human",
+      "action": null,
+      "params": [],
+      "depends_on": [
+       "pre-2"
+      ],
+      "success_criteria": "Confirmed in console",
+      "abort_on_failure": true
+     },
+     {
+      "id": "pre-4",
+      "phase": "pre-checks",
+      "title": "Start heartbeat writer (RPO measurement)",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "start_heartbeat",
+      "params": [],
+      "depends_on": [
+       "pre-3"
+      ],
+      "success_criteria": "Heartbeats acknowledged",
+      "abort_on_failure": true
+     },
+     {
+      "id": "out-1",
+      "phase": "outage",
+      "title": "Inject outage: stop Region A web app",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "inject_outage",
+      "params": [
+       {
+        "key": "region",
+        "value": "A"
+       }
+      ],
+      "depends_on": [
+       "pre-4"
+      ],
+      "success_criteria": "Region A /health fails",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fo-1",
+      "phase": "failover",
+      "title": "Forced SQL failover to Region B",
+      "owner_team": "db",
+      "type": "automated",
+      "action": "sql_failover",
+      "params": [
+       {
+        "key": "target_region",
+        "value": "B"
+       },
+       {
+        "key": "allow_data_loss",
+        "value": "true"
+       }
+      ],
+      "depends_on": [
+       "out-1"
+      ],
+      "success_criteria": "Region B is SQL primary",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fo-2",
+      "phase": "failover",
+      "title": "Disable Region A Traffic Manager endpoint",
+      "owner_team": "network",
+      "type": "automated",
+      "action": "tm_set_endpoint",
+      "params": [
+       {
+        "key": "region",
+        "value": "A"
+       },
+       {
+        "key": "enabled",
+        "value": "false"
+       }
+      ],
+      "depends_on": [
+       "fo-1"
+      ],
+      "success_criteria": "Endpoint A disabled",
+      "abort_on_failure": true
+     },
+     {
+      "id": "val-1",
+      "phase": "validation",
+      "title": "Wait until users are served from Region B",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "wait_healthy",
+      "params": [
+       {
+        "key": "target",
+        "value": "tm"
+       },
+       {
+        "key": "expect_region",
+        "value": "B"
+       },
+       {
+        "key": "timeout_s",
+        "value": "900"
+       }
+      ],
+      "depends_on": [
+       "fo-2"
+      ],
+      "success_criteria": "TM /health OK from Region B with db_ok",
+      "abort_on_failure": true
+     },
+     {
+      "id": "val-2",
+      "phase": "validation",
+      "title": "Functional check: make a payment via Traffic Manager",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "functional_txn_check",
+      "params": [],
+      "depends_on": [
+       "val-1"
+      ],
+      "success_criteria": "Payment written and read back",
+      "abort_on_failure": true
+     },
+     {
+      "id": "val-3",
+      "phase": "validation",
+      "title": "Measure RPO from heartbeats",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "measure_rpo",
+      "params": [],
+      "depends_on": [
+       "val-2"
+      ],
+      "success_criteria": "RPO computed",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-1",
+      "phase": "failback",
+      "title": "App team approves failback",
+      "owner_team": "app",
+      "type": "human",
+      "action": null,
+      "params": [],
+      "depends_on": [
+       "val-3"
+      ],
+      "success_criteria": "Confirmed in console",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-2",
+      "phase": "failback",
+      "title": "Start Region A web app",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "start_webapp",
+      "params": [
+       {
+        "key": "region",
+        "value": "A"
+       }
+      ],
+      "depends_on": [
+       "fb-1"
+      ],
+      "success_criteria": "Region A running",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-3",
+      "phase": "failback",
+      "title": "Wait for Region A to be healthy (direct)",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "wait_healthy",
+      "params": [
+       {
+        "key": "target",
+        "value": "A"
+       },
+       {
+        "key": "expect_region",
+        "value": "A"
+       },
+       {
+        "key": "timeout_s",
+        "value": "600"
+       }
+      ],
+      "depends_on": [
+       "fb-2"
+      ],
+      "success_criteria": "Region A /health OK",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-4",
+      "phase": "failback",
+      "title": "Planned SQL failover back to Region A",
+      "owner_team": "db",
+      "type": "automated",
+      "action": "sql_failover",
+      "params": [
+       {
+        "key": "target_region",
+        "value": "A"
+       },
+       {
+        "key": "allow_data_loss",
+        "value": "false"
+       }
+      ],
+      "depends_on": [
+       "fb-3"
+      ],
+      "success_criteria": "Region A is SQL primary",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-5",
+      "phase": "failback",
+      "title": "Re-enable Region A Traffic Manager endpoint",
+      "owner_team": "network",
+      "type": "automated",
+      "action": "tm_set_endpoint",
+      "params": [
+       {
+        "key": "region",
+        "value": "A"
+       },
+       {
+        "key": "enabled",
+        "value": "true"
+       }
+      ],
+      "depends_on": [
+       "fb-4"
+      ],
+      "success_criteria": "Endpoint A enabled",
+      "abort_on_failure": true
+     },
+     {
+      "id": "fb-6",
+      "phase": "failback",
+      "title": "Wait until users are served from Region A again",
+      "owner_team": "app",
+      "type": "automated",
+      "action": "wait_healthy",
+      "params": [
+       {
+        "key": "target",
+        "value": "tm"
+       },
+       {
+        "key": "expect_region",
+        "value": "A"
+       },
+       {
+        "key": "timeout_s",
+        "value": "900"
+       }
+      ],
+      "depends_on": [
+       "fb-5"
+      ],
+      "success_criteria": "TM /health OK from Region A",
+      "abort_on_failure": true
+     },
+     {
+      "id": "iaas-2",
+      "phase": "closure",
+      "title": "Verify the recovered reports VM serves from Region B and produces the daily payments report (ASR test failover)",
+      "owner_team": "infra",
+      "type": "automated",
+      "action": "asr_verify_recovery",
+      "params": [
+       {
+        "key": "timeout_s",
+        "value": "1200"
+       }
+      ],
+      "depends_on": [
+       "iaas-1",
+       "fb-6"
+      ],
+      "success_criteria": "Recovered VM /health OK in Southeast Asia and daily payments report produced",
+      "abort_on_failure": false
+     },
+     {
+      "id": "iaas-3",
+      "phase": "closure",
+      "title": "Clean up the ASR test failover",
+      "owner_team": "infra",
+      "type": "automated",
+      "action": "asr_test_cleanup",
+      "params": [],
+      "depends_on": [
+       "iaas-2"
+      ],
+      "success_criteria": "Test VM removed",
+      "abort_on_failure": false
+     },
+     {
+      "id": "cl-1",
+      "phase": "closure",
+      "title": "Stop heartbeat writer",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "stop_heartbeat",
+      "params": [],
+      "depends_on": [
+       "fb-6"
+      ],
+      "success_criteria": "Writer stopped",
+      "abort_on_failure": false
+     },
+     {
+      "id": "cl-2",
+      "phase": "closure",
+      "title": "Generate report & notify stakeholders",
+      "owner_team": "dr-agent",
+      "type": "automated",
+      "action": "generate_report",
+      "params": [],
+      "depends_on": [
+       "cl-1"
+      ],
+      "success_criteria": "Report published",
+      "abort_on_failure": false
+     }
+    ],
+    "assumptions": [
+     "Region A (East Asia) is primary and Region B (Southeast Asia) is a warm standby.",
+     "The IaaS reports VM is replicated by Azure Site Recovery; it is validated with a non-disruptive TEST failover.",
+     "The outage is simulated by stopping the Region A web app; the database is failed over as if Region A were lost.",
+     "No production systems are affected; this runs on the demo environment."
+    ]
+   },
+   "grade": {
+    "schema_ok": true,
+    "llm": false,
+    "first_pass": false,
+    "final_valid": false,
+    "attempts": 1,
+    "problems": [
+     "foundry-agent ReadTimeout: The read operation timed out; APITimeoutError: Request timed out."
+    ],
+    "pass": false
+   },
+   "calls": [
+    {
+     "name": "planner",
+     "source": "fallback",
+     "via": "fallback",
+     "error": "foundry-agent ReadTimeout: The read operation timed out; APITimeoutError: Request timed out.",
+     "latency_ms": 60614,
+     "model": "",
+     "agent_version": "",
+     "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cached_tokens": 0,
+      "reasoning_tokens": 0,
+      "rounds": 1
+     },
+     "cost_usd": 0.0,
+     "blocked": false,
+     "tools": []
+    }
+   ],
+   "latency_ms": 60615,
+   "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cached_tokens": 0,
+    "reasoning_tokens": 0,
+    "rounds": 1
+   },
+   "cost_usd": 0.0,
+   "model": "",
+   "agent_version": "",
+   "throttled": false,
+   "rep": 1,
+   "groundedness": null
+  }
+ ]
+}
