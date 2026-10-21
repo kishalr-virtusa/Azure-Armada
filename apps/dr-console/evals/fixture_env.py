@@ -69,9 +69,9 @@ class Records:
             out.append(copy.deepcopy(e))
         return sorted(out, key=lambda e: e["RowKey"])
 
-    def list_exercises(self, limit: int = 50) -> list[dict]:
+    def list_exercises(self, limit: int = 50, fields: tuple[str, ...] = ("status", "t0", "rto_s", "rpo_s")) -> list[dict]:
         rows = [self.exercise(x) for x in self.data["exercises"]]
-        rows = [{"PartitionKey": r["PartitionKey"], "RowKey": "meta", **{f: r.get(f) for f in ("status", "t0", "rto_s", "rpo_s")}}
+        rows = [{"PartitionKey": r["PartitionKey"], "RowKey": "meta", **{f: r.get(f) for f in fields}}
                 for r in rows if r]
         return sorted(rows, key=lambda x: x.get("t0") or "", reverse=True)[:limit]
 
