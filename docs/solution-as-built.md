@@ -16,6 +16,8 @@ This document describes the solution **as built and running** (21 Oct 2026). The
 
 Scope: **validation**, not DR design. DR comes in many patterns (backup & restore, pilot light, warm standby, active-passive, active-active). Our validator is pattern-aware; we have built and proven it on **warm standby**, the most common enterprise pattern, and adding a pattern means adding engine actions, not a redesign.
 
+**Where it runs:** full drills in staging or isolated test networks; production gets continuous read-only validation. Enterprises do not take production down casually, and neither does the DR Agent: the readiness checks are read-only and safe to run against production every 10 minutes; full failover drills run in a staging copy or in an isolated test network (as an Azure Site Recovery test failover does), and a production "game day" happens only when the business plans and approves it. Our demo runs a full drill on a test workload.
+
 ---
 
 ## 2. Describe the problem you are trying to solve in detail
@@ -56,7 +58,7 @@ The **DR Agent** turns DR validation from a manual weekend drill into a **contin
    - fail back with no data loss
    - optionally, a Site Recovery test failover of an IaaS server, with the recovered VM proving it produces the daily payments report
 
-   A drill is **blocked unless the latest readiness result is a recent GO**.
+   A drill is **blocked unless the latest readiness result is a recent GO**. Full drills run in staging or isolated test networks; production gets continuous read-only validation (layer 1).
 3. **Afterwards: evidence.** RTO and RPO are **measured by code**: every second of RTO is accounted for in segments (failover, DNS, Validator diagnosis, waiting for human approval…), and every acknowledged write is checked against the new primary. The **Reporter agent** writes the narrative, which is checked against the measurements, and the **Black box** answers any audit question about any past drill with citations.
 
 **Design principle: agents decide, the engine acts.** AI agents plan, diagnose and explain. A deterministic engine with a fixed set of 15 allowed actions is the only thing that changes Azure, and humans approve the risky moments. The worst outcome of a wrong or manipulated model is a rejected suggestion, never a bad action in production.
