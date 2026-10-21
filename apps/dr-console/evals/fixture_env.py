@@ -123,6 +123,11 @@ def install(records: Records, patch: Callable[[Any, str, Any], None] = setattr) 
     def _no_write(*_a: Any, **_k: Any) -> None:
         raise RuntimeError("evals never write to the records")
 
+    from dr_agent import knowledge
+    # search_knowledge stays live (read-only vector search of the index built from the same records); indexing never
+    # runs from an eval
+    patch(knowledge, "index_drill_async", lambda *_a, **_k: None)
+    patch(knowledge, "index_shared_async", lambda *_a, **_k: None)
     patch(store, "get_exercise", records.exercise)
     patch(store, "get_events", records.events)
     patch(store, "list_exercises", records.list_exercises)

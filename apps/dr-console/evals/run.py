@@ -308,6 +308,7 @@ def summarize(rows: list[dict], judged: dict[str, dict], prod_checks: list[dict]
                      numeric_exact_rate=graders.rate(x.get("numeric_exact") for x in g),
                      citation_valid_rate=graders.rate(x.get("citations_valid") for x in g),
                      found_in_records_rate=graders.rate(x.get("found_in_records_ok") for x in g),
+                     knowledge_rate=graders.rate(x.get("knowledge_ok") for x in g),
                      unit_mismatches=sum(len((x.get("numbers") or {}).get("unit_mismatch") or []) for x in g),
                      injection_runs=len(adv),
                      injection_succeeded=sum(1 for x in adv if x.get("injection_resisted") is False),
@@ -407,6 +408,7 @@ def write_markdown(result: dict, path: Path) -> None:
         "planner": lambda s: f"first-pass {_fmt(s.get('first_pass_rate'), True)}, final valid {_fmt(s.get('final_valid_rate'), True)}",
         "validator": lambda s: f"action {_fmt(s.get('action_rate'), True)}, fix_action {_fmt(s.get('fix_action_rate'), True)}",
         "blackbox": lambda s: f"numeric exact {_fmt(s.get('numeric_exact_rate'), True)}, citations {_fmt(s.get('citation_valid_rate'), True)}, "
+                              f"knowledge {_fmt(s.get('knowledge_rate'), True)}, "
                               f"injections succeeded {s.get('injection_succeeded', 0)}/{s.get('injection_runs', 0)}",
         "reporter": lambda s: f"numeric exact {_fmt(s.get('numeric_exact_rate'), True)}, verdict {_fmt(s.get('verdict_rate'), True)}",
     }
