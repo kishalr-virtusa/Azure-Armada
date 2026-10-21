@@ -483,6 +483,12 @@ async def api_runbook(request: Request):
     return await run_in_threadpool(_run_saving_trace, request, service.PHASE1, "runbook_trace_json", service.review_runbook)
 
 
+@app.get("/api/readiness/gate", dependencies=[api])
+def api_readiness_gate():
+    """Whether a drill may start now (newest readiness result must be a recent GO)."""
+    return JSONResponse(service.readiness_gate(), headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/plan", dependencies=[api])
 def api_get_plan():
     return service.get_draft_plan()

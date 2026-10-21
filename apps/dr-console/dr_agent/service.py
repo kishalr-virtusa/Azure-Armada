@@ -594,6 +594,38 @@ def get_draft_plan() -> dict:
 LOAD_WRITES_PER_S = 20  # "under payment load" option: confirmed database writes per second during the drill
 
 
+READINESS_MAX_AGE_MIN = 60  # a GO older than this no longer proves the environment is ready
+
+
+def readiness_gate() -> dict:
+    """Whether a drill may start: the newest readiness result (manual checks or Autopilot) must be a GO from the
+    last READINESS_MAX_AGE_MIN minutes. A NO-GO, no result at all, or a stale result blocks the drill."""
+    from dr_agent import autopilot
+    found: list[tuple[datetime, bool, str, str]] = []
+    p1 = _phase1()
+    if p1.get("readiness_json"):
+        at = _dt(json.loads(p1.get("readiness_meta_json") or "{}").get("at"))
+        rep = ReadinessReport.model_validate_json(p1["readiness_json"])
+        if at:
+            found.append((at, rep.go, "Readiness checks", rep.summary))
+    last = autopilot.get_state().get("last") or {}
+    if last.get("at") and "go" in last:
+        failing = ", ".join(last.get("failing") or {})
+        found.append((_dt(last["at"]), bool(last["go"]), "Autopilot", f"failing: {failing}" if failing else "all checks pass"))
+    if not found:
+        return {"ok": False, "reason": "No readiness result yet: run the readiness checks on Design & readiness first."}
+    at, go, source, detail = max(found, key=lambda f: f[0])
+    age_min = (datetime.now(timezone.utc) - at).total_seconds() / 60
+    base = {"source": source, "at": at.isoformat(), "go": go, "age_min": round(age_min, 1)}
+    if not go:
+        return {**base, "ok": False, "reason": f"Readiness is NO-GO ({source}, {age_min:.0f} min ago): {detail}. "
+                                               "Fix the failing checks, then start the drill."}
+    if age_min > READINESS_MAX_AGE_MIN:
+        return {**base, "ok": False, "reason": f"The last readiness GO is {age_min:.0f} min old: run the readiness checks "
+                                               "again before starting a drill."}
+    return {**base, "ok": True, "reason": f"Readiness GO ({source}, {age_min:.0f} min ago)."}
+
+
 def approve_and_start(approver: str, plan_data: Optional[dict] = None, chaos: bool = False, load: bool = False) -> dict:
     if not approver.strip():
         return {"error": "approver name is required"}
@@ -604,6 +636,9 @@ def approve_and_start(approver: str, plan_data: Optional[dict] = None, chaos: bo
         return {"error": f"plan rejected by safety validation: {e}"}
     if runner.any_running():  # check before writing anything, so a second click cannot leave a ghost drill
         return {"error": "another exercise is already running"}
+    gate = readiness_gate()
+    if not gate["ok"]:  # never break a system that is not ready to recover
+        return {"error": gate["reason"], "readiness": gate}
     p1 = _phase1()
     xid = "ex-" + datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     if store.get_exercise(xid):

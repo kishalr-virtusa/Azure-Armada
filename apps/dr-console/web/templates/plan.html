@@ -63,7 +63,8 @@
                 <input type="checkbox" name="chaos">
                 <span>Inject a surprise fault during the drill (tests the Validator agent)</span>
             </label>
-            <button type="submit" class="btn btn-danger" style="align-self: flex-start; margin-top: 4px;">
+            <p class="sub" id="readinessGate" style="margin: 2px 0 0;">Checking readiness…</p>
+            <button type="submit" class="btn btn-danger" id="approveBtn" style="align-self: flex-start; margin-top: 4px;">
                 Approve & Start Exercise
             </button>
         </form>
@@ -210,6 +211,31 @@
         }
     });
     
+    // A drill may only start on a recent readiness GO (the server enforces it too): show why before the click
+    async function checkGate() {
+        const el = document.getElementById('readinessGate');
+        const btn = document.getElementById('approveBtn');
+        try {
+            const res = await fetch('/api/readiness/gate', { cache: 'no-store' });
+            const g = await res.json();
+            el.textContent = '';
+            const pill = document.createElement('span');
+            pill.className = 'st ' + (g.ok ? 'pass' : 'fail');
+            pill.textContent = g.ok ? 'Readiness GO' : 'Blocked';
+            const why = document.createElement('span');
+            why.textContent = ' ' + g.reason;
+            el.append(pill, why);
+            if (!g.ok) {
+                const a = document.createElement('a');
+                a.href = '/phase1'; a.textContent = ' Open Design & readiness';
+                el.append(a);
+            }
+            if (btn.textContent.trim() !== 'Starting…') btn.disabled = !g.ok;
+        } catch (e) { el.textContent = 'Could not check readiness; the server checks it again when you start.'; }
+    }
+    checkGate();
+    setInterval(checkGate, 30000);
+
     // Check if there's an existing plan
     (async () => {
         try {
