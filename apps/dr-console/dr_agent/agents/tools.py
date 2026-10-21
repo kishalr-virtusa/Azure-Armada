@@ -1,6 +1,7 @@
 """Read-only investigation tools the Foundry agents may call themselves (function calling).
 
-Every tool only READS Azure state (live resources, or the recorded drills in Table storage for the Black box).
+Every tool only READS Azure state (live resources, or the recorded drills in Cosmos DB and the knowledge index for the
+Black box).
 Writes stay in the engine, behind the allowlist and human approvals, so letting an agent choose what to look at adds
 investigation, not risk. Each call is shown in the live activity trace.
 """
@@ -188,6 +189,11 @@ def _get_current_state() -> dict:
             "link": "/"}
 
 
+def _search_knowledge(query: str, k: int, source: str) -> dict:
+    from dr_agent import knowledge
+    return knowledge.search(query, k, source)
+
+
 # name -> (description, JSON schema for arguments, implementation)
 TOOLS: dict[str, tuple[str, dict, Callable[..., Any]]] = {
     "probe": ("Health-check a region's payments app (HTTP status, which region answered, database write OK), or "
@@ -213,9 +219,22 @@ TOOLS: dict[str, tuple[str, dict, Callable[..., Any]]] = {
                            _get_autopilot_feed),
     "get_current_state": ("Current health of both regions, which region serves customers, SQL primary, the latest drill's "
                           "status and Autopilot settings.", _obj({}), _get_current_state),
+    "search_knowledge": ("Semantic search over the DR knowledge (unstructured text, not measurements): the DR runbook "
+                         "and its latest review, drill report narratives and remediation items, Validator diagnoses, "
+                         "incident timelines (errors, fixes, surprise faults), Autopilot findings and tech decisions. "
+                         "Use it for what a document says, whether a problem happened before and how it was fixed, and "
+                         "recommendations; use the other tools for numbers, times and approvals. Returns the most "
+                         "similar chunks with source, ref, snippet, score, link and cite (the citation source to use).",
+                         _obj({"query": {"type": "string", "description": "The question or keywords, at most 500 characters"},
+                               "k": {"type": "integer", "description": "How many chunks, 1-8 (default 5)"},
+                               "source": {"type": "string", "enum": ["any", "runbook", "runbook-review", "report",
+                                                                     "diagnosis", "event", "autopilot", "decision"],
+                                          "description": "Only this kind of document, or any"}}),
+                         _search_knowledge),
 }
 
-BLACKBOX_TOOLS = ["list_drills", "get_drill", "get_drill_timeline", "get_autopilot_feed", "get_current_state"]
+BLACKBOX_TOOLS = ["list_drills", "get_drill", "get_drill_timeline", "get_autopilot_feed", "get_current_state",
+                  "search_knowledge"]
 
 # which agents may call which tools
 TOOLSETS: dict[str, list[str]] = {

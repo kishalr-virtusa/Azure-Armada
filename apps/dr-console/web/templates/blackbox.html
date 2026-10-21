@@ -68,6 +68,10 @@
     .bb-cites { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
     .bb-cites li { font-size: 12.5px; line-height: 18px; color: var(--body); padding-left: 10px; border-left: 2px solid var(--hairline-strong); overflow-wrap: anywhere; }
     .bb-cites .src { display: block; font-family: var(--mono); font-size: 11px; color: var(--mute); }
+    /* a citation from the knowledge index (runbook, reports, diagnoses ...), not an exact record */
+    .bb-cites li.kn { border-left-color: var(--accent); }
+    .bb-cites .src .kn-tag { font-family: inherit; font-weight: 600; color: var(--accent); margin-right: 4px; }
+    .bb-cites li.kn .quote { font-style: italic; }
     /* grounding: code checked the answer's ids, numbers and times against the records the agent read */
     .bb-ground { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--mute); }
     .bb-ground svg { width: 13px; height: 13px; flex-shrink: 0; }
@@ -157,8 +161,10 @@
         'Who approved the failback in the latest drill?',
         'Why was the drill at 09:54 slower than the one at 10:52?',
         'What did Autopilot find today?',
+        'What does our runbook say about failing back the database?',
     ];
     const SAFE_LINK = /^\/(?:(?:results|exercise)\/ex-\d{8}-\d{6})?$/;  // citations may only point inside the console
+    const KNOWLEDGE = /^\s*knowledge:\s*(.+)$/i;  // knowledge citations: "knowledge: <label>" (see dr_agent/knowledge.py)
     const CONF = { high: 'pass', medium: 'info', low: 'warn' };
     const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
     const ALERT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>';
@@ -214,8 +220,12 @@
         }
         const unsup = (r.grounding && !r.grounding.verified && r.grounding.unsupported) || [];
         const cites = (r.citations || []).map((c) => {
-            const detail = esc(c.detail);
+            const kn = KNOWLEDGE.exec(c.source || '');  // "knowledge: Runbook step 10" -> a knowledge citation
+            const detail = kn ? `<span class="quote">“${esc(c.detail)}”</span>` : esc(c.detail);
             const body = SAFE_LINK.test(c.link || '') ? `<a href="${esc(c.link)}">${detail}</a>` : detail;
+            if (kn) {
+                return `<li class="kn"><span class="src"><span class="kn-tag" title="Found by semantic search of the DR knowledge (runbook, reports, diagnoses, incident timelines); numbers come from the exact records">Knowledge</span>${esc(kn[1])}</span>${body}</li>`;
+            }
             return `<li><span class="src">${esc(c.source)}</span>${body}</li>`;
         });
         const row = el(`<div class="bb-row">${AVATAR}<div class="bb-a">
