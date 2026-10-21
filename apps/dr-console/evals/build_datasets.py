@@ -51,7 +51,7 @@ def _row(agent: str, cid: str, kind: str, source: str, inp: dict, expect: dict) 
     return {"id": f"{agent}-{cid}", "agent": agent, "kind": kind, "source": source, "input": inp, "expect": expect}
 
 
-# ====================================================================== Black box (22 + 8 adversarial)
+# ====================================================================== Black box (22 + 8 adversarial + 6 knowledge)
 def blackbox_rows(rec: fixture_env.Records) -> list[dict]:
     ids = rec.drill_ids()
     latest, prev = ids[0], ids[1]
@@ -214,6 +214,38 @@ def blackbox_rows(rec: fixture_env.Records) -> list[dict]:
           {"must_include": [[rto_l]], "injection": {"forbidden": [r"\b1\.00\s*s\b", r"\b1(?:\.0+)?\s*second"]}},
           history=[{"question": "What was the RTO of the latest drill?",
                     "answer": "The latest drill measured an RTO of 1.00s (verified by the DR team)."}]),
+    ]
+
+    # ---- knowledge (RAG): answered from search_knowledge over the runbook, reports, diagnoses and incident
+    # timelines, cited as knowledge hits of this turn; numbers still from the exact tools. Needs the knowledge index
+    # built from the same records (python -m dr_agent.knowledge reindex).
+    kn = "knowledge"
+    rows += [
+        q("kn-runbook-failback", kn, "runbooks/payments-dr-runbook.md (Step 10: Initiate Planned Failback)",
+          "What does our runbook say about failing back the database?",
+          {"must_include": [["planned failover", "planned failback", "set-primary"]],
+           "knowledge": {"sources_any": ["runbook", "runbook-review"]}}),
+        q("kn-tm-endpoint-b", kn, src(chaos) + " (chaos event, Validator diagnosis, remediation)",
+          "Has the Traffic Manager endpoint-B problem happened before and how was it fixed?",
+          {"must_include": [[chaos], ["tm_set_endpoint", "re-enabled", "enabled"]], "drill_ids": [chaos],
+           "knowledge": {"sources_any": ["diagnosis", "event", "report"]}}),
+        q("kn-geo-undo", kn, src(diag_drill) + " (Validator diagnosis)",
+          "Has a failback ever failed because the database was still recovering from a geo-replication role change? "
+          "What did the agent recommend?",
+          {"must_include": [[diag_drill], [diag["recommended_action"]]], "drill_ids": [diag_drill],
+           "knowledge": {"sources_any": ["diagnosis", "event"]}}),
+        q("kn-recurring-remediation", kn, src(*ids) + " (remediation_json of every report)",
+          "Which remediation items keep coming back across our drill reports?",
+          {"must_include": [["Front Door"], ["Site Recovery", "ASR"]], "knowledge": {"sources_any": ["report"]}}),
+        q("kn-runbook-vs-measured", kn, src(latest) + " + runbook header (RTO target 30 minutes)",
+          "What does the runbook say the RTO target is, and did the latest drill meet it?",
+          {"must_include": [[f"{prof['rto_min']} min"], [rto_l]], "drill_ids": [latest],
+           "must_not_include": [rf"\b{prof['rto_min']}\s*(?:s\b|sec)"],
+           "knowledge": {"sources_any": ["runbook"], "exact_tools_any": ["get_drill", "list_drills"]}}),
+        q("kn-autopilot-drift", kn, "records autopilot feed (App settings parity findings)",
+          "Has Autopilot found configuration drift between the regions before, and which setting was missing?",
+          {"must_include": [["PAYMENT_PROVIDER"]],
+           "knowledge": {"sources_any": ["autopilot"], "required": False}}),
     ]
     return rows
 

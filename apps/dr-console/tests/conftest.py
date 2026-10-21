@@ -80,6 +80,13 @@ class FakeContainer:
         return [{f: d[f] for f in fields if f in d} for d in rows]  # missing fields are omitted, as in Cosmos
 
 
+@pytest.fixture(autouse=True)
+def _no_knowledge_indexing(monkeypatch):
+    """Report builds and runbook reviews start background knowledge indexing (embeddings + Cosmos writes); tests that
+    exercise it switch it back on explicitly."""
+    monkeypatch.setenv("KNOWLEDGE_ENABLED", "false")
+
+
 @pytest.fixture
 def cosmos(monkeypatch):
     """store.py backed by in-memory containers; returns {container name: FakeContainer}."""

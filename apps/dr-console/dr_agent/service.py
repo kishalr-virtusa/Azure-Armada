@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from dr_agent import trace
+from dr_agent import knowledge, trace
 from dr_agent.config import config
 from dr_agent.engine import runner
 from dr_agent.engine import measurements as M
@@ -563,6 +563,7 @@ def review_runbook() -> dict:
         saved["updated_runbook_md"] = saved["updated_runbook_md"][:max(0, len(saved["updated_runbook_md"]) - over - 200)] + "\n\n…(shortened for storage)"
         raw = json.dumps(saved)
     store.upsert_exercise(PHASE1, {"runbook_json": raw, "runbook_meta_json": json.dumps(meta)})
+    _safe(knowledge.index_shared_async)  # the Black box can now search the reviewed runbook (background, best effort)
     return {**res.output.model_dump(), **meta, "original_md": md}
 
 

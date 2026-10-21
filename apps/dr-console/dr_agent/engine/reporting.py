@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 
 from jinja2 import Environment, select_autoescape
@@ -9,6 +10,8 @@ from jinja2 import Environment, select_autoescape
 from dr_agent.engine.measurements import fmt_duration
 from dr_agent.models import AppProfile
 from dr_agent.tools import store
+
+log = logging.getLogger(__name__)
 
 TEMPLATE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>DR Exercise Report {{ xid }}</title>
@@ -146,6 +149,18 @@ def build_report(xid: str) -> str:
         approvals=m.get("approvals_json", ""), grounding=grounding_note(res.grounding))
     url = store.upload_report(xid, html)
     store.upsert_exercise(xid, {"report_url": url, "remediation_json": json.dumps([r.model_dump() for r in narrative.remediation]),
+                                "report_narrative_json": narrative.model_dump_json()[:30000],
                                 "report_grounding_json": json.dumps(res.grounding),
                                 "report_agent_version": res.agent_version, "report_via": res.via})
+    _index_knowledge(xid)
     return url
+
+
+def _index_knowledge(xid: str) -> None:
+    """Add this drill's report, diagnoses and incident timeline to the Black box knowledge index: best effort, in the
+    background, never failing or delaying the drill."""
+    try:
+        from dr_agent import knowledge
+        knowledge.index_drill_async(xid)
+    except Exception as e:  # noqa: BLE001
+        log.warning("knowledge indexing of %s not started: %s", xid, e)

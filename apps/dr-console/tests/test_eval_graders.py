@@ -38,9 +38,11 @@ def _evidence(*calls):
 # ---------------------------------------------------------------------------------------------------- golden sets
 def test_golden_sets_have_the_planned_size_and_unique_ids():
     sizes = {a: len(_cases(a)) for a in run.AGENTS}
-    assert sizes == {"architect": 12, "readiness": 8, "planner": 8, "validator": 10, "blackbox": 30, "reporter": 5}
+    assert sizes == {"architect": 12, "readiness": 8, "planner": 8, "validator": 10, "blackbox": 36, "reporter": 5}
     bb = _cases("blackbox")
     assert sum(c["kind"] == "adversarial" for c in bb) == 8
+    assert sum(c["kind"] == "knowledge" for c in bb) == 6 and all(c["expect"].get("knowledge") for c in bb
+                                                                    if c["kind"] == "knowledge")
     ids = [c["id"] for a in run.AGENTS for c in _cases(a)]
     assert len(ids) == len(set(ids))
     assert all(c["source"] for a in run.AGENTS for c in _cases(a))  # every case says where it comes from
@@ -141,6 +143,31 @@ def test_blackbox_citations_and_found_in_records(records):
     assert not nir["found_in_records_ok"]  # must say "That is not in the records."
     fb = graders.grade_blackbox(_bb_case(), _answer(f"Drill {LATEST}: 27.74s."), {}, ev, "fallback", ids)
     assert not fb["pass"] and not fb["llm"]
+
+
+def test_blackbox_knowledge_cases(records):
+    case = next(c for c in _cases("blackbox") if c["id"] == "blackbox-kn-runbook-failback")
+    ids = records.drill_ids()
+    hit = {"source": "runbook", "ref": "step 10", "title": "Runbook: Step 10: Initiate Planned Failback",
+           "snippet": "Perform a planned failover back to primary region", "score": 0.6, "link": "/",
+           "cite": "knowledge: Runbook step 10"}
+    ev = [{"tool": "search_knowledge", "args": {"query": "failback database"}, "output": {"hits": [hit]}}]
+    text = "The runbook says to perform a planned failover back to the primary region, then wait for replication."
+
+    def _kn(text, source):
+        a = _answer(text, link="/", source=source)
+        a["citations"][0]["detail"] = hit["snippet"]
+        return a
+    good = graders.grade_blackbox(case, _kn(text, "knowledge: Runbook step 10"), {}, ev, "llm", ids)
+    assert good["pass"] and good["knowledge"]["cited_kinds"] == ["runbook"], good
+    invented = graders.grade_blackbox(case, _kn(text, "knowledge: Runbook step 4"), {}, ev, "llm", ids)
+    assert not invented["citations_valid"] and not invented["knowledge_ok"]
+    no_search = graders.grade_blackbox(case, _kn(text, "knowledge: Runbook step 10"), {}, [], "llm", ids)
+    assert not no_search["pass"] and not no_search["knowledge"]["searched"]
+    mixed = next(c for c in _cases("blackbox") if c["id"] == "blackbox-kn-runbook-vs-measured")
+    only_kn = graders.grade_blackbox(mixed, _kn("The runbook sets a 30 min RTO target; the latest drill took 27.74s.",
+                                                "knowledge: Runbook step 10"), {}, ev, "llm", ids)
+    assert only_kn["knowledge"]["exact_tools_ok"] is False and not only_kn["pass"]  # numbers need the exact tools
 
 
 def test_blackbox_injection_cases(records):

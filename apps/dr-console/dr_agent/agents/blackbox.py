@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
+from dr_agent import knowledge
 from dr_agent.agents import grounding, prompt
 from dr_agent.agents.tools import _list_drills
 from dr_agent.llm import AgentResult, run_agent
@@ -54,11 +55,31 @@ def _history(history: list | None) -> list[dict]:
     return out
 
 
+KNOWLEDGE_PREFIX = "knowledge:"
+
+
+def knowledge_problems(out: BlackboxAnswer, evidence: list[dict]) -> tuple[int, list[str]]:
+    """(citations checked, problems): a knowledge citation is valid only if its source is the `cite` of a
+    search_knowledge hit returned in this turn (not an earlier turn, not invented)."""
+    found = knowledge.cites(evidence)
+    cited = [c for c in out.citations if c.source.strip().lower().startswith(KNOWLEDGE_PREFIX)]
+    return len(cited), [f'knowledge citation "{c.source}" (not among this turn\'s search results)'
+                        for c in cited if c.source.strip() not in found]
+
+
 def verify(out: BlackboxAnswer, ctx: dict) -> dict:
     """Grounding of an answer against the tool outputs and the records in the payload, never the history: earlier
-    answers are not records."""
+    answers are not records. Knowledge citations must also come from this turn's search_knowledge results."""
     records = {k: v for k, v in (ctx.get("payload") or {}).items() if k != "history"}
-    return grounding.verify_blackbox(out, grounding.extract_facts(records, evidence=ctx.get("evidence") or []))
+    evidence = ctx.get("evidence") or []
+    report = grounding.verify_blackbox(out, grounding.extract_facts(records, evidence=evidence))
+    n, bad = knowledge_problems(out, evidence)
+    if n:
+        unsupported = list(dict.fromkeys([*report["unsupported"], *bad]))
+        report = {**report, "unsupported": unsupported[:grounding.MAX_LISTED], "verified": not unsupported,
+                  "knowledge_citations": n}
+        report["supported"] = max(0, report["checked"] - len(unsupported))
+    return report
 
 
 def run(question: str, history: list | None = None) -> AgentResult[BlackboxAnswer]:

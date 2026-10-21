@@ -38,6 +38,9 @@ param reasoningDeploymentName string = 'gpt-5-mini'
 @description('Reasoning model capacity (thousands of tokens per minute)')
 param reasoningCapacity int = 100
 
+@description('Embedding deployment used by the Black box knowledge index (app setting EMBEDDING_DEPLOYMENT)')
+param embeddingDeploymentName string = 'text-embedding-3-small'
+
 var foundryName = 'dra-foundry-${suffix}'
 
 resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' = if (!useExistingOpenAI) {
@@ -95,7 +98,21 @@ module models 'guardrails.bicep' = if (!useExistingOpenAI) {
   }
 }
 
+// text-embedding-3-small for the Black box knowledge index (also deployed alone by scripts/deploy-rag.sh);
+// after the chat deployments: parallel deployment operations on one account fail with RequestConflict
+module embeddings 'embeddings.bicep' = if (!useExistingOpenAI) {
+  name: 'foundry-embeddings'
+  dependsOn: [
+    models
+  ]
+  params: {
+    foundryName: foundryName
+    deploymentName: embeddingDeploymentName
+  }
+}
+
 output reasoningDeploymentName string = reasoningDeploymentName
+output embeddingDeploymentName string = embeddingDeploymentName
 output openAIId string = useExistingOpenAI ? '' : foundry.id
 output openAIName string = useExistingOpenAI ? '' : foundry.name
 output openAIEndpoint string = useExistingOpenAI ? '' : 'https://${foundryName}.openai.azure.com/'
