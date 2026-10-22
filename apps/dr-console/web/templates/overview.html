@@ -434,7 +434,7 @@
         const acc = d.access;
         const items = [
             ['Site Recovery (reports VM)', asr.protected ? `${pill(asrOk, asr.health || asr.state || 'protected')} ${asr.rpo_s != null ? `<span class="sys-n">replication RPO ${esc(asr.rpo_s)} s</span>` : ''}` : pill(false, asr.state || 'not protected')],
-            ['AI agents', `${pill(d.agents?.connected, d.agents?.connected ? '6 registered' : 'not configured')} <span class="sys-n">${esc(d.agents?.platform || '')}</span>`],
+            ['AI agents', `${pill(d.agents?.connected, d.agents?.connected ? '7 registered' : 'not configured')} <span class="sys-n">${esc(d.agents?.platform || '')}</span>`],
             ['Demo app (Contoso)', acc ? pill(null, acc.public ? 'Public' : 'Private') + (acc.public && acc.public_until ? ` <span class="sys-n">until ${when(acc.public_until)}</span>` : ' <span class="sys-n">team access link only</span>') : '—'],
         ];
         document.getElementById('sysList').innerHTML = items.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
