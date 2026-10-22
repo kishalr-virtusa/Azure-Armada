@@ -8,41 +8,452 @@
     "locale": "en"
   },
   "components": [
-    { "id": "phones", "type": "external", "label": "Users & judges", "sublabel": "phones · /pay", "pos": [40, 360], "size": [122, 62] },
-    { "id": "tm", "type": "cloud", "label": "Traffic Manager", "sublabel": "priority · /health 10s", "pos": [200, 360], "size": [140, 62], "tag": "dra-tm-e23x" },
-    { "id": "app_a", "type": "frontend", "label": "Contoso Payments", "sublabel": "App Service · primary", "pos": [440, 250], "size": [150, 62], "tag": "dra-app-eas" },
-    { "id": "sql_a", "type": "database", "label": "Azure SQL primary", "sublabel": "failover group dra-fog", "pos": [710, 250], "size": [150, 62], "tag": "dra-sql-eas" },
-    { "id": "vm_a", "type": "backend", "label": "Reports VM", "sublabel": "Windows · replicated", "pos": [960, 250], "size": [140, 62], "tag": "dra-vm-reports" },
-    { "id": "app_b", "type": "frontend", "label": "Contoso Payments", "sublabel": "App Service · warm standby", "pos": [440, 470], "size": [150, 62], "tag": "dra-app-sea" },
-    { "id": "sql_b", "type": "database", "label": "Azure SQL secondary", "sublabel": "readable geo-replica", "pos": [710, 470], "size": [150, 62], "tag": "dra-sql-sea" },
-    { "id": "vault", "type": "cloud", "label": "Site Recovery vault", "sublabel": "isolated test network", "pos": [1170, 470], "size": [150, 62], "tag": "dra-rsv-e23x" },
-    { "id": "engine", "type": "security", "label": "DR console + engine", "sublabel": "allowlist · approvals · kill", "pos": [710, 40], "size": [160, 62], "tag": "azure-armada" },
-    { "id": "agents", "type": "backend", "label": "6 AI agents", "sublabel": "gpt-4.1-mini · gpt-5-mini", "pos": [1080, 40], "size": [160, 62], "tag": "Foundry Agent Service" }
+    {
+      "id": "kv",
+      "type": "security",
+      "label": "Key Vault",
+      "sublabel": "secrets via MI",
+      "pos": [
+        340,
+        40
+      ],
+      "size": [
+        150,
+        62
+      ],
+      "tag": "dra-kv-e23x"
+    },
+    {
+      "id": "blob",
+      "type": "database",
+      "label": "Blob storage",
+      "sublabel": "HTML drill reports",
+      "pos": [
+        515,
+        40
+      ],
+      "size": [
+        150,
+        62
+      ],
+      "tag": "drastoragee23x"
+    },
+    {
+      "id": "cosmos",
+      "type": "database",
+      "label": "Azure Cosmos DB",
+      "sublabel": "Central India + SEA replica",
+      "pos": [
+        700,
+        40
+      ],
+      "size": [
+        180,
+        62
+      ],
+      "tag": "dra-cosmos-e23x"
+    },
+    {
+      "id": "insights",
+      "type": "cloud",
+      "label": "Application Insights",
+      "sublabel": "+ Log Analytics · workbook",
+      "pos": [
+        1080,
+        40
+      ],
+      "size": [
+        190,
+        62
+      ],
+      "tag": "dra-insights-e23x"
+    },
+    {
+      "id": "engine",
+      "type": "security",
+      "label": "DR console + engine",
+      "sublabel": "FastAPI · 15 actions · approvals",
+      "pos": [
+        690,
+        190
+      ],
+      "size": [
+        200,
+        70
+      ],
+      "tag": "azure-armada"
+    },
+    {
+      "id": "agents",
+      "type": "backend",
+      "label": "7 AI agents",
+      "sublabel": "versioned · pinned",
+      "pos": [
+        1090,
+        190
+      ],
+      "size": [
+        170,
+        62
+      ],
+      "tag": "Foundry Agent Service"
+    },
+    {
+      "id": "models",
+      "type": "cloud",
+      "label": "Model deployments",
+      "sublabel": "gpt-4.1-mini · gpt-5-mini",
+      "pos": [
+        1390,
+        190
+      ],
+      "size": [
+        200,
+        62
+      ],
+      "tag": "+ text-embedding-3-small"
+    },
+    {
+      "id": "phones",
+      "type": "external",
+      "label": "Customers' phones",
+      "sublabel": "payments · /pay",
+      "pos": [
+        40,
+        520
+      ],
+      "size": [
+        130,
+        62
+      ]
+    },
+    {
+      "id": "tm",
+      "type": "cloud",
+      "label": "Traffic Manager",
+      "sublabel": "priority · /health 10s",
+      "pos": [
+        220,
+        520
+      ],
+      "size": [
+        140,
+        62
+      ],
+      "tag": "dra-tm-e23x"
+    },
+    {
+      "id": "app_a",
+      "type": "frontend",
+      "label": "Contoso Payments",
+      "sublabel": "App Service · primary",
+      "pos": [
+        440,
+        410
+      ],
+      "size": [
+        150,
+        62
+      ],
+      "tag": "dra-app-eas"
+    },
+    {
+      "id": "sql_a",
+      "type": "database",
+      "label": "Azure SQL primary",
+      "sublabel": "failover group dra-fog",
+      "pos": [
+        715,
+        410
+      ],
+      "size": [
+        150,
+        62
+      ],
+      "tag": "dra-sql-eas-e23x"
+    },
+    {
+      "id": "vm_a",
+      "type": "backend",
+      "label": "Reports VM",
+      "sublabel": "Windows · replicated",
+      "pos": [
+        960,
+        410
+      ],
+      "size": [
+        140,
+        62
+      ],
+      "tag": "dra-vm-reports"
+    },
+    {
+      "id": "app_b",
+      "type": "frontend",
+      "label": "Contoso Payments",
+      "sublabel": "App Service · warm standby",
+      "pos": [
+        440,
+        630
+      ],
+      "size": [
+        150,
+        62
+      ],
+      "tag": "dra-app-sea"
+    },
+    {
+      "id": "sql_b",
+      "type": "database",
+      "label": "Azure SQL secondary",
+      "sublabel": "readable geo-replica",
+      "pos": [
+        715,
+        630
+      ],
+      "size": [
+        150,
+        62
+      ],
+      "tag": "dra-sql-sea-e23x"
+    },
+    {
+      "id": "vault",
+      "type": "cloud",
+      "label": "Site Recovery vault",
+      "sublabel": "isolated test network",
+      "pos": [
+        1170,
+        630
+      ],
+      "size": [
+        150,
+        62
+      ],
+      "tag": "dra-rsv-e23x"
+    }
   ],
   "boundaries": [
-    { "kind": "region", "label": "Global", "wraps": ["tm"], "pad": 16 },
-    { "kind": "region", "label": "Region A · East Asia (primary)", "wraps": ["app_a", "sql_a", "vm_a"], "pad": 20 },
-    { "kind": "region", "label": "Region B · Southeast Asia (DR, paired region)", "wraps": ["app_b", "sql_b", "vault"], "pad": 20 },
-    { "kind": "security-group", "label": "Control plane · South India", "wraps": ["engine"], "pad": 16 },
-    { "kind": "region", "label": "Azure AI Foundry · East US 2", "wraps": ["agents"], "pad": 16 }
+    {
+      "kind": "region",
+      "label": "Shared services · Central India (keyless, RBAC)",
+      "wraps": [
+        "kv",
+        "blob",
+        "cosmos",
+        "insights"
+      ],
+      "pad": 16
+    },
+    {
+      "kind": "security-group",
+      "label": "Control plane · South India · MI: Contributor on rg-dra-workload only",
+      "wraps": [
+        "engine"
+      ],
+      "pad": 16
+    },
+    {
+      "kind": "region",
+      "label": "Azure AI Foundry · East US 2",
+      "wraps": [
+        "agents",
+        "models"
+      ],
+      "pad": 16
+    },
+    {
+      "kind": "region",
+      "label": "Global",
+      "wraps": [
+        "tm"
+      ],
+      "pad": 16
+    },
+    {
+      "kind": "region",
+      "label": "Region A · East Asia (primary)",
+      "wraps": [
+        "app_a",
+        "sql_a",
+        "vm_a"
+      ],
+      "pad": 20
+    },
+    {
+      "kind": "region",
+      "label": "Region B · Southeast Asia (DR, paired region)",
+      "wraps": [
+        "app_b",
+        "sql_b",
+        "vault"
+      ],
+      "pad": 20
+    }
   ],
   "connections": [
-    { "from": "phones", "to": "tm", "label": "HTTPS", "variant": "emphasis" },
-    { "from": "tm", "to": "app_a", "label": "priority 1", "variant": "emphasis", "route": "orthogonal-h" },
-    { "from": "tm", "to": "app_b", "label": "priority 2", "variant": "dashed", "route": "orthogonal-h" },
-    { "from": "app_a", "to": "sql_a", "label": "SQL listener" },
-    { "from": "app_b", "to": "sql_b", "label": "SQL listener" },
-    { "from": "sql_a", "to": "sql_b", "label": "geo-replication", "variant": "security", "route": "straight" },
-    { "from": "vm_a", "to": "vault", "label": "ASR replication", "variant": "security", "route": "orthogonal-h" },
-    { "from": "engine", "to": "agents", "label": "plan · diagnose · report" },
-    { "from": "engine", "to": "tm", "label": "endpoint on/off", "variant": "emphasis", "fromSide": "left", "toSide": "top" },
-    { "from": "engine", "to": "app_a", "label": "stop / start", "variant": "emphasis", "toSide": "top" },
-    { "from": "engine", "to": "sql_a", "label": "failover · heartbeat 2s", "variant": "emphasis", "route": "straight" },
-    { "from": "engine", "to": "vault", "label": "test failover · cleanup", "variant": "emphasis", "toSide": "top" }
+    {
+      "from": "phones",
+      "to": "tm",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "from": "tm",
+      "to": "app_a",
+      "label": "priority 1",
+      "variant": "emphasis",
+      "route": "orthogonal-h"
+    },
+    {
+      "from": "tm",
+      "to": "app_b",
+      "label": "priority 2",
+      "variant": "dashed",
+      "route": "orthogonal-h"
+    },
+    {
+      "from": "app_a",
+      "to": "sql_a",
+      "label": "SQL listener"
+    },
+    {
+      "from": "app_b",
+      "to": "sql_b",
+      "label": "SQL listener"
+    },
+    {
+      "from": "sql_a",
+      "to": "sql_b",
+      "label": "geo-replication",
+      "variant": "security",
+      "route": "straight"
+    },
+    {
+      "from": "vm_a",
+      "to": "vault",
+      "label": "ASR replication",
+      "variant": "security",
+      "route": "orthogonal-h"
+    },
+    {
+      "from": "engine",
+      "to": "agents",
+      "label": "Responses API · Entra ID"
+    },
+    {
+      "from": "agents",
+      "to": "models",
+      "label": "Prompt Shields"
+    },
+    {
+      "from": "engine",
+      "to": "kv",
+      "label": "secrets"
+    },
+    {
+      "from": "engine",
+      "to": "blob",
+      "label": "reports"
+    },
+    {
+      "from": "engine",
+      "to": "cosmos",
+      "label": "records · chats · RAG",
+      "route": "straight"
+    },
+    {
+      "from": "engine",
+      "to": "insights",
+      "label": "OTel spans · $/call",
+      "variant": "dashed"
+    },
+    {
+      "from": "agents",
+      "to": "insights",
+      "label": "Foundry tracing",
+      "variant": "dashed",
+      "route": "straight"
+    },
+    {
+      "from": "engine",
+      "to": "tm",
+      "label": "ARM: endpoint on/off",
+      "variant": "emphasis",
+      "fromSide": "left",
+      "toSide": "top"
+    },
+    {
+      "from": "engine",
+      "to": "app_a",
+      "label": "ARM: stop / start",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "engine",
+      "to": "sql_a",
+      "label": "ARM: failover",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "from": "engine",
+      "to": "vault",
+      "label": "ARM: test failover · cleanup",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
   ],
   "cards": [
-    { "dot": "violet", "title": "Agents decide, the engine acts", "items": ["Architect, Readiness, Runbook, Reporter on gpt-4.1-mini", "Planner and Validator on gpt-5-mini (reasoning)", "Engine runs only allowlisted actions from a validated plan", "Humans approve the plan, the DB go, failback and any fix"] },
-    { "dot": "emerald", "title": "Measured, not estimated", "items": ["RTO: outage injected until healthy via Traffic Manager", "RPO: 2s heartbeats vs rows surviving in the new primary", "IaaS: ASR test failover verified inside the recovered VM"] },
-    { "dot": "rose", "title": "Secure by default", "items": ["Secrets in Key Vault, managed identities, no keys", "Contoso is private; public is time-boxed and audited", "State and reports in Storage; logs in App Insights"] }
+    {
+      "dot": "violet",
+      "title": "Agents decide, the engine acts",
+      "items": [
+        "7 agents: Architect, Readiness, Runbook, Planner, Validator, Reporter, Black box",
+        "Planner on gpt-5-mini; the others on gpt-4.1-mini; text-embedding-3-small for Black box RAG",
+        "Engine runs only the 15 allowlisted actions, with checkpoints in Cosmos DB",
+        "Humans approve the plan, the DB go, failback and any fix"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "DR console (App Service azure-armada)",
+      "items": [
+        "Autopilot: readiness checks every 10 min",
+        "Readiness gate: drill blocked unless a GO from the last 60 min",
+        "Live map with real payments; Black box chat (RAG over Cosmos vectors)",
+        "Cosmos: drills, events, approvals, Autopilot, notifications, chats, knowledge"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Measured, not estimated",
+      "items": [
+        "RTO: outage injected until healthy via Traffic Manager",
+        "RPO: 2s heartbeats vs rows surviving in the new primary",
+        "IaaS: ASR test failover verified inside the recovered VM"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Secure by default",
+      "items": [
+        "Managed identity everywhere; secrets in Key Vault; Cosmos DB (free tier) keyless",
+        "Prompt Shields filter dra-guardrails on every model deployment",
+        "Full drills run in staging or isolated test networks; production gets continuous read-only validation"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Observable and reproducible",
+      "items": [
+        "OpenTelemetry GenAI spans with $ cost per agent call",
+        "Agent operations workbook; Foundry Tracing connection",
+        "Infrastructure as code: Bicep"
+      ]
+    }
   ]
 }
