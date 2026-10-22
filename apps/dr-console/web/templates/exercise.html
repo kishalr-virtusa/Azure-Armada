@@ -26,7 +26,7 @@
     <div class="kpi">
         <div class="l">Current Step</div>
         <div class="v" id="currentStep">—</div>
-        <div class="x" id="currentStepTitle">Waiting...</div>
+        <div class="x" id="currentStepTitle">Loading…</div>
     </div>
     
     <!-- Progress -->
@@ -220,6 +220,19 @@
                     } else {
                         document.getElementById('humanStepBox').classList.add('hide');
                     }
+                } else {
+                    // every step has run: show the outcome instead of leaving the placeholder text
+                    const OUTCOME = {
+                        completed: ['Done', 'All steps completed'],
+                        rolled_back: ['Rolled back', 'Region A restored after a rollback'],
+                        killed: ['Stopped', 'Stopped by the kill switch'],
+                        failed: ['Failed', 'The exercise failed: see the timeline'],
+                    };
+                    const [label, title] = OUTCOME[data.raw_status || data.status] || ['Finishing', 'Writing the report…'];
+                    document.getElementById('currentStep').textContent = label;
+                    document.getElementById('currentStepTitle').textContent = title;
+                    document.getElementById('progressPhase').textContent = label === 'Finishing' ? 'Closure' : 'Finished';
+                    document.getElementById('humanStepBox').classList.add('hide');
                 }
             }
             
