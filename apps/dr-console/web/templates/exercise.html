@@ -299,6 +299,7 @@
             // Update exercise state for chaos button
             exerciseState = data.status;
             updateChaosButton(data);
+            updateControls(data);
             
             // Handle killed status - show prominent rollback
             if (data.status === 'killed') {
@@ -533,6 +534,20 @@
         }
     }
     
+    // Same rule as the server (service.COMMANDS_BY_STATUS): a button is only clickable when its command is allowed
+    const ALLOWED = {
+        running: ['kill'], waiting_human: ['kill'],
+        paused_failed: ['kill', 'rollback'],
+        killed: ['rollback'], failed: ['rollback'],
+    };
+    function updateControls(data) {
+        const ok = ALLOWED[data.raw_status || data.status] || [];
+        for (const [id, cmd] of [['killBtn', 'kill'], ['rollbackBtn', 'rollback']]) {
+            const b = document.getElementById(id);
+            if (b) b.disabled = !ok.includes(cmd);
+        }
+    }
+
     function updateChaosButton(data) {
         const chaosBtn = document.getElementById('chaosBtn');
         // Enable chaos button only during running state and chaos not already injected
