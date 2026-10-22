@@ -52,3 +52,13 @@ def test_acs_channel_only_when_really_configured(monkeypatch):
         monkeypatch.setattr(config, "acs_connection_string", conn)
         monkeypatch.setattr(config, "acs_sender", sender)
         assert notify.email_channels() == expected
+
+
+def test_mark_all_notifications_read(cosmos):
+    from dr_agent.tools import store
+    a = store.add_notification("info", "A", "a")
+    b = store.add_notification("info", "B", "b")
+    store.mark_notification_read(a)
+    assert store.mark_all_notifications_read() == 1          # only B was still unread
+    assert all(n["read"] for n in store.get_notifications())
+    assert store.mark_all_notifications_read() == 0

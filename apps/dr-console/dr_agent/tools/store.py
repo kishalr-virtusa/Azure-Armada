@@ -280,6 +280,16 @@ def mark_notification_read(notif_id: str) -> None:
         pass
 
 
+def mark_all_notifications_read() -> int:
+    """Mark every unread notification as read. Returns how many changed."""
+    c, n = _container("notifications"), 0
+    for r in _query("notifications", "SELECT c.id, c.read FROM c", pk="global"):
+        if not r.get("read"):
+            c.patch_item(r["id"], partition_key="global", patch_operations=[{"op": "set", "path": "/read", "value": True}])
+            n += 1
+    return n
+
+
 def update_notification(notif_id: str, fields: dict[str, Any]) -> None:
     """Merge fields into an existing notification (e.g. how its email was delivered)."""
     _merge("notifications", "global", notif_id, fields)

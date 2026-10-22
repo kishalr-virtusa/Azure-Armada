@@ -74,7 +74,8 @@
 
     /* L7: QR code section with larger size and better visibility */
     body.drill-active .qr-section { padding: 14px 18px; }
-    body.drill-active .qr-section h2, body.drill-active .qr-code, body.drill-active .qr-section .sub,
+    /* during a drill the QR stays (people still join to pay while the region is down), only smaller */
+    body.drill-active .qr-section h2, body.drill-active .qr-section .sub,
     body.drill-active .qr-section > p { display: none !important; }
     body.drill-active .qr-url { font-size: 20px !important; margin: 0 0 8px !important; }
     .qr-section {
@@ -442,7 +443,7 @@
     .pv-join .qr-code img, .pv-join .qr-code canvas, .pv-join .qr-code svg { width: 100% !important; height: auto !important; }
     .pv-join-text { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; min-width: 0; }
     .pv-join .qr-url { font-size: 15px !important; color: var(--ink); margin: 0 !important; overflow-wrap: anywhere; }
-    body.drill-active .pv-join .qr-code { display: none !important; }
+    body.drill-active .pv-join .qr-code { width: 140px; height: 140px; flex: 0 0 140px; padding: 6px; }
     body.drill-active .pv-join { padding: 14px 20px; }
     body.drill-active .pv-join h2 { display: block !important; font-size: 14px !important; }
     .state-banner { text-align: left !important; font-size: 15px !important; font-weight: 500 !important; padding: 14px 16px !important; border-radius: 8px; box-shadow: var(--ring); }

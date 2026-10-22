@@ -53,7 +53,7 @@
                         <span class="bell-badge hide" id="bellBadge">0</span>
                     </button>
                     <div class="notif-dropdown hide" id="notifDropdown">
-                        <div class="notif-header">Notifications</div>
+                        <div class="notif-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><span>Notifications</span><button type="button" class="btn btn-secondary" id="notifReadAll" onclick="markAllRead(event)" style="height:28px;padding:0 10px;font-size:12px;">Mark all read</button></div>
                         <div id="notifList"><div style="padding: 16px; color: var(--mute); text-align: center;">No notifications</div></div>
                     </div>
                 </div>
@@ -112,58 +112,47 @@
         
         const _e = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+        // One list drives both the badge and the dropdown, so the number always matches what you can see.
         async function loadNotifications() {
             try {
-                const url = lastNotifId 
-                    ? `/api/notifications?after=${lastNotifId}` 
-                    : '/api/notifications';
-                const res = await fetch(url);
-                const notifs = await res.json();
-                
+                const res = await fetch('/api/notifications', { cache: 'no-store' });
+                if (!res.ok) return;
+                const notifs = await res.json();  // newest first
                 const list = document.getElementById('notifList');
                 const badge = document.getElementById('bellBadge');
-                
-                if (notifs.length === 0 && !lastNotifId) {
+                if (!notifs.length) {
                     list.innerHTML = '<div style="padding: 16px; color: var(--ink-3); text-align: center;">No notifications</div>';
                     badge.classList.add('hide');
                     return;
                 }
-                
-                if (notifs.length > 0) {
-                    // Show new notification popup
-                    const newest = notifs[0];
-                    if (lastNotifId && newest.RowKey !== lastNotifId) {
-                        showNotificationPopup(newest);
-                    }
-                    lastNotifId = newest.RowKey;
-                    
-                    // Count unread
-                    const unread = notifs.filter(n => !n.read).length;
-                    if (unread > 0) {
-                        badge.textContent = unread;
-                        badge.classList.remove('hide');
-                    } else {
-                        badge.classList.add('hide');
-                    }
-                    
-                    // Render list
-                    list.innerHTML = notifs.slice(0, 10).map(n => `
-                        <div class="notif-item ${n.read ? '' : 'unread'}" data-id="${_e(n.RowKey)}" data-link="${_e(n.link || '')}" onclick="openNotification(this.dataset.id, this.dataset.link)">
-                            <div class="notif-kind ${_e(n.kind)}">${_e(n.kind)}</div>
-                            <div class="notif-title">${_e(n.title)}</div>
-                            <div class="notif-body">${_e(n.body)}</div>
-                            <div class="notif-time">${formatTime(n.ts)}</div>
-                        </div>
-                    `).join('');
-                }
+                const newest = notifs[0];
+                if (lastNotifId && newest.RowKey !== lastNotifId && !newest.read) showNotificationPopup(newest);
+                lastNotifId = newest.RowKey;
+                const unread = notifs.filter(n => !n.read).length;
+                badge.textContent = unread;
+                badge.classList.toggle('hide', unread === 0);
+                list.innerHTML = notifs.map(n => `
+                    <div class="notif-item ${n.read ? '' : 'unread'}" data-id="${_e(n.RowKey)}" data-link="${_e(n.link || '')}" onclick="openNotification(this.dataset.id, this.dataset.link)">
+                        <div class="notif-kind ${_e(n.kind)}">${_e(n.kind)}</div>
+                        <div class="notif-title">${_e(n.title)}</div>
+                        <div class="notif-body">${_e(n.body)}</div>
+                        <div class="notif-time">${formatTime(n.ts)}</div>
+                    </div>
+                `).join('');
             } catch (e) {
                 console.error('Failed to load notifications:', e);
             }
         }
-        
+
+        async function markAllRead(ev) {
+            ev.stopPropagation();
+            await fetch('/api/notifications/read-all', { method: 'POST' }).catch(() => {});
+            loadNotifications();
+        }
+
         function openNotification(id, link) {
             // Mark as read
-            fetch(`/api/notifications/${encodeURIComponent(id)}/read`, { method: 'POST' });
+            fetch(`/api/notifications/${encodeURIComponent(id)}/read`, { method: 'POST' }).then(loadNotifications).catch(() => {});
             
             // Navigate if link provided (console pages only)
             if (link && link.startsWith('/') && !link.startsWith('//')) {
