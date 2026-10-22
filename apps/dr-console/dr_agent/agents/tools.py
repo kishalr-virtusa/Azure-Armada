@@ -1,0 +1,265 @@
+"""Read-only investigation tools the Foundry agents may call themselves (function calling).
+
+Every tool only READS Azure state (live resources, or the recorded drills in Cosmos DB and the knowledge index for the
+Black box).
+Writes stay in the engine, behind the allowlist and human approvals, so letting an agent choose what to look at adds
+investigation, not risk. Each call is shown in the live activity trace.
+"""
+from __future__ import annotations
+
+import json
+import re
+from typing import Any, Callable, Optional
+
+REGION = {"type": "string", "enum": ["A", "B"], "description": "A = East Asia (primary), B = Southeast Asia (DR)"}
+
+
+def _obj(props: dict) -> dict:
+    return {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}
+
+
+def _probe(target: str) -> dict:
+    from dr_agent.engine.runner import _probe as probe
+    r = probe(target)
+    return {k: r.get(k) for k in ("ok", "status_code", "region", "db_ok", "db_server", "latency_ms", "reason", "error",
+                                  "routed_to", "dns_region") if r.get(k) is not None}
+
+
+def _traffic_manager() -> dict:
+    from dr_agent.tools.azure_trafficmanager import get_profile_status
+    st = get_profile_status()
+    return {"endpoints": [{"name": e.get("name"), "enabled": e.get("endpoint_status"), "health": e.get("endpoint_monitor_status"),
+                           "priority": e.get("priority")} for e in st.get("endpoints") or []],
+            "ttl_s": (st.get("dns_config") or {}).get("ttl")}
+
+
+def _web_app(region: str) -> dict:
+    from dr_agent.config import config
+    from dr_agent.tools.azure_webapp import get_webapp_state
+    st = get_webapp_state(config.webapp_a_name if region == "A" else config.webapp_b_name)
+    return {k: st.get(k) for k in ("name", "state", "location", "availability_state", "enabled")}
+
+
+def _sql_failover_group() -> dict:
+    from dr_agent.engine.runner import _fog
+    return _fog().status()
+
+
+def _app_settings_diff() -> dict:
+    from dr_agent.config import config
+    from dr_agent.tools.azure_webapp import list_app_settings
+    a, b = set(list_app_settings(config.webapp_a_name)), set(list_app_settings(config.webapp_b_name))
+    return {"only_in_A": sorted(a - b), "only_in_B": sorted(b - a), "in_both": len(a & b)}  # names only, never values
+
+
+def _site_recovery() -> dict:
+    from dr_agent.tools.azure_asr import AsrTestFailover
+    st = AsrTestFailover.from_env().status()
+    return {k: st.get(k) for k in ("protected", "state", "health", "rpo_s", "test_failover")}
+
+
+# ---------------------------------------------------------------- black box: recorded history (storage reads only)
+DRILL_ID = re.compile(r"^ex-\d{8}-\d{6}$")
+DRILL_ARG = {"type": "string", "description": "Drill id, e.g. ex-20261019-105207 (start time in UTC)"}
+TIMELINE_KINDS = ("all", "measurement", "approval", "error", "diagnosis", "remediation", "chaos")
+BUDGET = 3800  # every result must stay under call()'s cap so it is never cut mid-JSON
+
+
+def _s(v: Any) -> Optional[float]:
+    """Seconds as recorded, to 2 decimals (the same precision the Results page shows)."""
+    try:
+        return None if v in (None, "") else round(float(v), 2)
+    except (TypeError, ValueError):
+        return None
+
+
+def _j(v: Any, default: Any) -> Any:
+    try:
+        return json.loads(v) if v else default
+    except (TypeError, ValueError):
+        return default
+
+
+def _fit(items: list, budget: int = BUDGET) -> list:
+    """Drop the oldest items (front of the list) until the JSON fits the budget."""
+    while items and len(json.dumps(items, default=str)) > budget:
+        items = items[1:]
+    return items
+
+
+def _drill(drill_id: str) -> tuple[Optional[dict], Optional[dict]]:
+    """(record, None) or (None, error result). Strict id check first: the id goes into a storage query."""
+    if not isinstance(drill_id, str) or not DRILL_ID.match(drill_id):
+        return None, {"error": "drill_id must look like ex-YYYYMMDD-HHMMSS"}
+    from dr_agent.tools import store
+    m = store.get_exercise(drill_id)
+    return (m, None) if m else (None, {"error": f"no drill {drill_id} in the records"})
+
+
+def _list_drills(limit: int) -> dict:
+    from dr_agent import service
+    from dr_agent.tools import store
+    rows = service.list_exercises()
+    out = []
+    for r in rows[:max(1, min(10, int(limit or 5)))]:
+        xid = r["PartitionKey"]
+        m = store.get_exercise(xid) or r
+        ev = _j(m.get("rpo_evidence_json"), {})
+        out.append({"id": xid, "status": m.get("status"), "started": m.get("t0") or None,
+                    "rto_s": _s(m.get("rto_s")), "rpo_s": _s(m.get("rpo_s")), "failback_s": _s(m.get("failback_s")),
+                    "chaos": bool(m.get("chaos_injected")), "load_writes_per_s": _s(m.get("load_writes_per_s")) or 1,
+                    "lost_writes": ev.get("lost_writes"), "link": f"/results/{xid}"})
+    return {"total_drills_recorded": len(rows), "drills": _fit(out[::-1])[::-1]}  # trims the oldest first
+
+
+def _get_drill(drill_id: str) -> dict:
+    m, err = _drill(drill_id)
+    if err:
+        return err
+    plan = _j(m.get("plan_json"), {}).get("steps", [])
+    titles = {s.get("id"): s.get("title") for s in plan}
+    ev = _j(m.get("rpo_evidence_json"), {})
+    prof = _j(m.get("profile_json"), {})
+    diag = _j(m.get("diagnosis_json"), None)
+    out = {
+        "id": drill_id, "status": m.get("status"), "link": f"/results/{drill_id}",
+        "times_utc": {k: m.get(k) or None for k in ("t0", "t_failover", "t_recovered", "t_failback_done", "chaos_injected")},
+        "rto_s": _s(m.get("rto_s")), "rpo_s": _s(m.get("rpo_s")), "failback_s": _s(m.get("failback_s")),
+        "rto_met": str(m.get("rto_met")).lower() == "true", "rpo_met": str(m.get("rpo_met")).lower() == "true",
+        "targets_min": {"rto": prof.get("rto_min"), "rpo": prof.get("rpo_min")},
+        "load_writes_per_s": _s(m.get("load_writes_per_s")) or 1,
+        "rto_breakdown_s": {k: _s(v) for k, v in _j(m.get("rto_breakdown_json"), {}).items()} or None,
+        "rpo_evidence": {"checked_writes": ev.get("checked_writes"), "lost_writes": ev.get("lost_writes"),
+                         "lost_write_times": (ev.get("lost_write_times") or [])[:8],
+                         "last_acked_ts": ev.get("last_acked_ts"), "newest_present_ts": ev.get("newest_present_ts"),
+                         "note": (ev.get("note") or "")[:200]} if ev else None,
+        "approvals": [{"what": k, "by": (v or {}).get("by"), "at": (v or {}).get("at")}
+                      for k, v in _j(m.get("approvals_json"), {}).items()],
+        "step_confirmations": [{"step_id": k, "step": titles.get(k), "by": (v or {}).get("by"), "at": (v or {}).get("at")}
+                               for k, v in _j(m.get("confirmations_json"), {}).items()],
+        "failed_step": m.get("failed_step") or None, "error": (m.get("error") or "")[:200] or None,
+        "diagnosis": {k: diag.get(k) for k in ("likely_cause", "recommended_action", "fix_action")} if diag else None,
+        "remediation": [{"item": (r.get("item") or "")[:160], "owner": r.get("owner"), "priority": r.get("priority")}
+                        for r in _j(m.get("remediation_json"), [])[:6]],
+        "plan_steps": [f"{s.get('id')}: {(s.get('title') or '')[:60]}" for s in plan[:16]],
+    }
+    while len(json.dumps(out, default=str)) > BUDGET and out["plan_steps"]:
+        out["plan_steps"] = out["plan_steps"][:-4]  # step titles are the least important facts here
+    return out
+
+
+def _get_drill_timeline(drill_id: str, kind: str) -> dict:
+    _, err = _drill(drill_id)
+    if err:
+        return err
+    if kind not in TIMELINE_KINDS:
+        return {"error": f"kind must be one of {', '.join(TIMELINE_KINDS)}"}
+    from dr_agent.tools import store
+    events = [e for e in store.get_events(drill_id) if kind == "all" or e.get("kind") == kind][-40:]
+    rows = [{"ts": e.get("ts"), "kind": e.get("kind"), "step_id": e.get("step_id"), "message": (e.get("message") or "")[:160]}
+            for e in events]
+    return {"drill_id": drill_id, "kind": kind, "events": _fit(rows)}
+
+
+def _get_autopilot_feed(limit: int) -> dict:
+    from dr_agent import autopilot
+    rows = []
+    for e in autopilot.feed(max(1, min(10, int(limit or 5)))):
+        d = _j(e.get("data_json"), {}) or {}
+        rows.append({"ts": e.get("ts"), "kind": e.get("kind"), "message": (e.get("message") or "")[:200],
+                     "trigger": d.get("trigger"), "failing": sorted(d.get("failing") or [])[:6],
+                     "ai_summary": ((d.get("ai") or {}).get("summary") or "")[:200] or None,
+                     "proposal": (d.get("proposal") or {}).get("status")})
+    return {"runs": _fit(rows[::-1])[::-1], "link": "/"}  # newest first; trims the oldest
+
+
+def _get_current_state() -> dict:
+    from dr_agent import autopilot, service
+    lm = service.live_map()
+    d = lm.get("drill") or {}
+    ap = autopilot.get_state()
+    return {"server_time": lm.get("server_time"), "serving_region": lm.get("serving"), "sql_primary": lm.get("primary"),
+            "replication": lm.get("replication"),
+            "regions": {r: {k: v.get(k) for k in ("healthy", "app_state", "sql_role", "tm_enabled", "reason")}
+                        for r, v in (lm.get("regions") or {}).items()},
+            "latest_drill": {"id": d.get("id"), "status": d.get("status"), "running": d.get("running"),
+                             "step": (d.get("step") or {}).get("title")} if d else None,
+            "autopilot": {"enabled": ap["settings"].get("enabled"), "level": ap["settings"].get("level"),
+                          "last_run_at": ap.get("last_run_at"), "fix_waiting_for_approval": bool(ap.get("proposal"))},
+            "link": "/"}
+
+
+def _search_knowledge(query: str, k: int, source: str) -> dict:
+    from dr_agent import knowledge
+    return knowledge.search(query, k, source)
+
+
+# name -> (description, JSON schema for arguments, implementation)
+TOOLS: dict[str, tuple[str, dict, Callable[..., Any]]] = {
+    "probe": ("Health-check a region's payments app (HTTP status, which region answered, database write OK), or "
+              "'tm' to check what a customer gets through Traffic Manager.",
+              _obj({"target": {"type": "string", "enum": ["A", "B", "tm"]}}), _probe),
+    "traffic_manager": ("Traffic Manager endpoints: enabled/disabled and health-check status per region.", _obj({}), _traffic_manager),
+    "web_app": ("State of a region's App Service web app (Running/Stopped).", _obj({"region": REGION}), _web_app),
+    "sql_failover_group": ("Azure SQL failover group: which region is primary and the replication state.", _obj({}), _sql_failover_group),
+    "app_settings_diff": ("Names of app settings that exist in one region but not the other (configuration drift).",
+                          _obj({}), _app_settings_diff),
+    "site_recovery": ("Azure Site Recovery protection and replication health of the reports VM.", _obj({}), _site_recovery),
+    "list_drills": ("Recorded DR drills, newest first: id, status, start time (UTC), RTO/RPO/failback seconds, whether a "
+                    "surprise fault (chaos) was injected, payment load (writes/s) and lost writes. limit 1-10.",
+                    _obj({"limit": {"type": "integer", "description": "How many drills, 1-10"}}), _list_drills),
+    "get_drill": ("Key recorded facts of one drill: times, RTO/RPO/failback, targets, RTO breakdown by segment, RPO "
+                  "evidence (lost writes and their times), approvals and step confirmations (who, when), diagnosis, "
+                  "remediation items and plan step titles.", _obj({"drill_id": DRILL_ARG}), _get_drill),
+    "get_drill_timeline": ("The last 40 recorded events of one drill (ts, kind, step_id, message), optionally only one kind.",
+                           _obj({"drill_id": DRILL_ARG, "kind": {"type": "string", "enum": list(TIMELINE_KINDS)}}),
+                           _get_drill_timeline),
+    "get_autopilot_feed": ("Recent Autopilot readiness runs, newest first: what failed, the AI summary and any proposed fix. "
+                           "limit 1-10.", _obj({"limit": {"type": "integer", "description": "How many runs, 1-10"}}),
+                           _get_autopilot_feed),
+    "get_current_state": ("Current health of both regions, which region serves customers, SQL primary, the latest drill's "
+                          "status and Autopilot settings.", _obj({}), _get_current_state),
+    "search_knowledge": ("Semantic search over the DR knowledge (unstructured text, not measurements): the DR runbook "
+                         "and its latest review, drill report narratives and remediation items, Validator diagnoses, "
+                         "incident timelines (errors, fixes, surprise faults), Autopilot findings and tech decisions. "
+                         "Use it for what a document says, whether a problem happened before and how it was fixed, and "
+                         "recommendations; use the other tools for numbers, times and approvals. Returns the most "
+                         "similar chunks with source, ref, snippet, score, link and cite (the citation source to use).",
+                         _obj({"query": {"type": "string", "description": "The question or keywords, at most 500 characters"},
+                               "k": {"type": "integer", "description": "How many chunks, 1-8 (default 5)"},
+                               "source": {"type": "string", "enum": ["any", "runbook", "runbook-review", "report",
+                                                                     "diagnosis", "event", "autopilot", "decision"],
+                                          "description": "Only this kind of document, or any"}}),
+                         _search_knowledge),
+}
+
+BLACKBOX_TOOLS = ["list_drills", "get_drill", "get_drill_timeline", "get_autopilot_feed", "get_current_state",
+                  "search_knowledge"]
+
+# which agents may call which tools
+TOOLSETS: dict[str, list[str]] = {
+    "validator": ["probe", "traffic_manager", "web_app", "sql_failover_group", "app_settings_diff"],
+    "readiness": ["probe", "traffic_manager", "sql_failover_group", "app_settings_diff", "site_recovery"],
+    "blackbox": BLACKBOX_TOOLS,
+}
+MAX_TOOL_CALLS = 6
+
+
+def definitions(agent: str) -> list[dict]:
+    """Foundry function-tool definitions for this agent (empty if it has no tools)."""
+    return [{"type": "function", "name": n, "description": TOOLS[n][0], "parameters": TOOLS[n][1], "strict": True}
+            for n in TOOLSETS.get(agent, [])]
+
+
+def call(agent: str, name: str, arguments: str) -> str:
+    """Execute one tool call requested by an agent; only tools in that agent's set are allowed."""
+    if name not in TOOLSETS.get(agent, []):
+        return json.dumps({"error": f"tool {name!r} is not available to the {agent} agent"})
+    try:
+        args = json.loads(arguments or "{}")
+        result = TOOLS[name][2](**args)
+    except Exception as e:  # noqa: BLE001 - the agent sees the error and can try something else
+        result = {"error": f"{type(e).__name__}: {e}"[:300]}
+    out = json.dumps(result, default=str)
+    # cut text stays valid JSON: the tool loop parses every result for the activity trace
+    return out if len(out) <= 4000 else json.dumps({"truncated": out[:3900]})

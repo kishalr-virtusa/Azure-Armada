@@ -48,14 +48,14 @@ This creates:
 ### 4. Access the Demo
 
 - **Traffic Manager URL**: `http://dra-tm-<suffix>.trafficmanager.net` — Contoso Payments app
-- **DR Console**: `https://dra-console-<suffix>.azurewebsites.net` — Exercise control
+- **DR Console**: `https://azure-armada.azurewebsites.net` (phones: `/pay`) — Exercise control
 
 ## Architecture
 
 ```
 Traffic Manager (Priority routing, TTL 10s)
-  ├─ Region A (Central India) ─── App Service B1 ─┐
-  └─ Region B (South India)  ─── App Service B1 ─┤─ SQL Failover Group
+  ├─ Region A (East Asia)      ─── App Service B1 ─┐
+  └─ Region B (Southeast Asia) ─── App Service B1 ─┤─ SQL Failover Group
                                                   │   └─ paymentsdb (Basic)
 DR Console (Control RG)                           │
   ├─ LLM Agents (Azure OpenAI gpt-4o-mini)        │

@@ -1,0 +1,530 @@
+{% extends "base.html" %}
+
+{% block title %}Phase 1 — DR Agent Console{% endblock %}
+
+{% block content %}
+<header>
+    <div>
+        <span class="eyebrow">Phase 1</span>
+        <h1>DR Design & Preparation</h1>
+    </div>
+</header>
+
+<!-- Profile Section -->
+<div class="card" id="profileSection">
+    <h2>1. Application Profile</h2>
+    <p class="sub">Define the application's criticality and recovery targets</p>
+    
+    <form id="profileForm" class="form-stack" style="margin-top: 8px;">
+        <div class="twin">
+            <div>
+                <div class="form-group">
+                    <label class="form-label">Application Name</label>
+                    <input type="text" name="name" class="form-input" value="Contoso Payments" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Criticality Tier</label>
+                    <select name="tier" class="form-input" required>
+                        <option value="0">Tier 0 - Mission Critical (99.99%)</option>
+                        <option value="1" selected>Tier 1 - Business Critical (99.9%)</option>
+                        <option value="2">Tier 2 - Important (99.5%)</option>
+                        <option value="3">Tier 3 - Standard (99%)</option>
+                    </select>
+                </div>
+            </div>
+            <div>
+                <div class="form-group">
+                    <label class="form-label">RTO Target (minutes)</label>
+                    <input type="number" name="rto_min" class="form-input" value="30" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">RPO Target (minutes)</label>
+                    <input type="number" name="rpo_min" class="form-input" value="15" min="0" required>
+                </div>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Monthly Budget (USD)</label>
+            <input type="number" name="monthly_budget_usd" class="form-input" value="200" min="0">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Notes</label>
+            <textarea name="notes" class="form-input" rows="2" placeholder="Any additional context..."></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary" style="align-self: flex-start; margin-top: 4px;">Save Profile</button>
+    </form>
+    
+    <div id="profileResult" class="box hide" style="margin-top: 16px;"></div>
+</div>
+
+<!-- Strategy Section -->
+<div class="card" id="strategySection">
+    <h2>2. DR Strategy Recommendation</h2>
+    <p class="sub">AI-recommended strategy based on your profile</p>
+    
+    <div id="strategyContent">
+        <button id="getStrategyBtn" class="btn btn-secondary" onclick="getStrategy()">Get Recommendation</button>
+    </div>
+    <p class="saved-note hide" id="strategySaved"></p>
+
+    <div id="strategyTrace" class="trace hide"></div>
+
+    <div id="strategyResult" class="hide">
+        <h3 style="margin-bottom: 12px;">
+            Strategy Comparison
+            <span id="strategySourceBadge" class="badge" style="margin-left: 8px; font-size: 9px;"></span>
+        </h3>
+        <div class="scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Strategy</th>
+                        <th>Expected RTO</th>
+                        <th>Expected RPO</th>
+                        <th>Est. cost / month</th>
+                        <th>Meets Targets</th>
+                    </tr>
+                </thead>
+                <tbody id="strategyTable"></tbody>
+            </table>
+        </div>
+        <p id="strategyCostNote" class="sub" style="margin: 12px 0 0; line-height: 20px;"></p>
+        <div class="box" style="margin-top: 16px;">
+            <h4 style="margin-bottom: 8px;">Recommendation</h4>
+            <div id="strategyRationale"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Readiness Section -->
+<div class="card" id="readinessSection">
+    <h2>3. Readiness Checks</h2>
+    <p class="sub">Verify the DR environment is prepared</p>
+    
+    <div id="readinessContent">
+        <button id="checkReadinessBtn" class="btn btn-secondary" onclick="checkReadiness()">Run Checks</button>
+    </div>
+    <p class="saved-note hide" id="readinessSaved"></p>
+
+    <div id="readinessTrace" class="trace hide"></div>
+
+    <div id="readinessResult" class="hide">
+        <div id="readinessChecks"></div>
+        <div class="box" style="margin-top: 16px;">
+            <h4 id="readinessVerdict" style="margin-bottom: 8px;"></h4>
+            <div id="readinessSummary"></div>
+        </div>
+        
+        <!-- Fixable items section -->
+        <div id="fixableSection" class="hide" style="margin-top: 16px;">
+            <div class="box" style="border-color: var(--upd); background: var(--upd-bg); display: flex; flex-direction: column; gap: 14px;">
+                <div>
+                    <h4 style="color: var(--upd); margin: 0 0 4px;">Fixable issue found</h4>
+                    <p id="fixableDescription" style="margin: 0; font-size: 13px;"></p>
+                </div>
+                <div class="form-group" style="max-width: 320px;">
+                    <label class="form-label" for="fixApproverName">Your name (for audit)</label>
+                    <input type="text" id="fixApproverName" class="form-input" placeholder="e.g., John Smith">
+                </div>
+                <button id="applyFixBtn" class="btn btn-primary" style="align-self: flex-start;" onclick="applyFix()">Apply Fix</button>
+            </div>
+        </div>
+        
+        <!-- Fix result -->
+        <div id="fixResult" class="hide" style="margin-top: 12px;"></div>
+    </div>
+</div>
+
+<!-- Runbook Review Section -->
+<div class="card" id="runbookSection">
+    <h2>4. Runbook Review</h2>
+    <p class="sub">Validate the DR runbook against current infrastructure</p>
+    
+    <div id="runbookContent">
+        <button id="reviewRunbookBtn" class="btn btn-secondary" onclick="reviewRunbook()">Review Runbook</button>
+    </div>
+    <p class="saved-note hide" id="runbookSaved"></p>
+
+    <div id="runbookTrace" class="trace hide"></div>
+
+    <div id="runbookResult" class="hide">
+        <h3 style="margin-bottom: 12px;">
+            Step Review
+            <span id="runbookSourceBadge" class="badge" style="margin-left: 8px; font-size: 9px;"></span>
+        </h3>
+        <div class="scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Step</th>
+                        <th>Original step</th>
+                        <th>Verdict</th>
+                        <th>Issue and correction</th>
+                    </tr>
+                </thead>
+                <tbody id="runbookTable"></tbody>
+            </table>
+        </div>
+        <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+                <h3 style="margin: 0;">Runbook</h3>
+                <div class="tabs" role="tablist">
+                    <button class="tab active" role="tab" data-md="updated" onclick="showRunbook('updated')">Corrected by the agent</button>
+                    <button class="tab" role="tab" data-md="original" onclick="showRunbook('original')">Original</button>
+                </div>
+            </div>
+            <div id="runbookMd" class="md-body"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Proceed Button -->
+<div id="proceedBar" class="card hide" style="flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+    <div>
+        <h2 style="margin: 0;">Ready for phase 2</h2>
+        <p class="sub" style="margin-top: 4px;">Profile saved, strategy chosen and readiness checked. The Planner agent builds the drill plan next.</p>
+    </div>
+    <a href="/plan" class="btn btn-primary btn-lg" id="proceedBtn">Proceed to plan generation →</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/vendor/marked.min.js"></script>
+<script src="/static/vendor/purify.min.js"></script>
+<script>
+    let profile = null;
+    let strategyDone = false;
+    let readinessDone = false;
+    let runbookDone = false;
+    let fixableKeys = [];
+    
+    function renderSourceBadge(source, via) {
+        const isAI = source === 'llm' || source === 'ai';
+        const label = via === 'foundry-agent' ? 'Azure AI Foundry Agent' : 'Azure OpenAI (direct)';
+        return isAI
+            ? `<span class="badge" style="background: var(--accent); color: white; border-color: var(--accent);" title="${via || ''}">${label}</span>`
+            : '<span class="badge" title="deterministic fallback">Rules</span>';
+    }
+    
+    document.getElementById('profileForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        profile = Object.fromEntries(formData.entries());
+        profile.tier = parseInt(profile.tier);
+        profile.rto_min = parseInt(profile.rto_min);
+        profile.rpo_min = parseInt(profile.rpo_min);
+        profile.monthly_budget_usd = parseInt(profile.monthly_budget_usd);
+        
+        try {
+            const res = await fetch('/api/profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(profile),
+            });
+            const result = await res.json();
+            
+            document.getElementById('profileResult').classList.remove('hide');
+            document.getElementById('profileResult').innerHTML = `
+                <span class="st pass">Profile Saved</span>
+                <span style="margin-left: 8px;">Tier ${profile.tier}, RTO ${profile.rto_min}min, RPO ${profile.rpo_min}min</span>
+            `;
+            
+            checkProceed();
+        } catch (e) {
+            alert('Failed to save profile: ' + e.message);
+        }
+    });
+    
+    async function getStrategy() {
+        const btn = document.getElementById('getStrategyBtn');
+        
+        btn.disabled = true;
+        btn.textContent = 'Agent working…';
+
+        try {
+            const data = await AgentUI.runWithTrace('/api/strategy', document.getElementById('strategyTrace'));
+            renderStrategy(data);
+        } catch (e) {
+            alert('Failed to get strategy: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Get recommendation again';
+        }
+    }
+
+    function renderStrategy(data) {
+            // Show source badge
+            document.getElementById('strategySourceBadge').innerHTML = renderSourceBadge(data.source, data.via);
+            
+            const table = document.getElementById('strategyTable');
+            const esc = AgentUI.esc;
+            table.innerHTML = data.options.map(opt => `
+                <tr>
+                    <td class="f">
+                        ${esc(opt.name)}
+                        ${opt.name === data.recommended ? '<span class="badge recommended" style="margin-left: 8px;">Recommended</span>' : ''}
+                    </td>
+                    <td>${opt.expected_rto_min}min</td>
+                    <td>${opt.expected_rpo_min}min</td>
+                    <td class="f">${opt.est_monthly_usd ? '$' + opt.est_monthly_usd.toFixed(2) : (opt.relative_cost + '×')}
+                        ${opt.est_monthly_usd && !opt.within_budget ? '<span class="st warn" style="margin-left: 6px;">Over budget</span>' : ''}
+                        <span style="color: var(--mute); font-size: 12px; margin-left: 4px;">${opt.relative_cost}×</span></td>
+                    <td><span class="st ${opt.meets_targets ? 'pass' : 'fail'}">${opt.meets_targets ? 'Yes' : 'No'}</span></td>
+                </tr>
+            `).join('');
+            
+            const dc = data.deployed_cost;
+            document.getElementById('strategyCostNote').innerHTML = dc ? `
+                <b>What our deployment actually costs:</b> $${dc.total_usd.toFixed(2)}/month at Azure list prices
+                (East Asia $${dc.region_a_usd.toFixed(2)} + Southeast Asia $${dc.region_b_usd.toFixed(2)} + Traffic Manager $${dc.traffic_manager_usd.toFixed(2)}),
+                ${dc.multiplier}× one region. The comparison above uses typical multipliers for every strategy so they are compared
+                on the same basis; our standby runs at full size, which is why the real figure is higher than the $${(data.options.find(o => o.name === 'warm-standby')?.est_monthly_usd || 0).toFixed(2)} estimate.
+                Payments workload only (excludes the DR console, monitoring and the reports VM).` : '';
+            document.getElementById('strategyRationale').innerHTML = `
+                <p><strong>${esc(data.recommended)}</strong></p>
+                <p style="color: var(--ink-2);">${esc(data.rationale)}</p>
+            `;
+            
+            document.getElementById('strategyResult').classList.remove('hide');
+            strategyDone = true;
+            savedNote('strategy', data);
+            document.getElementById('getStrategyBtn').textContent = 'Get recommendation again';
+            checkProceed();
+    }
+    
+    async function checkReadiness() {
+        const btn = document.getElementById('checkReadinessBtn');
+        btn.disabled = true;
+        btn.textContent = 'Running checks…';
+
+        try {
+            const data = await AgentUI.runWithTrace('/api/readiness', document.getElementById('readinessTrace'));
+            document.getElementById('fixResult').classList.add('hide');
+            renderReadiness(data);
+        } catch (e) {
+            alert('Failed to check readiness: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Run checks again';
+        }
+    }
+
+    function renderReadiness(data) {
+            const esc = AgentUI.esc;
+            const label = { pass: 'Pass', warn: 'Warn', fail: 'Fail' };
+            const checksDiv = document.getElementById('readinessChecks');
+            checksDiv.innerHTML = data.checks.map((check, i) => `
+                <div class="check-row-item">
+                    <span class="st ${esc(check.status)}">${label[check.status] || esc(check.status)}</span>
+                    <span class="f" style="font-weight: 500;">${esc(check.name)}</span>
+                    <span class="check-detail" style="color: var(--body);">${esc(check.detail)}</span>
+                    <button class="link-btn" onclick="toggleEvidence(${i}, this)" aria-expanded="false">Evidence</button>
+                </div>
+                <div id="evidence-${i}" class="evidence-row hide"><div class="evidence-box">${AgentUI.renderData(check.evidence)}</div></div>
+            `).join('');
+            
+            document.getElementById('readinessVerdict').innerHTML = data.go 
+                ? '<span class="st pass">GO</span> Ready for exercise'
+                : '<span class="st fail">NO-GO</span> Issues must be resolved';
+            document.getElementById('readinessSummary').textContent = data.summary;
+            
+            // Handle fixable items
+            fixableKeys = data.fixable || [];
+            if (fixableKeys.length > 0) {
+                document.getElementById('fixableSection').classList.remove('hide');
+                document.getElementById('fixableDescription').textContent = 
+                    `The following settings can be automatically fixed: ${fixableKeys.join(', ')}`;
+            } else {
+                document.getElementById('fixableSection').classList.add('hide');
+            }
+            
+            document.getElementById('readinessResult').classList.remove('hide');
+            readinessDone = true;
+            savedNote('readiness', data);
+            document.getElementById('checkReadinessBtn').textContent = 'Run checks again';
+            checkProceed();
+    }
+    
+    async function applyFix() {
+        const approverName = document.getElementById('fixApproverName').value.trim();
+        if (!approverName) {
+            alert('Please enter your name for the audit log.');
+            return;
+        }
+        
+        const btn = document.getElementById('applyFixBtn');
+        btn.disabled = true;
+        btn.textContent = 'Applying fix...';
+        
+        try {
+            const res = await fetch('/api/readiness/fix', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    keys: fixableKeys,
+                    approver_name: approverName,
+                }),
+            });
+            const result = await res.json();
+            
+            const fixResult = document.getElementById('fixResult');
+            fixResult.classList.remove('hide');
+            
+            if (result.success && !result.error) {
+                document.getElementById('fixableSection').classList.add('hide');
+                watchFix(result.message || 'Settings updated');
+            } else {
+                fixResult.innerHTML = `
+                    <div class="box" style="border-color: var(--add); background: var(--add-bg);">
+                        <span class="st fail">Fix Failed</span>
+                        <span style="margin-left: 8px;">${AgentUI.esc(result.error || 'Unknown error')}</span>
+                    </div>
+                `;
+            }
+        } catch (e) {
+            alert('Failed to apply fix: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Apply Fix';
+        }
+    }
+    
+    async function reviewRunbook() {
+        const btn = document.getElementById('reviewRunbookBtn');
+        btn.disabled = true;
+        btn.textContent = 'Agent working…';
+        
+        try {
+            const data = await AgentUI.runWithTrace('/api/runbook', document.getElementById('runbookTrace'));
+            renderRunbook(data);
+        } catch (e) {
+            alert('Failed to review runbook: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Review runbook again';
+        }
+    }
+
+    function renderRunbook(data) {
+            const esc = AgentUI.esc;
+            
+            // Show source badge
+            document.getElementById('runbookSourceBadge').innerHTML = renderSourceBadge(data.source, data.via);
+            
+            const table = document.getElementById('runbookTable');
+            table.innerHTML = data.steps.map(step => `
+                <tr>
+                    <td class="f">${esc(step.step_no)}</td>
+                    <td class="md-inline">${AgentUI.renderMarkdown(step.text)}</td>
+                    <td><span class="st ${step.verdict === 'valid' ? 'pass' : step.verdict === 'stale' ? 'warn' : 'fail'}">${esc(step.verdict)}</span></td>
+                    <td style="color: var(--ink-2);">${esc(step.reason || '—')}
+                        ${step.suggested ? `<div class="md-inline" style="margin-top: 6px; color: var(--ink);"><span style="font-size: 12px; color: var(--success); font-weight: 500;">Corrected step</span>${AgentUI.renderMarkdown(step.suggested)}</div>` : ''}</td>
+                </tr>
+            `).join('');
+            
+            runbookMd = { updated: data.updated_runbook_md || data.original_md || '', original: data.original_md || '' };
+            showRunbook('updated');
+            
+            document.getElementById('runbookResult').classList.remove('hide');
+            runbookDone = true;
+            savedNote('runbook', data);
+            document.getElementById('reviewRunbookBtn').textContent = 'Review runbook again';
+            checkProceed();
+    }
+    
+    // After a fix, Azure restarts the Southeast Asia app (~1 min) and Traffic Manager needs a few 10 s probes to trust it
+    // again. Re-checking too early looks like a failed fix, so watch both and re-run Readiness only once they are green.
+    async function watchFix(message) {
+        const box = document.getElementById('fixResult');
+        box.classList.remove('hide');
+        const started = Date.now();
+        const line = (ok, label, detail) => `<div style="display: flex; align-items: center; gap: 10px;">
+            ${ok ? '<span class="st pass">Done</span>' : '<span class="spin"></span>'}
+            <span><b>${label}</b> <span style="color: var(--body);">${AgentUI.esc(detail)}</span></span></div>`;
+        const draw = (p) => {
+            box.innerHTML = `<div class="box" style="border-color: var(--have); background: var(--have-bg); display: flex; flex-direction: column; gap: 10px;">
+                <div><span class="st pass">Fix applied</span> <span style="margin-left: 8px;">${AgentUI.esc(message.split(' The app restarts')[0])}</span></div>
+                ${line(p && p.app_ok, 'Southeast Asia app', p ? (p.app_ok ? 'healthy again' : `restarting to load the setting (${p.app_detail})`) : 'restarting to load the setting')}
+                ${line(p && p.tm_ok, 'Traffic Manager', p ? (p.tm_ok ? 'trusts Southeast Asia again (Online)' : `re-checking the region (${p.tm_detail})`) : 're-checking the region')}
+                <div style="font-size: 12px; color: var(--mute); font-family: var(--mono);">${Math.round((Date.now() - started) / 1000)} s · Readiness re-runs automatically when both are done</div></div>`;
+        };
+        draw(null);
+        while (Date.now() - started < 5 * 60 * 1000) {
+            await new Promise(r => setTimeout(r, 4000));
+            let p = null;
+            try { p = await (await fetch('/api/readiness/fix-progress', { cache: 'no-store' })).json(); } catch (e) { /* retry */ }
+            draw(p);
+            if (p && p.done) {
+                await new Promise(r => setTimeout(r, 1000));
+                box.classList.add('hide');
+                checkReadiness();
+                return;
+            }
+        }
+        box.insertAdjacentHTML('beforeend', '<p class="sub" style="margin-top: 8px;">Still not healthy after 5 minutes. Run the checks to see what is wrong.</p>');
+    }
+
+    // "Last run 18 Oct, 10:42 · Azure AI Foundry Agent": results are saved on the server, so they survive leaving the page
+    function savedNote(key, data) {
+        const el = document.getElementById(key + 'Saved');
+        if (!el || !data.at) return;
+        const by = data.via === 'foundry-agent' ? 'Azure AI Foundry Agent' : data.via === 'azure-openai' ? 'Azure OpenAI (direct)' : data.via === 'fallback' ? 'rules fallback' : '';
+        el.textContent = `Last run ${new Date(data.at).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}${by ? ' · ' + by : ''}`;
+        el.classList.remove('hide');
+    }
+
+    async function restorePhase1() {
+        let st;
+        try {
+            const res = await fetch('/api/phase1', { cache: 'no-store' });
+            if (!res.ok) return;
+            st = await res.json();
+        } catch (e) { return; }
+        if (st.profile) {
+            const f = document.getElementById('profileForm');
+            for (const [k, v] of Object.entries(st.profile)) { if (f.elements[k] && v !== null && v !== undefined) f.elements[k].value = v; }
+            profile = st.profile;
+            document.getElementById('profileResult').classList.remove('hide');
+            document.getElementById('profileResult').innerHTML = `<span class="st pass">Profile saved</span>
+                <span style="margin-left: 8px;">Tier ${profile.tier}, RTO ${profile.rto_min} min, RPO ${profile.rpo_min} min</span>`;
+        }
+        if (st.strategy) { renderStrategy(st.strategy); AgentUI.showSaved(document.getElementById('strategyTrace'), st.strategy.trace, st.strategy.at); }
+        if (st.readiness) {
+            renderReadiness(st.readiness);
+            AgentUI.showSaved(document.getElementById('readinessTrace'), st.readiness.trace, st.readiness.at);
+            // a fix applied after this readiness run makes the run out of date: say so instead of offering the fix again
+            if (st.last_fix && st.readiness.at && st.last_fix.at > st.readiness.at) {
+                document.getElementById('fixableSection').classList.add('hide');
+                const fr = document.getElementById('fixResult');
+                fr.classList.remove('hide');
+                fr.innerHTML = `<div class="box" style="border-color: var(--have); background: var(--have-bg); display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <span class="st pass">Fix applied</span>
+                    <span style="flex: 1; min-width: 240px;">${AgentUI.esc((st.last_fix.copied || []).join(', ') || 'Settings')} copied to Southeast Asia by ${AgentUI.esc(st.last_fix.approved_by)}. The checks above were run before the fix.</span>
+                    <button class="btn btn-secondary" onclick="checkReadiness()">Re-run Readiness</button></div>`;
+            }
+        }
+        if (st.runbook) { renderRunbook(st.runbook); AgentUI.showSaved(document.getElementById('runbookTrace'), st.runbook.trace, st.runbook.at); }
+    }
+
+    function checkProceed() {
+        if (profile && strategyDone && readinessDone) {
+            document.getElementById('proceedBar').classList.remove('hide');
+        }
+    }
+
+    function toggleEvidence(i, btn) {
+        const row = document.getElementById('evidence-' + i);
+        const open = row.classList.toggle('hide') === false;
+        btn.textContent = open ? 'Hide evidence' : 'Evidence';
+        btn.setAttribute('aria-expanded', open);
+    }
+
+    let runbookMd = { updated: '', original: '' };
+    function showRunbook(which) {
+        document.querySelectorAll('.tab[data-md]').forEach(t => t.classList.toggle('active', t.dataset.md === which));
+        document.getElementById('runbookMd').innerHTML = AgentUI.renderMarkdown(runbookMd[which] || '_No runbook content._');
+    }
+    AgentUI.rememberName(document.getElementById('fixApproverName'));
+    restorePhase1();
+</script>
+{% endblock %}

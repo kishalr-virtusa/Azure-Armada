@@ -9,13 +9,13 @@
                ├─ web/ (FastAPI + Jinja, polling every 2s)
                ├─ engine/orchestrator  ── phase state machine, one exercise at a time
                ├─ engine/executor      ── runs plan steps via tools (allowlist)
-               ├─ agents/*             ── Azure OpenAI gpt-4o-mini (AI Foundry), structured outputs
+               ├─ agents/*             ── Azure OpenAI gpt-4.1-mini (AI Foundry), structured outputs
                └─ tools/*              ── Azure SDK (web, sql, cdn/afd, resource graph), probes, heartbeat
                      │ Contributor on rg-dra-workload only
                      ▼
  Traffic Manager (Priority routing, DNS TTL 10s, HTTP, probe /health every 10s)
-   endpoints:   A (prio 1) ── App Service B1 centralindia  ─┐
-                 B (prio 2) ── App Service B1 southindia    ─┤─ SQL failover group listener
+   endpoints:   A (prio 1) ── App Service B1 eastasia  ─┐
+                 B (prio 2) ── App Service B1 southeastasia    ─┤─ SQL failover group listener
    SQL server A (primary) ═══ geo-replication ═══► SQL server B (secondary)   paymentsdb Basic
  Control store: Storage Tables (exercises, events, heartbeats) + Blob (reports)
 ```
@@ -33,7 +33,7 @@
   - `SELECT 1`, then `INSERT` and `DELETE` a probe row in `transactions`, inside a single transaction
   - returns `{status:"ok", region, db_ok, db_server: @@SERVERNAME, time}`
 - UI: one Jinja page with a card layout.
-  - Header: "Contoso Payments", a big region pill (blue for Central India, purple for South India), a live status dot.
+  - Header: "Contoso Payments", a big region pill (purple for East Asia, magenta for Southeast Asia), a live status dot.
   - Body: a "Make payment" button (POST /api/txn) and a recent-transactions table.
   - Uses `fetch` polling every 3s. If a fetch fails, it shows a red "Service unavailable" banner, which is very visible during the outage.
 
@@ -42,7 +42,7 @@
 - `log.bicep`: Log Analytics workspace + App Insights (shared).
 - `keyvault.bicep`: Key Vault in the control RG (RBAC mode). Secrets: `sql-admin-password`, `console-passcode`, `acs-connection-string`. They are seeded by `seed-secrets.sh` from env vars, never stored in the repo.
 - `sql.bicep`:
-  - server A (centralindia) + server B (southindia), Entra admin + SQL admin
+  - server A (eastasia) + server B (southeastasia), Entra admin + SQL admin
   - `paymentsdb` Basic on A
   - failover group `dra-fog-<suffix>`, with partner B, read-write policy **Manual**, containing `paymentsdb` (geo-secondary created by the FOG)
   - firewall: allow Azure services
@@ -61,7 +61,7 @@
 - `console.bicep`: plan B1 + web app (control RG), app settings for every endpoint/name the console needs (see `config.py`), system identity.
 - `roles.bicep`: console identity → Contributor on `rg-dra-workload`, Storage Table Data Contributor + Storage Blob Data Contributor on the control storage, Key Vault Secrets User, and **Cognitive Services OpenAI User** on the OpenAI resource.
 
-**Azure OpenAI:** `openai.bicep` creates an AI Foundry/AI Services account in `OPENAI_LOCATION` (parameter, default `eastus2`) with deployment `gpt-4o-mini`, sku GlobalStandard, capacity 30. If it already exists, the parameter `useExistingOpenAI` skips it.
+**Azure OpenAI:** `openai.bicep` creates an AI Foundry/AI Services account in `OPENAI_LOCATION` (parameter, default `eastus2`) with deployment `gpt-4.1-mini`, sku GlobalStandard, capacity 30. If it already exists, the parameter `useExistingOpenAI` skips it.
 
 Scripts:
 - `deploy.sh`: `az deployment sub create`, then `deploy-apps.sh`, which zip-deploys both apps via `az webapp deploy --type zip`.
@@ -83,7 +83,7 @@ Scripts:
 - `ReadinessReport{checks:list[Check], go:bool, summary}`
 - `RunbookStepReview{step_no, text, verdict:"valid|stale|missing", reason, suggested}`
 - `RunbookReview{steps, updated_runbook_md}`
-- `PlanStep{id, phase, title, owner_team, type:"human|automated", action:str|None, params:dict, depends_on:list[str], success_criteria, abort_on_failure:bool}`
+- `PlanStep{id, phase, title, owner_team, type:"human|automated", action:str|None, params:list[Param{key,value}] (strict JSON schema forbids dicts), depends_on:list[str], success_criteria, abort_on_failure:bool}`
 - `ExercisePlan{steps:list[PlanStep], assumptions:list[str]}`
 - `Diagnosis{likely_cause, evidence, recommended_action:"retry|rollback|continue"}`
 - `Measurement{t0, t_failover, t_recovered, rto_s, rpo_s, rto_target_s, rpo_target_s, rto_met, rpo_met, evidence}`

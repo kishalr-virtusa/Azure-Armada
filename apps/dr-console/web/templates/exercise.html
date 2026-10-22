@@ -1,0 +1,582 @@
+{% extends "base.html" %}
+
+{% block title %}Exercise {{ exercise_id }} — DR Agent Console{% endblock %}
+
+{% block content %}
+<header>
+    <div>
+        <span class="eyebrow">Live Exercise</span>
+        <h1>{{ exercise_id }}</h1>
+    </div>
+    <div>
+        <span class="st" id="exerciseStatus">{{ status }}</span>
+    </div>
+</header>
+
+<!-- KPI Row -->
+<div class="kpis">
+    <!-- Live RTO Timer -->
+    <div class="kpi" id="rtoCard">
+        <div class="l">RTO</div>
+        <div class="v big" id="rtoTimer">00:00</div>
+        <div class="x">Target: {{ rto_target_min }}min</div>
+    </div>
+    
+    <!-- Current Step -->
+    <div class="kpi">
+        <div class="l">Current Step</div>
+        <div class="v" id="currentStep">—</div>
+        <div class="x" id="currentStepTitle">Waiting...</div>
+    </div>
+    
+    <!-- Progress -->
+    <div class="kpi">
+        <div class="l">Progress</div>
+        <div class="v" id="progressCount">0/0</div>
+        <div class="x" id="progressPhase">—</div>
+    </div>
+    
+    <!-- Demo App Status -->
+    <div class="kpi" id="appStatusCard">
+        <div class="l">Demo App Status</div>
+        <div class="v" id="appStatus">—</div>
+        <div class="x" id="appRegion">—</div>
+    </div>
+</div>
+
+<div class="twin">
+    <!-- Timeline -->
+    <div class="card">
+        <h2>Execution Timeline</h2>
+        <p class="sub">Live event stream</p>
+        
+        <div class="timeline" id="timeline" style="margin-top: 16px; max-height: 400px; overflow-y: auto;">
+            <div style="color: var(--ink-3); padding: 12px;">Loading events...</div>
+        </div>
+    </div>
+    
+    <!-- Controls & Actions -->
+    <div class="card">
+        <h2>Controls</h2>
+        
+        <!-- Human Step Confirmation -->
+        <div id="humanStepBox" class="box hide" style="margin-top: 16px; border-color: var(--upd);">
+            <h4 style="color: var(--upd);">⏳ Waiting for Human Action</h4>
+            <p id="humanStepTitle" style="margin: 8px 0;"></p>
+            <p id="humanStepOwner" style="font-size: 12px; color: var(--ink-3); margin-bottom: 12px;"></p>
+            <button id="confirmStepBtn" class="btn btn-primary" onclick="confirmStep()">
+                ✓ Confirm Done
+            </button>
+        </div>
+        
+        <!-- Emergency Controls -->
+        <div style="margin-top: 16px;">
+            <h3 style="margin-bottom: 12px;">Emergency Controls</h3>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn btn-danger" onclick="killSwitch()" id="killBtn">
+                    Kill Switch
+                </button>
+                <button class="btn btn-secondary" onclick="rollback()" id="rollbackBtn">
+                    Rollback
+                </button>
+            </div>
+        </div>
+        
+        <!-- Chaos Injection -->
+        <div style="margin-top: 16px;">
+            <h3 style="margin-bottom: 12px;">Chaos Testing</h3>
+            <button class="btn btn-secondary" id="chaosBtn" onclick="injectChaos()" disabled style="color: var(--danger);">
+                Inject Surprise Fault
+            </button>
+            <p style="font-size: 11px; color: var(--ink-3); margin-top: 6px;">
+                Tests the Validator agent's ability to handle unexpected failures
+            </p>
+        </div>
+        
+        <!-- Demo App Embed -->
+        <div style="margin-top: 24px;">
+            <h3 style="margin-bottom: 12px;">Demo App Preview</h3>
+            <div style="border: 1px solid var(--line); border-radius: 8px; overflow: hidden;">
+                <iframe id="appFrame" src="{{ app_url }}" style="width: 100%; height: 300px; border: none;"></iframe>
+            </div>
+            <div style="margin-top: 8px; font-size: 12px; color: var(--ink-3);">
+                <a href="{{ app_url }}" target="_blank" rel="noopener">Open in new tab →</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Paused/Failed Diagnosis Panel (hidden by default) -->
+<div id="pausedFailedBanner" class="card hide" style="background: var(--add-bg); border-color: var(--add);">
+    <h2 style="color: var(--add);">
+        Exercise Paused — Failure Detected
+        <span id="diagnosisBadge" class="badge hide" style="margin-left: 8px; background: var(--accent); color: white; border-color: var(--accent);"></span>
+    </h2>
+    <p id="failedStepInfo" class="sub" style="margin-bottom: 16px;"></p>
+    <div style="margin: 16px 0;">
+        <div style="margin-bottom: 12px;">
+            <strong style="color: var(--add);">Likely Cause</strong>
+            <p id="diagnosisLikelyCause" style="margin: 4px 0; padding: 12px; background: var(--surface); border-radius: 6px; border-left: 3px solid var(--add);">—</p>
+        </div>
+        <details style="margin-bottom: 12px;">
+            <summary style="color: var(--add);">Evidence</summary>
+            <pre id="diagnosisEvidence" style="margin-top: 8px; padding: 12px; background: var(--surface); border-radius: 6px; font-family: monospace; font-size: 11px; overflow-x: auto; white-space: pre-wrap;">—</pre>
+        </details>
+        <div style="margin-bottom: 12px;">
+            <strong style="color: var(--add);">Recommended Action</strong>
+            <p id="diagnosisRecommendedAction" style="margin: 4px 0; padding: 12px; background: var(--surface); border-radius: 6px; border-left: 3px solid var(--accent);">—</p>
+        </div>
+        
+        <!-- Proposed fix section (shown when fix_action != "none") -->
+        <div id="proposedFixSection" class="hide" style="margin-bottom: 12px;">
+            <div class="box" style="border-color: var(--have); background: var(--have-bg);">
+                <strong style="color: var(--have);"> Proposed Fix</strong>
+                <p id="proposedFixText" style="margin: 8px 0; font-weight: 500;"></p>
+                <div id="fixParamsList" style="font-size: 12px; color: var(--ink-2);"></div>
+            </div>
+        </div>
+    </div>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button class="btn btn-primary" id="approveFixBtn" onclick="approveFixAndRetry()" style="display: none;">
+             Approve Fix & Retry
+        </button>
+        <button class="btn btn-secondary" id="retryStepBtn" onclick="retryStep()">Retry Step</button>
+        <button class="btn btn-secondary" onclick="continueExercise()">⏭️ Continue (Skip)</button>
+        <button class="btn btn-danger" onclick="rollback()">Rollback</button>
+    </div>
+</div>
+
+<!-- Killed Banner (hidden by default) -->
+<div id="killedBanner" class="card hide" style="background: var(--add-bg); border-color: var(--add); text-align: center;">
+    <h2 style="color: var(--add);">Exercise Killed</h2>
+    <p style="margin: 12px 0;">The exercise was stopped by an operator. Infrastructure may be in an inconsistent state.</p>
+    <div style="margin-top: 16px;">
+        <button class="btn btn-danger" style="font-size: 16px; padding: 12px 32px;" onclick="rollback()">
+            Rollback to Original State
+        </button>
+    </div>
+    <p style="margin-top: 12px; font-size: 12px; color: var(--ink-3);">Rollback will restore Traffic Manager and SQL failover group to their pre-exercise configuration.</p>
+</div>
+
+<!-- Completed Banner (hidden by default) -->
+<div id="completedBanner" class="card hide" style="flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+    <h2><span class="st pass" style="margin-right: 8px;">Completed</span>Exercise completed</h2>
+    <p style="margin: 12px 0;">The DR exercise has finished successfully.</p>
+    <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+        <a href="/results/{{ exercise_id }}" class="btn btn-primary">View Results</a>
+        <a id="reportUrlLink" href="#" class="btn btn-secondary hide" target="_blank">Download Report</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const exerciseId = '{{ exercise_id }}';
+    let t0 = null;
+    let rtoFinal = null;  // measured RTO: the tile freezes on it once users are served from Region B
+    let lastEventSeq = 0;
+    let currentHumanStep = null;
+    let timerInterval = null;
+    let currentDiagnosis = null;
+    let exerciseState = null;
+    
+    async function loadExercise() {
+        try {
+            const res = await fetch(`/api/exercise/${exerciseId}`);
+            const data = await res.json();
+            
+            // Update status
+            updateStatus(data.status);
+            
+            // Set t0 for timer
+            rtoFinal = (data.rto_s !== undefined && data.rto_s !== null) ? data.rto_s : null;
+            if (data.t0) { t0 = new Date(data.t0); updateTimer(); }  // also paint finished drills (no interval running)
+            if (data.t0) {
+                t0 = new Date(data.t0);
+                if (!timerInterval) {
+                    timerInterval = setInterval(updateTimer, 1000);
+                }
+            }
+            
+            // Update progress
+            if (data.plan && data.plan.steps) {
+                const completed = data.completed_steps || 0;
+                const total = data.plan.steps.length;
+                document.getElementById('progressCount').textContent = `${completed}/${total}`;
+                
+                const currentIdx = data.current_step_index || 0;
+                if (currentIdx < data.plan.steps.length) {
+                    const step = data.plan.steps[currentIdx];
+                    document.getElementById('currentStep').textContent = step.id;
+                    document.getElementById('currentStepTitle').textContent = step.title;
+                    document.getElementById('progressPhase').textContent = step.phase;
+                    
+                    // Show human step box if waiting
+                    if (step.type === 'human' && data.status === 'running' && data.waiting_for_human) {
+                        currentHumanStep = step;
+                        document.getElementById('humanStepBox').classList.remove('hide');
+                        document.getElementById('humanStepTitle').textContent = step.title;
+                        document.getElementById('humanStepOwner').textContent = `Owner: ${step.owner_team}`;
+                    } else {
+                        document.getElementById('humanStepBox').classList.add('hide');
+                    }
+                }
+            }
+            
+            // Handle paused_failed status - show diagnosis panel
+            if (data.status === 'paused_failed' && data.diagnosis) {
+                currentDiagnosis = data.diagnosis;
+                document.getElementById('pausedFailedBanner').classList.remove('hide');
+                document.getElementById('killedBanner').classList.add('hide');
+                document.getElementById('completedBanner').classList.add('hide');
+                
+                // Show which step failed
+                const failedStepInfo = document.getElementById('failedStepInfo');
+                if (data.failed_step) {
+                    failedStepInfo.textContent = `Step "${data.failed_step.id}: ${data.failed_step.title}" failed`;
+                } else {
+                    failedStepInfo.textContent = 'A step in the exercise failed';
+                }
+                
+                // Show diagnosis source badge
+                const diagnosisBadge = document.getElementById('diagnosisBadge');
+                if (data.diagnosis.diagnosis_via === 'foundry-agent') {
+                    diagnosisBadge.textContent = 'Azure AI Foundry Agent';
+                    diagnosisBadge.classList.remove('hide');
+                } else {
+                    diagnosisBadge.classList.add('hide');
+                }
+                
+                // Populate diagnosis details
+                document.getElementById('diagnosisLikelyCause').textContent = data.diagnosis.likely_cause || 'Unknown';
+                document.getElementById('diagnosisEvidence').textContent = data.diagnosis.evidence || 'No evidence available';
+                document.getElementById('diagnosisRecommendedAction').textContent = data.diagnosis.recommended_action || 'Contact support';
+                
+                // Handle fix_action
+                const fixSection = document.getElementById('proposedFixSection');
+                const approveFixBtn = document.getElementById('approveFixBtn');
+                const retryStepBtn = document.getElementById('retryStepBtn');
+                
+                if (data.diagnosis.fix_action && data.diagnosis.fix_action !== 'none') {
+                    fixSection.classList.remove('hide');
+                    document.getElementById('proposedFixText').textContent = data.diagnosis.recommended_action || 'Apply automated fix';
+                    
+                    // Show fix params if available
+                    const fixParams = data.diagnosis.fix_params || [];
+                    if (fixParams.length > 0) {
+                        document.getElementById('fixParamsList').innerHTML = fixParams.map(p => 
+                            `<div style="margin-top:4px;"><code>${AgentUI.esc(p.key)}</code> = <code>${AgentUI.esc(p.value)}</code></div>`
+                        ).join('');
+                    } else {
+                        document.getElementById('fixParamsList').innerHTML = '';
+                    }
+                    
+                    approveFixBtn.style.display = 'inline-block';
+                    retryStepBtn.classList.add('hide');
+                } else {
+                    fixSection.classList.add('hide');
+                    approveFixBtn.style.display = 'none';
+                    retryStepBtn.classList.remove('hide');
+                }
+            } else {
+                document.getElementById('pausedFailedBanner').classList.add('hide');
+                currentDiagnosis = null;
+            }
+            
+            // Update exercise state for chaos button
+            exerciseState = data.status;
+            updateChaosButton(data);
+            
+            // Handle killed status - show prominent rollback
+            if (data.status === 'killed') {
+                document.getElementById('killedBanner').classList.remove('hide');
+                document.getElementById('pausedFailedBanner').classList.add('hide');
+                document.getElementById('completedBanner').classList.add('hide');
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                }
+            } else {
+                document.getElementById('killedBanner').classList.add('hide');
+            }
+            
+            // Check if completed
+            if (data.status === 'completed' || data.status === 'rolled_back') {
+                document.getElementById('completedBanner').classList.remove('hide');
+                document.getElementById('pausedFailedBanner').classList.add('hide');
+                document.getElementById('killedBanner').classList.add('hide');
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                }
+                
+                // Show report URL link if available
+                if (data.report_url) {
+                    const reportLink = document.getElementById('reportUrlLink');
+                    reportLink.href = data.report_url;
+                    reportLink.classList.remove('hide');
+                }
+            }
+            
+        } catch (e) {
+            console.error('Failed to load exercise:', e);
+        }
+    }
+    
+    async function loadEvents() {
+        try {
+            const res = await fetch(`/api/exercise/${exerciseId}/events?after=${lastEventSeq}`);
+            const events = await res.json();
+            
+            if (events.length === 0) return;
+            
+            const timeline = document.getElementById('timeline');
+            
+            // Clear loading message on first load
+            if (lastEventSeq === 0 && events.length > 0) {
+                timeline.innerHTML = '';
+            }
+            
+            events.forEach(event => {
+                const seq = parseInt(event.RowKey);
+                if (seq > lastEventSeq) {
+                    lastEventSeq = seq;
+                }
+                
+                const item = document.createElement('div');
+                item.className = 'timeline-item ' + getEventClass(event.kind);
+                item.innerHTML = `
+                    <div class="tl-msg">${AgentUI.esc(event.message)}</div>
+                    <div class="tl-meta">${formatTime(event.ts)} · ${event.step_id || 'system'}</div>
+                    ${event.kind === 'measurement' ? `<div style="font-size: 12px; color: var(--ink-2);">${formatMeasurement(event.data)}</div>` : ''}
+                `;
+                timeline.appendChild(item);
+            });
+            
+            // Auto-scroll to bottom
+            timeline.scrollTop = timeline.scrollHeight;
+            
+        } catch (e) {
+            console.error('Failed to load events:', e);
+        }
+    }
+    
+    async function loadAppStatus() {
+        try {
+            const res = await fetch(`/api/probe/tm`);
+            const data = await res.json();
+            
+            const card = document.getElementById('appStatusCard');
+            const status = document.getElementById('appStatus');
+            const region = document.getElementById('appRegion');
+            
+            if (data.ok) {
+                status.textContent = '✓';
+                region.textContent = data.region || 'Unknown';
+                card.classList.remove('fail');
+                card.classList.add('pass');
+            } else {
+                status.textContent = '✗';
+                region.textContent = data.error || 'Unreachable';
+                card.classList.remove('pass');
+                card.classList.add('fail');
+            }
+        } catch (e) {
+            document.getElementById('appStatus').textContent = '?';
+            document.getElementById('appRegion').textContent = 'Error';
+        }
+    }
+    
+    function updateStatus(status) {
+        const el = document.getElementById('exerciseStatus');
+        el.textContent = status;
+        el.className = 'st ' + getStatusClass(status);
+    }
+    
+    function getStatusClass(status) {
+        switch (status) {
+            case 'running': return 'info';
+            case 'paused': case 'paused_failed': return 'warn';
+            case 'completed': case 'rolled_back': return 'pass';
+            case 'failed': case 'killed': return 'fail';
+            default: return 'neutral';
+        }
+    }
+    
+    function getEventClass(kind) {
+        switch (kind) {
+            case 'step_end': return 'completed';
+            case 'step_start': return 'running';
+            case 'error': return 'failed';
+            default: return '';
+        }
+    }
+    
+    function updateTimer() {
+        if (!t0) return;
+        const diffMs = rtoFinal !== null ? rtoFinal * 1000 : new Date() - t0;
+        const diffS = Math.floor(diffMs / 1000);
+        const mins = Math.floor(diffS / 60);
+        const secs = diffS % 60;
+        
+        document.getElementById('rtoTimer').textContent = 
+            `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    
+    function formatTime(isoString) {
+        if (!isoString) return '';
+        return new Date(isoString).toLocaleTimeString();
+    }
+    
+    function formatMeasurement(data) {
+        if (!data) return '';
+        if (data.rto_s !== undefined) {
+            return `RTO: ${data.rto_s < 60 ? data.rto_s.toFixed(2) + 's' : Math.floor(data.rto_s / 60) + 'm ' + (data.rto_s % 60).toFixed(2) + 's'}`;
+        }
+        if (data.rpo_s !== undefined) {
+            return `RPO: ${Number(data.rpo_s).toFixed(2)}s`;
+        }
+        return JSON.stringify(data);
+    }
+    
+    // Every approval and command carries the approver's name (remembered in this browser) for the audit trail,
+    // and any refusal from the engine (wrong state, stale click) is shown instead of silently ignored.
+    async function act(path) {
+        const by = AgentUI.approverName();
+        if (by === null) throw new Error('an approver name is required');
+        const res = await fetch(`/api/exercise/${exerciseId}/${path}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ by }) });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok || out.error) throw new Error(out.error || out.detail || `HTTP ${res.status}`);
+        return out;
+    }
+
+    async function confirmStep() {
+        if (!currentHumanStep) return;
+        
+        const btn = document.getElementById('confirmStepBtn');
+        btn.disabled = true;
+        btn.textContent = 'Confirming...';
+        
+        try {
+            await act(`confirm/${currentHumanStep.id}`);
+            document.getElementById('humanStepBox').classList.add('hide');
+            currentHumanStep = null;
+        } catch (e) {
+            alert('Failed to confirm step: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '✓ Confirm Done';
+        }
+    }
+    
+    async function killSwitch() {
+        if (!confirm('Are you sure you want to KILL the exercise? This will stop execution immediately.')) {
+            return;
+        }
+        
+        try {
+            await act('kill');
+            alert('Exercise killed. Offering rollback...');
+        } catch (e) {
+            alert('Failed to kill exercise: ' + e.message);
+        }
+    }
+    
+    async function rollback() {
+        if (!confirm('Are you sure you want to ROLLBACK? This will restore the original state.')) {
+            return;
+        }
+        
+        try {
+            await act('rollback');
+            alert('Rollback initiated.');
+        } catch (e) {
+            alert('Failed to rollback: ' + e.message);
+        }
+    }
+    
+    async function retryStep() {
+        if (!confirm('Retry the failed step? The exercise will resume from the current step.')) {
+            return;
+        }
+        
+        try {
+            await act('retry');
+            document.getElementById('pausedFailedBanner').classList.add('hide');
+        } catch (e) {
+            alert('Failed to retry step: ' + e.message);
+        }
+    }
+    
+    async function continueExercise() {
+        if (!confirm('Continue and skip the failed step? The exercise will proceed to the next step.')) {
+            return;
+        }
+        
+        try {
+            await act('continue');
+            document.getElementById('pausedFailedBanner').classList.add('hide');
+        } catch (e) {
+            alert('Failed to continue exercise: ' + e.message);
+        }
+    }
+    
+    function updateChaosButton(data) {
+        const chaosBtn = document.getElementById('chaosBtn');
+        // Enable chaos button only during running state and chaos not already injected
+        const canChaos = data.status === 'running' && !data.chaos;
+        chaosBtn.disabled = !canChaos;
+    }
+    
+    async function injectChaos() {
+        if (!confirm('Inject a surprise fault?\n\nThis will create a second failure for the Validator agent to diagnose and fix.')) {
+            return;
+        }
+        
+        const btn = document.getElementById('chaosBtn');
+        btn.disabled = true;
+        
+        try {
+            const res = await fetch(`/api/exercise/${exerciseId}/chaos`, { method: 'POST' });
+            const result = await res.json();
+            if (result.error) {
+                alert('Failed: ' + result.error);
+                btn.disabled = false;
+            }
+        } catch (e) {
+            alert('Failed to inject chaos: ' + e.message);
+            btn.disabled = false;
+        }
+    }
+    
+    async function approveFixAndRetry() {
+        if (!confirm('Apply the proposed fix and retry the step?')) {
+            return;
+        }
+        
+        const btn = document.getElementById('approveFixBtn');
+        btn.disabled = true;
+        btn.textContent = 'Applying fix...';
+        
+        try {
+            // The retry endpoint with fix approval
+            await act('retry');
+            document.getElementById('pausedFailedBanner').classList.add('hide');
+        } catch (e) {
+            alert('Failed to apply fix: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = ' Approve Fix & Retry';
+        }
+    }
+    
+    // Initial load
+    loadExercise();
+    loadEvents();
+    loadAppStatus();
+    
+    // Poll
+    setInterval(loadExercise, 2000);
+    setInterval(loadEvents, 2000);
+    setInterval(loadAppStatus, 3000);
+</script>
+{% endblock %}

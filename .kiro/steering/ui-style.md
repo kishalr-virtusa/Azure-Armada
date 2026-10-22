@@ -1,3 +1,14 @@
+# UI style (read first)
+
+**The design system is `docs/design/DESIGN.md`** (derived from VoltAgent/awesome-design-md: Vercel for the console,
+Mercury for Contoso). It overrides anything below. Key rules: Geist + Geist Mono, weight <= 600, sentence case,
+hairline-ring cards (no coloured top borders), status pills with dots, ink primary buttons, Virtusa purple as the
+only accent, mono for technical identifiers, no emoji icons, no gradients, no watermarks, 4px spacing grid.
+Shared CSS: `apps/dr-console/web/static/virtusa.css` (tokens + components). Do not add page-level colours or fonts.
+
+---
+(previous notes, superseded where they conflict)
+
 ---
 inclusion: always
 ---

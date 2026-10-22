@@ -1,0 +1,864 @@
+{% extends "base.html" %}
+
+{% block title %}Live Presenter View — DR Agent Console{% endblock %}
+
+{% block head %}
+<style>
+    /* L7: Virtual presentation - min 18px body text for legibility in compressed screen shares */
+    .presenter-wrap, .presenter-wrap * {
+        font-size: 18px;
+    }
+        /* (watermark removed: branding lives in the header) */
+    .wrap {
+        position: relative;
+    }
+    .wrap::before {
+        content: '';
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        width: 1200px;
+        height: 400px;
+        background: none;
+        background-size: contain;
+        opacity: 0.04;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: -1;
+    }
+    @media (prefers-color-scheme: dark) {
+        .wrap::before {
+            background-image: none;
+        }
+    }
+
+    /* Presenter header with branding */
+    .presenter-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+    }
+    .presenter-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .presenter-brand img { height: 28px; }
+    .azure-badge-presenter {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 16px;
+        color: var(--ink-2);
+    }
+    .azure-badge-presenter img { height: 22px; }
+
+    /* Full-screen presenter layout */
+    .presenter-wrap {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        min-height: calc(100vh - 200px);
+    }
+    @media (max-width: 1200px) {
+        .presenter-wrap { grid-template-columns: 1fr; }
+    }
+
+    /* Left panel - QR + KPIs */
+    .left-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    /* L7: QR code section with larger size and better visibility */
+    body.drill-active .qr-section { padding: 14px 18px; }
+    body.drill-active .qr-section h2, body.drill-active .qr-code, body.drill-active .qr-section .sub,
+    body.drill-active .qr-section > p { display: none !important; }
+    body.drill-active .qr-url { font-size: 20px !important; margin: 0 0 8px !important; }
+    .qr-section {
+        text-align: center;
+        padding: 28px;
+    }
+    .qr-code {
+        display: inline-block;
+        padding: 24px; /* L7: White quiet zone for video call legibility */
+        background: white;
+        border-radius: 12px;
+        border: 2px solid var(--line);
+    }
+    /* L7: URL in large readable text (≥28px) */
+    .qr-url {
+        margin-top: 16px;
+        font-size: 28px;
+        font-weight: 500;
+        color: var(--ink);
+        word-break: break-all;
+        letter-spacing: -0.5px;
+    }
+    .qr-caption {
+        margin-top: 10px;
+        font-size: 14px;
+        color: var(--ink-3);
+    }
+    /* L7: Copy link button for meeting chat */
+    .copy-link-btn {
+        margin-top: 16px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 24px;
+        background: var(--accent);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-family: inherit;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s, transform 0.1s;
+    }
+    .copy-link-btn:hover {
+        background: #4a22cc;
+        transform: scale(1.02);
+    }
+    .copy-link-btn:active {
+        transform: scale(0.98);
+    }
+    .copy-link-btn.copied {
+        background: var(--have);
+    }
+
+    /* L7: High-contrast big KPI tiles */
+    .big-kpis {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+    .big-kpi {
+        background: var(--surface);
+        border: 2px solid var(--line);
+        border-radius: 12px;
+        padding: 24px;
+        text-align: center;
+        border-top: 5px solid var(--accent);
+    }
+    .big-kpi.pass { border-top-color: var(--have); }
+    .big-kpi.fail { border-top-color: var(--add); }
+    .big-kpi.region-b { border-top-color: var(--mag); }
+    .big-kpi .label {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--ink);
+        margin-bottom: 10px;
+    }
+    .big-kpi .value {
+        font-size: 56px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+        color: var(--ink);
+    }
+    .big-kpi.pass .value { color: var(--have); }
+    .big-kpi.fail .value { color: var(--add); }
+    .big-kpi .sub {
+        font-size: 16px;
+        color: var(--ink-2);
+        margin-top: 10px;
+    }
+
+    /* Stopwatch */
+    .stopwatch-tile {
+        grid-column: 1 / -1;
+    }
+    .stopwatch-value {
+        font-size: 72px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        font-variant-numeric: tabular-nums;
+        color: var(--add);
+    }
+    .stopwatch-value.normal { color: var(--ink); }
+    .stopwatch-value.recovered { color: var(--have); }
+
+    .eta-display {
+        font-size: 20px;
+        color: var(--ink-2);
+        margin-top: 10px;
+    }
+    .eta-display strong { color: var(--ink); }
+
+    /* Right panel - phone frame + timeline */
+    .right-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    /* Phone frame (iPhone 14 Pro dimensions: 393×852, scaled) */
+    .phone-frame-container {
+        position: relative;
+        display: inline-block;
+    }
+    .phone-frame {
+        position: relative;
+        width: 280px;
+        height: 604px;
+        margin: 0 auto;
+        background: #1a1a1a;
+        border-radius: 36px;
+        padding: 6px;
+        box-shadow: 0 0 0 1px rgba(0,0,0,.2), 0 16px 40px -12px rgba(0,0,0,0.35);
+    }
+    .phone-screen {
+        width: 100%;
+        height: 100%;
+        border-radius: 30px;
+        overflow: hidden;
+        background: #fbfcfd;
+        padding-top: 24px;   /* status-bar area: app content starts below the island */
+    }
+    .phone-screen iframe {
+        width: 390px;
+        height: 826px;
+        transform: scale(0.6872);
+        transform-origin: top left;
+        border: none;
+    }
+    .phone-notch {
+        position: absolute;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 64px;
+        height: 16px;
+        background: #0a0a0a;
+        border-radius: 10px;
+        z-index: 10;
+    }
+
+    /* L7: Phone shake animation for haptic visualization */
+    @keyframes phone-shake {
+        0%, 100% { transform: translateX(0); }
+        20%, 60% { transform: translateX(-1.5px); }
+        40%, 80% { transform: translateX(1.5px); }
+    }
+    .phone-frame.shaking {
+        animation: phone-shake 0.28s linear;
+    }
+
+    /* L7: Ripple rings effect for haptic visualization */
+    .haptic-ripple {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 100%;
+        height: 100%;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+    }
+    .haptic-ripple::before,
+    .haptic-ripple::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 280px;
+        height: 604px;
+        border: 3px solid var(--accent);
+        border-radius: 50px;
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0;
+    }
+    .haptic-ripple.active::before {
+        animation: ripple-out 0.6s ease-out forwards;
+    }
+    .haptic-ripple.active::after {
+        animation: ripple-out 0.6s ease-out 0.15s forwards;
+    }
+    @keyframes ripple-out {
+        0% {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 0.8;
+        }
+        100% {
+            transform: translate(-50%, -50%) scale(1.3);
+            opacity: 0;
+        }
+    }
+
+    /* L7: Haptic label indicator */
+    .haptic-label {
+        position: absolute;
+        bottom: -40px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--accent);
+        color: white;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 16px;
+        font-weight: 600;
+        opacity: 0;
+        transition: opacity 0.15s;
+        white-space: nowrap;
+    }
+    .haptic-label.visible {
+        opacity: 1;
+        animation: haptic-label-fade 1.5s ease-out forwards;
+    }
+    @keyframes haptic-label-fade {
+        0%, 60% { opacity: 1; }
+        100% { opacity: 0; }
+    }
+
+    /* Timeline card - L7: larger text */
+    .timeline-card {
+        flex: 1;
+        min-height: 200px;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .timeline-item {
+        padding: 10px 0 10px 18px;
+        border-bottom: 1px solid var(--line);
+        font-size: 16px;
+    }
+    /* dot centred on the first (time) line, inside the card */
+    .timeline-card .timeline-item::before { left: 2px; top: 16px; background: var(--hairline-strong); box-shadow: none; }
+    .timeline-card .timeline-item.measurement::before { background: var(--success); }
+    .timeline-card .timeline-item.error::before { background: var(--danger); }
+    .timeline-card .timeline-item.approval::before, .timeline-card .timeline-item.step_start::before { background: var(--accent); }
+    .timeline-item:last-child { border-bottom: none; }
+    .timeline-time {
+        color: var(--ink-2);
+        font-size: 14px;
+        line-height: 20px;
+    }
+    .timeline-msg {
+        font-weight: 500;
+        margin-top: 4px;
+        color: var(--ink);
+    }
+    .timeline-item.error .timeline-msg { color: var(--add); }
+    .timeline-item.measurement .timeline-msg { color: var(--have); }
+
+    /* Chaos button */
+    .chaos-section {
+        text-align: center;
+        padding: 16px;
+    }
+    .chaos-btn {
+        background: var(--add);
+        color: #fff;
+        border: none;
+        border-radius: 12px;
+        padding: 16px 32px;
+        font-family: inherit;
+        font-size: 18px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.1s, opacity 0.2s;
+    }
+    .chaos-btn:hover { transform: none; filter: brightness(.95); }
+    .chaos-btn:disabled { background: var(--surface-2); color: var(--ink-3); cursor: not-allowed; transform: none; }
+    header .st { font-size: 12px; padding: 6px 12px; }
+    .chaos-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    /* L7: High-contrast state banners */
+    .state-banner {
+        padding: 18px 24px;
+        border-radius: 10px;
+        text-align: center;
+        font-weight: 600;
+        font-size: 20px;
+    }
+    .state-banner.normal,
+    .state-banner.pass {
+        background: var(--have-bg);
+        color: var(--have);
+    }
+    .state-banner.outage,
+    .state-banner.fail {
+        background: var(--add-bg);
+        color: var(--add);
+    }
+    .state-banner.recovered {
+        background: var(--have-bg);
+        color: var(--have);
+    }
+    .state-banner.chaos {
+        background: var(--upd-bg);
+        color: var(--upd);
+    }
+
+    /* Current step display - L7: larger text */
+    .current-step {
+        text-align: center;
+        padding: 14px;
+        background: var(--surface-2);
+        border-radius: 8px;
+        font-size: 18px;
+    }
+    .current-step strong { color: var(--accent); }
+
+    /* Progress */
+    .progress-bar {
+        height: 10px;
+        background: var(--line);
+        border-radius: 5px;
+        overflow: hidden;
+    }
+    .progress-fill {
+        height: 100%;
+        background: var(--accent);
+        transition: width 0.3s;
+    }
+
+    /* sizing pass: readable in a 720p screen share without shouting */
+    .qr-url { font-size: 22px !important; }
+    .qr-section h2, .card > h2 { font-size: 18px !important; }
+    .state-banner { font-size: 17px; padding: 14px 20px; }
+    .stopwatch-value { font-size: 60px; }
+    .big-kpi .value { font-size: 44px; }
+    .big-kpi .label { font-size: 15px; }
+    .big-kpi .sub { font-size: 14px; }
+    .eta-display { font-size: 16px; }
+    /* nothing to time while idle: hide the empty stopwatch and RTO/RPO tiles until a drill starts */
+    body:not(.drill-active) .big-kpis { display: none; }
+
+    /* ---- presenter layout v2 (DESIGN.md) ---- */
+    .pv-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+    @media (max-width: 1100px) { .pv-grid { grid-template-columns: 1fr; } }
+    .pv-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+    .pv-side { position: sticky; top: 24px; }
+    .pv-join { flex-direction: row; align-items: center; gap: 24px; text-align: left; padding: 20px; }
+    .pv-join .qr-code { width: 172px; height: 172px; flex: 0 0 172px; padding: 8px; background: #fff; border-radius: 8px; box-shadow: var(--ring); display: grid; place-items: center; margin: 0; }
+    .pv-join .qr-code img, .pv-join .qr-code canvas, .pv-join .qr-code svg { width: 100% !important; height: auto !important; }
+    .pv-join-text { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; min-width: 0; }
+    .pv-join .qr-url { font-size: 15px !important; color: var(--ink); margin: 0 !important; overflow-wrap: anywhere; }
+    body.drill-active .pv-join .qr-code { display: none !important; }
+    body.drill-active .pv-join { padding: 14px 20px; }
+    body.drill-active .pv-join h2 { display: block !important; font-size: 14px !important; }
+    .state-banner { text-align: left !important; font-size: 15px !important; font-weight: 500 !important; padding: 14px 16px !important; border-radius: 8px; box-shadow: var(--ring); }
+    .big-kpis { display: grid !important; grid-template-columns: 2fr 1fr 1fr !important; gap: 16px !important; }
+    @media (max-width: 700px) { .big-kpis { grid-template-columns: 1fr !important; } }
+    .big-kpi { background: var(--canvas) !important; border-radius: 8px !important; box-shadow: var(--ring) !important; border: 0 !important; padding: 16px !important; text-align: left !important; }
+    .big-kpi .label { font-size: 12px !important; font-weight: 500 !important; color: var(--mute) !important; margin: 0 0 6px !important; }
+    .big-kpi .value { font-size: 40px !important; line-height: 44px !important; font-weight: 600 !important; letter-spacing: -1.6px; }
+    .big-kpi .sub { font-size: 12px !important; margin-top: 4px !important; }
+    .stopwatch-tile { grid-column: auto !important; }
+    .stopwatch-value { font-size: 56px !important; line-height: 60px !important; font-weight: 600 !important; letter-spacing: -2.4px !important; font-variant-numeric: tabular-nums; }
+    .eta-display { font-size: 13px !important; margin-top: 4px !important; color: var(--body) !important; }
+    .pv-progress { display: flex; flex-direction: column; gap: 8px; }
+    .pv-progress .current-step { font-size: 13px !important; color: var(--body); background: none !important; padding: 0 !important; text-align: left !important; }
+    body:not(.drill-active) .pv-progress { display: none; }
+    .pv-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .pv-card-head > .sub { margin: 0; line-height: 24px; }
+    .pv-card-head h2 { font-size: 16px !important; margin: 0 !important; }
+    .pv-empty { color: var(--mute); font-size: 13px; padding: 12px 0; }
+    .pv-phone { align-items: stretch; text-align: left; padding-bottom: 24px; }
+    .pv-phone .phone-frame-container { margin-top: 8px; }
+    .chaos-btn { background: var(--canvas) !important; color: var(--danger) !important; box-shadow: var(--ring) !important; border: 0 !important; font-size: 13px !important; height: 32px !important; padding: 0 12px !important; border-radius: 6px !important; }
+    .chaos-btn:disabled { color: var(--mute) !important; }
+    body:not(.drill-active) .big-kpis { display: none !important; }
+</style>
+<script src="/static/vendor/qrcode.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<header>
+    <div>
+        <span class="eyebrow">Presenter view</span>
+        <h1>Live demo</h1>
+        <p class="lede">What customers see on their phones, and what the DR Agent is doing behind the scenes.</p>
+    </div>
+    <span class="st" id="stateTag">Loading</span>
+</header>
+
+<div class="pv-grid">
+    <div class="pv-main">
+        <div class="card pv-join qr-section">
+            <div class="qr-code" id="qrCode"></div>
+            <div class="pv-join-text">
+                <h2>Scan to open Contoso Payments</h2>
+                <div class="qr-url mono" id="qrUrl">Loading...</div>
+                <p class="sub qr-caption">Team Azure Armada · works on any phone</p>
+                <button class="btn btn-secondary" id="copyLinkBtn" onclick="copyLink()">
+                    <span id="copyBtnIcon"></span><span id="copyBtnText">Copy link</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="state-banner normal" id="stateBanner">All systems normal</div>
+
+        <div class="big-kpis">
+            <div class="big-kpi stopwatch-tile" id="stopwatchTile">
+                <div class="label">Time since the outage</div>
+                <div class="stopwatch-value normal" id="stopwatchValue">00:00.0</div>
+                <div class="eta-display" id="etaDisplay"></div>
+            </div>
+            <div class="big-kpi" id="rtoTile">
+                <div class="label">Recovery time (RTO)</div>
+                <div class="value" id="rtoValue">—</div>
+                <div class="sub" id="rtoTarget">target —</div>
+            </div>
+            <div class="big-kpi" id="rpoTile">
+                <div class="label">Data loss (RPO)</div>
+                <div class="value" id="rpoValue">—</div>
+                <div class="sub" id="rpoTarget">target —</div>
+            </div>
+        </div>
+
+        <div class="pv-progress">
+            <div class="current-step" id="currentStep">Waiting for a drill</div>
+            <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width: 0%"></div></div>
+        </div>
+
+        <div class="card timeline-card">
+            <div class="pv-card-head">
+                <div>
+                    <h2>Agent timeline</h2>
+                    <p class="sub">Decisions and actions of the DR Agent, newest first</p>
+                </div>
+                <button class="btn btn-secondary chaos-btn" id="chaosBtn" onclick="injectChaos()" disabled
+                        title="Disables the Southeast Asia traffic endpoint mid-failover to test the Validator agent">Inject surprise fault</button>
+            </div>
+            <div id="timelineList"><div class="pv-empty">No drill running</div></div>
+        </div>
+    </div>
+
+    <aside class="pv-side">
+        <div class="card pv-phone">
+            <div class="pv-card-head"><h2>Customer view</h2><span class="sub">Contoso Payments</span></div>
+            <div class="phone-frame-container">
+                <div class="phone-frame" id="phoneFrame">
+                    <div class="phone-notch"></div>
+                    <div class="phone-screen"><iframe id="phoneIframe" src="about:blank" title="Contoso Payments"></iframe></div>
+                </div>
+                <div class="haptic-ripple" id="hapticRipple"></div>
+                <div class="haptic-label" id="hapticLabel">Haptic</div>
+            </div>
+        </div>
+    </aside>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let publicUrl = '';
+    let appUrl = '';
+    let exerciseId = null;
+    let clockSkew = 0;
+    let t0 = null;
+    let stopwatchInterval = null;
+    let lastState = null;
+
+    // Load config and generate QR
+    async function loadConfig() {
+        try {
+            const res = await fetch('/api/live-config');
+            const cfg = await res.json();
+            publicUrl = cfg.public_url || '';
+            appUrl = cfg.app_url || '';
+
+            // Generate QR code - L7: at least 280px with cell size 7 for good video call visibility
+            if (publicUrl) {
+                const qr = qrcode(0, 'M');
+                qr.addData(publicUrl);
+                qr.make();
+                // Cell size 7 = ~280px for a 40-module QR code
+                document.getElementById('qrCode').innerHTML = qr.createSvgTag(7);
+                // L7: Show short URL for readability
+                const shortUrl = publicUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+                document.getElementById('qrUrl').textContent = shortUrl;
+            } else {
+                document.getElementById('qrCode').innerHTML = '<div style="padding:60px;color:var(--ink-2);font-size:18px;">No public URL configured</div>';
+                document.getElementById('qrUrl').textContent = '—';
+            }
+
+            // Load phone iframe
+            if (appUrl) {
+                document.getElementById('phoneIframe').src = appUrl;
+            }
+        } catch (e) {
+            console.error('Failed to load config:', e);
+        }
+    }
+
+    // L7: Copy link to clipboard for meeting chat
+    async function copyLink() {
+        if (!publicUrl) {
+            alert('No public URL configured');
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(publicUrl);
+            const btn = document.getElementById('copyLinkBtn');
+            const icon = document.getElementById('copyBtnIcon');
+            const text = document.getElementById('copyBtnText');
+            btn.classList.add('copied');
+            icon.textContent = '✓';
+            text.textContent = 'Copied!';
+            setTimeout(() => {
+                btn.classList.remove('copied');
+                icon.textContent = '';
+                text.textContent = 'Copy link';
+            }, 2000);
+        } catch (e) {
+            // Fallback for older browsers
+            const input = document.createElement('input');
+            input.value = publicUrl;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+            alert('Link copied to clipboard!');
+        }
+    }
+
+    // L7: Listen for haptic postMessage from iframe and show visual feedback
+    window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'haptic') {
+            showHapticFeedback(event.data.pattern);
+        }
+    });
+
+    // L7: Visual haptic feedback - shake + ripple + label
+    function showHapticFeedback(pattern) {
+        const phoneFrame = document.getElementById('phoneFrame');
+        const ripple = document.getElementById('hapticRipple');
+        const label = document.getElementById('hapticLabel');
+
+        // Update label based on pattern
+        const patternLabels = {
+            'tap': ' tap',
+            'success': ' success',
+            'error': ' error',
+            'alert': ' alert!'
+        };
+        label.textContent = patternLabels[pattern] || ' haptic';
+
+        // Reset animations by removing and re-adding classes
+        phoneFrame.classList.remove('shaking');
+        ripple.classList.remove('active');
+        label.classList.remove('visible');
+
+        // Force reflow to restart animations
+        void phoneFrame.offsetWidth;
+
+        // Apply animations
+        phoneFrame.classList.add('shaking');
+        ripple.classList.add('active');
+        label.classList.add('visible');
+
+        // Clean up after animations complete
+        setTimeout(() => {
+            phoneFrame.classList.remove('shaking');
+        }, 400);
+        setTimeout(() => {
+            ripple.classList.remove('active');
+        }, 750);
+        setTimeout(() => {
+            label.classList.remove('visible');
+        }, 1500);
+    }
+
+    // Poll live status
+    async function pollLive() {
+        try {
+            const res = await fetch('/public/live', { cache: 'no-store' });
+            const data = await res.json();
+
+            // Clock skew
+            if (data.server_time) {
+                clockSkew = Date.now() - Date.parse(data.server_time);
+            }
+
+            exerciseId = data.exercise_id;
+            handleState(data);
+        } catch (e) {
+            console.error('Live poll failed:', e);
+        }
+    }
+
+    function handleState(data) {
+        const state = data.state;
+        lastState = state;
+
+        // State tag
+        const stateTag = document.getElementById('stateTag');
+        stateTag.textContent = state.replace('_', ' ');
+        stateTag.className = 'st ' + getStateClass(state);
+        // during a drill the stopwatch matters more than the QR: collapse the QR card to a slim link row
+        document.body.classList.toggle('drill-active', !['normal', 'armed'].includes(state));
+
+        // State banner
+        const banner = document.getElementById('stateBanner');
+        banner.textContent = data.headline || getDefaultHeadline(state);
+        banner.className = 'state-banner ' + (data.chaos ? 'chaos' : getStateClass(state));
+
+        // Stopwatch
+        const stopwatchValue = document.getElementById('stopwatchValue');
+        if (state === 'outage') {
+            if (data.t0) {
+                t0 = Date.parse(data.t0);
+                startStopwatch();
+            }
+            stopwatchValue.className = 'stopwatch-value';
+
+            // ETA
+            if (data.eta_s != null) {
+                // eta_s is the time still remaining (server side), not the total
+                document.getElementById('etaDisplay').innerHTML = data.eta_s <= 0
+                    ? 'Taking longer than usual…' : `<strong>Estimated recovery:</strong> ~${Math.ceil(data.eta_s)}s left`;
+            }
+        } else if (state === 'recovered' || state === 'completed') {
+            stopStopwatch();
+            if (data.rto_s != null) {
+                stopwatchValue.textContent = formatStopwatch(data.rto_s);
+            }
+            stopwatchValue.className = 'stopwatch-value recovered';
+            document.getElementById('etaDisplay').innerHTML = '';
+        } else {
+            stopStopwatch();
+            stopwatchValue.textContent = '00:00.0';
+            stopwatchValue.className = 'stopwatch-value normal';
+            document.getElementById('etaDisplay').innerHTML = '';
+        }
+
+        // RTO/RPO tiles
+        updateRtoRpo(data);
+
+        // Current step + progress
+        if (data.current_step) {
+            document.getElementById('currentStep').innerHTML = `<strong>Now:</strong> ${AgentUI.esc(data.current_step)}`;
+        } else {
+            document.getElementById('currentStep').textContent = 'Waiting for exercise...';
+        }
+        if (data.steps_total > 0) {
+            const pct = (data.steps_done / data.steps_total) * 100;
+            document.getElementById('progressFill').style.width = pct + '%';
+        }
+
+        // Timeline
+        if (data.timeline && data.timeline.length > 0) {
+            document.getElementById('timelineList').innerHTML = data.timeline.slice(-8).reverse().map(e => `
+                <div class="timeline-item ${AgentUI.esc(e.kind)}">
+                    <div class="timeline-time">${formatTime(e.ts)}</div>
+                    <div class="timeline-msg">${AgentUI.esc(e.message)}</div>
+                </div>
+            `).join('');
+        }
+
+        // Chaos button - only enabled during outage
+        document.getElementById('chaosBtn').disabled = (state !== 'outage' || data.chaos);
+    }
+
+    function updateRtoRpo(data) {
+        const rtoTile = document.getElementById('rtoTile');
+        const rpoTile = document.getElementById('rpoTile');
+
+        // Targets
+        if (data.rto_target_s) {
+            document.getElementById('rtoTarget').textContent = `target ${Math.floor(data.rto_target_s / 60)}min`;
+        }
+        if (data.rpo_target_s) {
+            document.getElementById('rpoTarget').textContent = `target ${Math.floor(data.rpo_target_s / 60)}min`;
+        }
+
+        // Values
+        if (data.rto_s != null) {
+            document.getElementById('rtoValue').textContent = `${Number(data.rto_s).toFixed(2)}s`;
+            rtoTile.className = 'big-kpi ' + (data.rto_met ? 'pass' : 'fail');
+        }
+        if (data.rpo_s != null) {
+            document.getElementById('rpoValue').textContent = `${Number(data.rpo_s).toFixed(2)}s`;
+            rpoTile.className = 'big-kpi ' + (data.rpo_met ? 'pass' : 'fail');
+        }
+    }
+
+    function getStateClass(state) {
+        switch (state) {
+            case 'normal': case 'armed': return 'pass';
+            case 'outage': return 'fail';
+            case 'recovered': case 'failing_back': case 'completed': return 'pass';
+            case 'paused': case 'paused_failed': return 'warn';
+            default: return 'neutral';
+        }
+    }
+
+    function getDefaultHeadline(state) {
+        switch (state) {
+            case 'normal': case 'armed': return 'All systems normal';
+            case 'outage': return 'Outage in progress — failover running';
+            case 'recovered': return 'Service recovered';
+            case 'failing_back': return 'Returning to primary region';
+            case 'completed': return 'Drill complete';
+            default: return state;
+        }
+    }
+
+    // Stopwatch
+    function startStopwatch() {
+        if (stopwatchInterval) return;
+        stopwatchInterval = setInterval(() => {
+            if (!t0) return;
+            const elapsed = (Date.now() - clockSkew - t0) / 1000;
+            document.getElementById('stopwatchValue').textContent = formatStopwatch(Math.max(0, elapsed));
+        }, 100);
+    }
+
+    function stopStopwatch() {
+        if (stopwatchInterval) {
+            clearInterval(stopwatchInterval);
+            stopwatchInterval = null;
+        }
+    }
+
+    function formatStopwatch(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        const t = Math.floor((seconds % 1) * 10);
+        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${t}`;
+    }
+
+    function formatTime(iso) {
+        if (!iso) return '';
+        return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    // Inject chaos
+    async function injectChaos() {
+        if (!exerciseId) {
+            alert('No active exercise');
+            return;
+        }
+        if (!confirm('Inject a surprise fault?\n\nThis will create a second failure for the Validator agent to diagnose and fix.')) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/exercise/${exerciseId}/chaos`, { method: 'POST' });
+            const result = await res.json();
+            if (result.error) {
+                alert('Failed: ' + result.error);
+            } else {
+                document.getElementById('chaosBtn').disabled = true;
+            }
+        } catch (e) {
+            alert('Failed to inject chaos: ' + e.message);
+        }
+    }
+
+    // Initialize
+    loadConfig();
+    pollLive();
+    setInterval(pollLive, 1000);
+</script>
+{% endblock %}

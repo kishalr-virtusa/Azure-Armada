@@ -1,0 +1,9 @@
+{
+ "components": [
+  {"monthly_usd": 14.6, "name": "App Service B1 (Linux)", "unit": "1 Hour", "unit_price": 0.02},
+  {"monthly_usd": 4.9, "name": "Azure SQL Database Basic", "unit": "1/Day", "unit_price": 0.1611}
+ ],
+ "region": "eastasia",
+ "source": "azure-retail-prices",
+ "total_usd": 19.5
+}

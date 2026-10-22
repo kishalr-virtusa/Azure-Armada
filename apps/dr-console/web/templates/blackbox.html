@@ -1,0 +1,398 @@
+{% extends "base.html" %}
+
+{% block title %}Black box — DR Agent Console{% endblock %}
+
+{% block content %}
+<style>
+    /* one chat column filling the window: header, scrolling conversation, composer pinned at the bottom */
+    .wrap { padding-bottom: 24px; }
+    footer { display: none; }
+    .bb { width: 100%; max-width: 880px; margin: 0 auto; height: calc(100dvh - 56px); min-height: 480px;
+          display: flex; flex-direction: column; background: var(--canvas); border-radius: 12px; box-shadow: var(--ring); overflow: hidden; }
+    @media (max-width: 960px) { .bb { height: calc(100dvh - 150px); min-height: 420px; } }
+
+    .bb-head { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--hairline); }
+    .bb-head .t { min-width: 0; flex: 1; }
+    .bb-head h1 { font-size: 16px; line-height: 22px; margin: 0; }
+    .bb-head .sub { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bb-head .btn { height: 32px; padding: 0 12px; font-size: 13px; flex-shrink: 0; }
+    .bb-head { position: relative; }
+    .bb-hist { position: absolute; top: calc(100% - 6px); right: 20px; z-index: 20; width: min(380px, calc(100% - 40px));
+               max-height: 60vh; overflow-y: auto; background: var(--surface, #fff); border: 1px solid var(--hairline);
+               border-radius: 12px; box-shadow: 0 12px 32px rgba(17, 12, 46, .14); padding: 6px; }
+    .bb-hist[hidden] { display: none; }
+    .bb-hist .h { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); padding: 8px 10px 6px; }
+    .bb-hist button { display: block; width: 100%; text-align: left; border: 0; background: none; border-radius: 8px;
+                      padding: 8px 10px; cursor: pointer; font: inherit; color: var(--ink); }
+    .bb-hist button:hover, .bb-hist button:focus-visible { background: var(--canvas-soft-2, #f4f2fb); outline: none; }
+    .bb-hist button.cur { background: var(--accent-soft); }
+    .bb-hist .ti { display: block; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bb-hist .mt { display: block; font-size: 12px; color: var(--mute); margin-top: 2px; }
+    .bb-hist .none { font-size: 13px; color: var(--mute); padding: 10px; }
+    .bb-hist .it { display: flex; align-items: center; gap: 4px; border-radius: 8px; }
+    .bb-hist .it.cur { background: var(--accent-soft); }
+    .bb-hist .it > button[data-id] { flex: 1; min-width: 0; }
+    .bb-hist .it.cur > button[data-id] { background: none; }
+    .bb-hist button.del { width: 32px; height: 32px; flex-shrink: 0; padding: 0; display: grid; place-items: center; color: var(--mute); }
+    .bb-hist button.del:hover, .bb-hist button.del:focus-visible { color: var(--danger); background: var(--danger-soft, #fdecec); }
+    .bb-hist button.del svg { width: 16px; height: 16px; }
+    .bb-av { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+    .bb-av svg { width: 17px; height: 17px; }
+    .bb-av.sm { width: 28px; height: 28px; }
+    .bb-av.sm svg { width: 15px; height: 15px; }
+
+    .bb-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 24px 20px; }
+    .bb-welcome { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 10px; padding: 8px 0; }
+    .bb-welcome[hidden] { display: none; }
+    .bb-welcome .bb-av { width: 48px; height: 48px; }
+    .bb-welcome .bb-av svg { width: 24px; height: 24px; }
+    .bb-welcome h2 { margin: 6px 0 0; font-size: 20px; }
+    .bb-welcome p { margin: 0; max-width: 520px; color: var(--body); font-size: 14px; line-height: 21px; }
+    .bb-suggest { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; max-width: 640px; }
+    .bb-suggest button { min-height: 32px; padding: 6px 12px; border-radius: 999px; border: 0; background: var(--canvas); box-shadow: var(--ring); color: var(--body); font-family: inherit; font-size: 13px; line-height: 18px; cursor: pointer; text-align: left; }
+    .bb-suggest button:hover { color: var(--accent); background: var(--accent-soft); box-shadow: none; }
+    .bb-suggest button:disabled { opacity: .45; cursor: not-allowed; }
+
+    .bb-msgs { display: flex; flex-direction: column; gap: 20px; }
+    .bb-q { align-self: flex-end; max-width: min(560px, 85%); padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--accent); color: #fff;
+            font-size: 14px; line-height: 21px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .bb-row { display: flex; gap: 10px; align-items: flex-start; max-width: 100%; }
+    .bb-a { min-width: 0; max-width: min(680px, calc(100% - 38px)); padding: 12px 14px; border-radius: 4px 16px 16px 16px; background: var(--canvas-soft);
+            box-shadow: var(--ring); color: var(--ink); display: flex; flex-direction: column; gap: 10px; font-size: 14px; line-height: 21px; }
+    .bb-a.err { background: var(--danger-soft); color: var(--danger); box-shadow: none; }
+    .bb-who { font-size: 12px; font-weight: 600; color: var(--ink); margin-bottom: -4px; }
+    .bb-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .bb-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .bb-src > summary { font-size: 12px; font-weight: 500; color: var(--body); cursor: pointer; width: max-content; }
+    .bb-src > summary:hover { color: var(--accent); }
+    .bb-cites { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+    .bb-cites li { font-size: 12.5px; line-height: 18px; color: var(--body); padding-left: 10px; border-left: 2px solid var(--hairline-strong); overflow-wrap: anywhere; }
+    .bb-cites .src { display: block; font-family: var(--mono); font-size: 11px; color: var(--mute); }
+    /* a citation from the knowledge index (runbook, reports, diagnoses ...), not an exact record */
+    .bb-cites li.kn { border-left-color: var(--accent); }
+    .bb-cites .src .kn-tag { font-family: inherit; font-weight: 600; color: var(--accent); margin-right: 4px; }
+    .bb-cites li.kn .quote { font-style: italic; }
+    /* grounding: code checked the answer's ids, numbers and times against the records the agent read */
+    .bb-ground { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--mute); }
+    .bb-ground svg { width: 13px; height: 13px; flex-shrink: 0; }
+    .bb-ground.ok svg { color: var(--success); }
+    .bb-ground.part svg { color: var(--warning); }
+    .bb-unsup { font-size: 12px; line-height: 17px; color: var(--mute); overflow-wrap: anywhere; }
+    .bb-a.blocked { background: var(--warning-soft); box-shadow: none; }
+
+    .bb-thinking { display: flex; align-items: center; gap: 10px; color: var(--body); min-height: 21px; }
+    .bb-thinking .now { overflow-wrap: anywhere; }
+    .bb-dots { display: inline-flex; gap: 4px; flex-shrink: 0; }
+    .bb-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: .3; animation: bb-dot 1.2s infinite; }
+    .bb-dots i:nth-child(2) { animation-delay: .2s; }
+    .bb-dots i:nth-child(3) { animation-delay: .4s; }
+    @keyframes bb-dot { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+
+    /* the agent's steps, inside its reply */
+    .bb-a .trace { background: var(--canvas); }
+    .bb-a .trace-head { padding: 8px 12px; gap: 6px 8px; }
+    .bb-a .trace-h { font-size: 12.5px; }
+    .bb-a .trace-sub { font-size: 11.5px; }
+    .bb-a .trace-note { display: none; }
+    .bb-a .trace-toggle { margin-left: auto; font-size: 12.5px; }
+    .bb-a .trace-list, .bb-a .trace:has(.trace-live.done) .trace-list { height: auto; max-height: 260px; }
+    .bb-a .trace-item { padding: 8px 12px; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 8px; }
+    .bb-a .trace-ic { width: 24px; height: 24px; }
+    .bb-a .trace-ic svg { width: 13px; height: 13px; }
+    .bb-a .trace-title { font-size: 13px; line-height: 18px; padding-top: 3px; }
+    .bb-a .trace-detail { font-size: 12px; line-height: 17px; }
+
+    .bb-composer { border-top: 1px solid var(--hairline); padding: 12px 20px 14px; background: var(--canvas); }
+    .bb-form { display: flex; align-items: flex-end; gap: 8px; padding: 6px 6px 6px 14px; border-radius: 12px; box-shadow: var(--ring); background: var(--canvas); }
+    .bb-form:focus-within { box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 1px var(--accent); }
+    .bb-form textarea { flex: 1; min-width: 0; border: 0; outline: 0; resize: none; background: transparent; color: var(--ink);
+                        font: inherit; font-size: 14px; line-height: 21px; padding: 7px 0; max-height: 98px; }
+    .bb-send { width: 36px; height: 36px; flex-shrink: 0; border: 0; border-radius: 9px; background: var(--accent); color: #fff; display: grid; place-items: center; cursor: pointer; }
+    .bb-send svg { width: 17px; height: 17px; }
+    .bb-send:disabled { opacity: .4; cursor: not-allowed; }
+    .bb-hint { margin: 6px 2px 0; font-size: 11.5px; color: var(--mute); }
+    @media (max-width: 640px) {
+        .bb-head, .bb-composer { padding-left: 12px; padding-right: 12px; }
+        .bb-scroll { padding: 16px 12px; }
+        .bb-head .sub, .bb-hint .keys { display: none; }
+    }
+</style>
+
+<section class="bb" aria-label="Black box chat">
+    <div class="bb-head">
+        <span class="bb-av" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="3"/><path d="M8 6V4h8v2"/></svg></span>
+        <div class="t">
+            <h1>Black box</h1>
+            <p class="sub">Answers only from what the DR Agent recorded · Azure AI Foundry</p>
+        </div>
+        <button class="btn btn-secondary" id="bbHistBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="bbHist">History</button>
+        <button class="btn btn-secondary" id="bbClear" type="button">New conversation</button>
+        <div class="bb-hist" id="bbHist" hidden role="menu" aria-label="Past conversations"></div>
+    </div>
+
+    <div class="bb-scroll" id="bbScroll">
+        <div class="bb-welcome" id="bbWelcome">
+            <span class="bb-av" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="3"/><path d="M8 6V4h8v2"/></svg></span>
+            <h2>Ask the Black box</h2>
+            <p>Like a flight recorder for your DR drills: ask what happened, what was lost and who approved what. Every answer cites the records, and it tells you when something is not in them.</p>
+            <div class="bb-suggest" id="bbSuggest"></div>
+        </div>
+        <div class="bb-msgs" id="bbMsgs" aria-live="polite"></div>
+    </div>
+
+    <div class="bb-composer">
+        <form class="bb-form" id="bbForm" autocomplete="off">
+            <textarea id="bbInput" rows="1" maxlength="500" placeholder="Ask about a drill, an approval, lost writes, Autopilot…" aria-label="Question"></textarea>
+            <button class="bb-send" id="bbAsk" type="submit" aria-label="Send" title="Send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg></button>
+        </form>
+        <p class="bb-hint">Read-only: it looks up drills, timelines and Autopilot runs, never changes anything.<span class="keys"> Enter to send · Shift+Enter for a new line.</span></p>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const esc = AgentUI.esc;
+    const KEY = 'dra-blackbox-conv';  // which saved conversation this browser has open (the turns live on the server)
+    const SUGGESTIONS = [
+        'Summarise the latest drill',
+        'Which writes were lost in the last drill under load?',
+        'Who approved the failback in the latest drill?',
+        'Why was the drill at 09:54 slower than the one at 10:52?',
+        'What did Autopilot find today?',
+        'What does our runbook say about failing back the database?',
+    ];
+    const SAFE_LINK = /^\/(?:(?:results|exercise)\/ex-\d{8}-\d{6})?$/;  // citations may only point inside the console
+    const KNOWLEDGE = /^\s*knowledge:\s*(.+)$/i;  // knowledge citations: "knowledge: <label>" (see dr_agent/knowledge.py)
+    const CONF = { high: 'pass', medium: 'info', low: 'warn' };
+    const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
+    const ALERT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>';
+    const SHIELD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/></svg>';
+    const AVATAR = '<span class="bb-av sm" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="3"/><path d="M8 6V4h8v2"/></svg></span>';
+    const scroller = document.getElementById('bbScroll');
+    const msgs = document.getElementById('bbMsgs');
+    const welcome = document.getElementById('bbWelcome');
+    const suggest = document.getElementById('bbSuggest');
+    const input = document.getElementById('bbInput');
+    const askBtn = document.getElementById('bbAsk');
+    let convo = [];  // [{question, reply, trace}] reply = server answer or {error}; trace = the agent's recorded steps
+    let convId = null;  // the server keeps every conversation; "New conversation" starts another one
+    let busy = false;
+
+    const remember = (id) => { try { id ? localStorage.setItem(KEY, id) : localStorage.removeItem(KEY); } catch (e) { /* storage blocked */ } };
+    const remembered = () => { try { return localStorage.getItem(KEY); } catch (e) { return null; } };
+
+    const nearBottom = () => scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 80;
+    const toBottom = () => { scroller.scrollTop = scroller.scrollHeight; };
+
+    function via(r) {
+        if (r.source === 'fallback') return '<span class="badge" title="deterministic fallback">Rules fallback</span>';
+        return `<span class="badge recommended">${r.via === 'foundry-agent' ? 'Azure AI Foundry Agent' : 'Azure OpenAI (direct)'}</span>`;
+    }
+
+    // the grounding check of an answer (older saved turns have none): a quiet line, never a headline
+    function grounded(r) {
+        const g = r.grounding || {};
+        if (!g.checked) return '';
+        const recs = g.records ? ` ${g.records} record${g.records === 1 ? '' : 's'}` : ' the records';
+        if (g.verified) {
+            return `<span class="bb-ground ok" title="Code checked every drill id, number and time in this answer and its sources against what the agent read">${CHECK}Verified against${esc(recs)}</span>`;
+        }
+        const n = (g.unsupported || []).length;
+        return `<span class="bb-ground part" title="Code could not find ${n} claim${n === 1 ? '' : 's'} in the records">${ALERT}Partially verified · ${g.supported}/${g.checked} found in the records</span>`;
+    }
+
+    // every server value below goes through esc() before it becomes markup
+    function el(html) { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; }
+
+    function question(q) { return el(`<div class="bb-q">${esc(q)}</div>`); }
+
+    function answer(turn) {
+        const r = turn.reply;
+        if (r.error) return el(`<div class="bb-row">${AVATAR}<div class="bb-a err">${esc(r.error)}</div></div>`);
+        if (r.blocked) {  // a security control did its job: say so, not "AI unavailable"
+            return el(`<div class="bb-row">${AVATAR}<div class="bb-a blocked">
+                <div class="bb-who">Black box</div>
+                <div class="bb-text">${esc(r.answer)}</div>
+                <div class="bb-meta"><span class="bb-ground part">${SHIELD}Blocked by Azure AI Content Safety · Prompt Shields</span></div>
+            </div></div>`);
+        }
+        const unsup = (r.grounding && !r.grounding.verified && r.grounding.unsupported) || [];
+        const cites = (r.citations || []).map((c) => {
+            const kn = KNOWLEDGE.exec(c.source || '');  // "knowledge: Runbook step 10" -> a knowledge citation
+            const detail = kn ? `<span class="quote">“${esc(c.detail)}”</span>` : esc(c.detail);
+            const body = SAFE_LINK.test(c.link || '') ? `<a href="${esc(c.link)}">${detail}</a>` : detail;
+            if (kn) {
+                return `<li class="kn"><span class="src"><span class="kn-tag" title="Found by semantic search of the DR knowledge (runbook, reports, diagnoses, incident timelines); numbers come from the exact records">Knowledge</span>${esc(kn[1])}</span>${body}</li>`;
+            }
+            return `<li><span class="src">${esc(c.source)}</span>${body}</li>`;
+        });
+        const row = el(`<div class="bb-row">${AVATAR}<div class="bb-a">
+            <div class="bb-who">Black box</div>
+            <div class="bb-text">${esc(r.answer)}</div>
+            <div class="bb-meta">
+                <span class="st ${CONF[r.confidence] || 'neutral'}">Confidence: ${esc(r.confidence || 'unknown')}</span>
+                ${r.found_in_records ? '' : '<span class="st neutral">Not in the records</span>'}
+                ${via(r)}
+                ${grounded(r)}
+            </div>
+            ${unsup.length ? `<div class="bb-unsup">Not found in the records: ${unsup.map((u) => esc(u)).join(' · ')}</div>` : ''}
+            ${cites.length ? `<details class="bb-src"${cites.length <= 3 ? ' open' : ''}><summary>Sources · ${cites.length}</summary><ul class="bb-cites">${cites.join('')}</ul></details>` : ''}
+            <div class="trace hide"></div>
+        </div></div>`);
+        if (turn.trace) AgentUI.showSaved(row.querySelector('.trace'), turn.trace);  // collapsed: "Show steps"
+        return row;
+    }
+
+    function setBusy(b) {
+        busy = b;
+        askBtn.disabled = b || !input.value.trim();
+        suggest.querySelectorAll('button').forEach((x) => { x.disabled = b; });
+    }
+
+    function render() {
+        msgs.replaceChildren(...convo.flatMap((m) => [question(m.question), answer(m)]));
+        welcome.hidden = convo.length > 0;
+        suggest.innerHTML = SUGGESTIONS.map((s, i) => `<button type="button" data-i="${i}">${esc(s)}</button>`).join('');
+        setBusy(busy);
+        toBottom();
+    }
+
+    async function ask(q) {
+        q = (q || '').trim();
+        if (!q || busy) return;
+        if (q.length > 500) { alert('Please keep the question under 500 characters.'); return; }
+        const turn = { question: q, reply: null, trace: null };
+        convo.push(turn);
+        input.value = '';
+        grow();
+        welcome.hidden = true;
+        setBusy(true);
+
+        msgs.append(question(q));
+        const pending = el(`<div class="bb-row">${AVATAR}<div class="bb-a">
+            <div class="bb-who">Black box</div>
+            <div class="bb-thinking"><span class="bb-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="now">Searching the records…</span></div>
+            <div class="trace hide"></div>
+        </div></div>`);
+        msgs.append(pending);
+        toBottom();
+        const panel = pending.querySelector('.trace');
+        const now = pending.querySelector('.now');
+        // the step the agent is on, as a one-line status next to the typing dots; follow it down the chat
+        const watch = new MutationObserver(() => {
+            const titles = panel.querySelectorAll('.trace-item .trace-title');
+            const last = titles[titles.length - 1];
+            const text = last && last.lastChild && last.lastChild.nodeType === 3 ? last.lastChild.textContent.trim() : '';
+            if (text && text !== 'Starting…') now.textContent = text;
+            if (nearBottom()) toBottom();
+        });
+        watch.observe(panel, { childList: true, subtree: true });
+        try {
+            turn.reply = await AgentUI.runWithTrace('/api/blackbox/ask', panel, {
+                headers: { 'Content-Type': 'application/json' },
+                // follow-up context is rebuilt on the server from the saved conversation, never sent from here
+                body: JSON.stringify({ question: q, conversation_id: convId }),
+                onTrace: (tr, ms) => { if ((tr.events || []).length) turn.trace = { ...tr, elapsed_ms: tr.elapsed_ms || Math.round(ms) }; },
+            });
+            if (turn.reply && turn.reply.conversation_id) { convId = turn.reply.conversation_id; remember(convId); }
+        } catch (e) {
+            turn.reply = { error: `Could not get an answer: ${e.message}` };
+        } finally {
+            watch.disconnect();
+            pending.replaceWith(answer(turn));
+            setBusy(false);
+            toBottom();
+            input.focus();
+        }
+    }
+
+    function grow() {
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 98) + 'px';  // up to ~4 lines, then it scrolls
+        askBtn.disabled = busy || !input.value.trim();
+    }
+
+    input.addEventListener('input', grow);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); ask(input.value); }
+    });
+    document.getElementById('bbForm').addEventListener('submit', (e) => { e.preventDefault(); ask(input.value); });
+    suggest.addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-i]');
+        if (b) ask(SUGGESTIONS[Number(b.dataset.i)]);
+    });
+    document.getElementById('bbClear').addEventListener('click', () => {
+        if (busy) return;
+        convo = []; convId = null; remember(null);  // the old one stays saved: open it again from History
+        closeHist();
+        render();
+        input.focus();
+    });
+
+    // ---------------------------------------------------------------- saved conversations
+    const hist = document.getElementById('bbHist');
+    const histBtn = document.getElementById('bbHistBtn');
+    const ago = (iso) => {
+        const s = Math.max(0, (Date.now() - Date.parse(iso || '')) / 1000);
+        if (!Number.isFinite(s)) return '';
+        if (s < 60) return 'just now';
+        if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+        if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+        return new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short' });
+    };
+    const TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/></svg>';
+    async function remove(id, title) {
+        if (busy || !confirm(`Delete "${title}"? This cannot be undone.`)) return;
+        try {
+            const res = await fetch(`/api/blackbox/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error();
+        } catch (e) { alert('Could not delete the conversation. Please try again.'); return; }
+        if (id === convId) { convo = []; convId = null; remember(null); render(); }  // deleted the open one: start fresh
+        openHist();
+    }
+    function closeHist() { hist.hidden = true; histBtn.setAttribute('aria-expanded', 'false'); }
+    async function openHist() {
+        hist.hidden = false; histBtn.setAttribute('aria-expanded', 'true');
+        hist.innerHTML = '<div class="none">Loading…</div>';
+        try {
+            const res = await fetch('/api/blackbox/conversations', { cache: 'no-store' });
+            const list = res.ok ? await res.json() : [];
+            hist.innerHTML = '<div class="h">Past conversations</div>' + (list.length ? list.map((c) =>
+                `<div class="it${c.id === convId ? ' cur' : ''}">
+                    <button type="button" role="menuitem" data-id="${esc(c.id)}">
+                        <span class="ti">${esc(c.title)}</span>
+                        <span class="mt">${c.turns} question${c.turns === 1 ? '' : 's'} · ${esc(ago(c.updated_at))}${c.by ? ' · ' + esc(c.by) : ''}</span>
+                    </button>
+                    <button type="button" class="del" data-del="${esc(c.id)}" data-title="${esc(c.title)}" aria-label="Delete conversation" title="Delete conversation">${TRASH}</button>
+                 </div>`).join('') : '<div class="none">No saved conversations yet.</div>');
+        } catch (e) { hist.innerHTML = '<div class="none">Could not load the history.</div>'; }
+    }
+    async function load(id) {
+        try {
+            const res = await fetch(`/api/blackbox/conversations/${encodeURIComponent(id)}`, { cache: 'no-store' });
+            if (!res.ok) throw new Error();
+            const c = await res.json();
+            convo = (c.turns || []).filter((t) => t.reply);
+            convId = c.id; remember(convId);
+        } catch (e) { convo = []; convId = null; remember(null); }
+        render();
+    }
+    histBtn.addEventListener('click', (e) => { e.stopPropagation(); hist.hidden ? openHist() : closeHist(); });
+    hist.addEventListener('click', (e) => {
+        e.stopPropagation();  // the list is re-rendered after a delete: keep it open
+        const d = e.target.closest('button[data-del]');
+        if (d) { remove(d.dataset.del, d.dataset.title); return; }
+        const b = e.target.closest('button[data-id]');
+        if (b && !busy) { closeHist(); load(b.dataset.id); }
+    });
+    document.addEventListener('click', (e) => { if (!hist.hidden && !hist.contains(e.target)) closeHist(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !hist.hidden) { closeHist(); histBtn.focus(); } });
+
+    render();
+    const last = remembered();
+    if (last) load(last);  // reopen the conversation this browser had open
+})();
+</script>
+{% endblock %}

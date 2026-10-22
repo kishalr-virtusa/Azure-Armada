@@ -1,0 +1,461 @@
+{% extends "base.html" %}
+
+{% block title %}Overview — DR Agent Console{% endblock %}
+
+{% block content %}
+<header>
+    <div>
+        <span class="eyebrow">DR Agent Console</span>
+        <h1>System Overview</h1>
+    </div>
+</header>
+
+<!-- KPI Cards -->
+<div class="kpis" id="statusCards">
+    <div class="kpi" id="cardRegionA">
+        <div class="l">Region A · East Asia</div>
+        <div class="v" id="statusA">—</div>
+        <div class="x" id="detailA">Loading…</div>
+    </div>
+    <div class="kpi region-b" id="cardRegionB">
+        <div class="l">Region B · Southeast Asia</div>
+        <div class="v" id="statusB">—</div>
+        <div class="x" id="detailB">Loading…</div>
+    </div>
+    <div class="kpi" id="cardTM">
+        <div class="l">Traffic Manager</div>
+        <div class="v" id="statusTM">—</div>
+        <div class="x" id="detailTM">Loading…</div>
+    </div>
+    <div class="kpi" id="cardFOG">
+        <div class="l">Database (SQL failover group)</div>
+        <div class="v" id="statusFOG">—</div>
+        <div class="x" id="detailFOG">Loading…</div>
+    </div>
+</div>
+
+<!-- Autopilot: checks readiness on its own -->
+<div class="card" id="autopilot">
+    <div class="card-head-row" style="flex-wrap: wrap;">
+        <div>
+            <h2 style="display: flex; align-items: center; gap: 10px;">Autopilot <span class="st neutral" id="apState">loading</span></h2>
+            <p class="sub" style="margin-top: 4px;" id="apSub">The DR Agent checks readiness on its own. No one has to ask.</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <div class="tabs" role="tablist" aria-label="Autonomy level">
+                <button class="tab" data-level="observe" type="button" title="Alert only">Observe</button>
+                <button class="tab" data-level="propose" type="button" title="Prepare the fix, a human approves">Propose fixes</button>
+                <button class="tab" data-level="auto-fix" type="button" title="Apply the allowlisted DR-side fix itself, audited">Auto-fix config drift</button>
+            </div>
+            <button class="btn btn-secondary" id="apRun" type="button">Run check now</button>
+        </div>
+    </div>
+    <div class="ap-strip" id="apStrip"></div>
+    <div id="apTrace" class="trace hide"></div>
+    <div id="apFinding"></div>
+</div>
+
+<!-- Proven recovery + system -->
+<div class="twin">
+    <div class="card">
+        <div class="card-head-row">
+            <div>
+                <h2>Proven recovery</h2>
+                <p class="sub" style="margin-top: 4px;">Measured in live drills, not assumed</p>
+            </div>
+            <a id="lastReport" class="link-btn hide" href="#">Latest report →</a>
+        </div>
+        <div class="proof-grid" id="proofGrid"><div class="empty-note">Loading drill history…</div></div>
+    </div>
+    <div class="card">
+        <h2>System</h2>
+        <p class="sub" style="margin-top: 4px;">What the DR Agent depends on</p>
+        <dl class="sys" id="sysList"><dt>Loading…</dt><dd></dd></dl>
+    </div>
+</div>
+
+<!-- Details Section -->
+<div class="twin">
+    <!-- Endpoints Card -->
+    <div class="card">
+        <h2>Traffic Manager Endpoints</h2>
+        <p class="sub">Current routing configuration</p>
+        <div class="scroll" style="margin-top: 12px;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Endpoint</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Monitor</th>
+                    </tr>
+                </thead>
+                <tbody id="endpointsTable">
+                    <tr><td colspan="4" style="text-align:center;color:var(--ink-3);">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- DNS & Routing Card -->
+    <div class="card">
+        <h2>Current Routing</h2>
+        <p class="sub">DNS resolution and active region</p>
+        <dl class="srcs" style="margin-top: 12px;" id="routingInfo">
+            <dt>TM FQDN</dt>
+            <dd id="tmFqdn">—</dd>
+            <dt>Routes To</dt>
+            <dd id="routesTo">—</dd>
+            <dt>Active Region</dt>
+            <dd id="activeRegion">—</dd>
+            <dt>Last Check</dt>
+            <dd id="lastCheck">—</dd>
+        </dl>
+    </div>
+</div>
+
+<!-- Recent Exercises -->
+<div class="card">
+    <div class="card-head-row">
+        <div>
+            <h2>Drills</h2>
+            <p class="sub" style="margin-top: 4px;">Every DR drill run by the agent, newest first</p>
+        </div>
+        <button class="link-btn hide" id="showAllDrills" type="button">Show all</button>
+    </div>
+    <div class="scroll" style="margin-top: 12px;">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Status</th>
+                    <th>Started</th>
+                    <th style="text-align:right">RTO</th>
+                    <th style="text-align:right">RPO</th>
+                    <th>Targets</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="exercisesTable">
+                <tr><td colspan="7" style="text-align:center;color:var(--ink-3);">No drills yet</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div style="margin-top: 16px;">
+        <a href="/phase1" class="btn btn-secondary">Start a new drill</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function loadStatus() {
+        try {
+            const res = await fetch('/api/status');
+            const data = await res.json();
+            
+            lastStatus = data;
+            // Region tiles combine the app's state (every 2 s) with its live health check (overview summary)
+            updateRegion('A', data);
+            updateRegion('B', data);
+            
+            // Update Traffic Manager
+            updateTMCard(data.traffic_manager);
+            
+            // Update FOG
+            updateFOGCard(data.failover_group);
+            
+            // Update endpoints table
+            updateEndpointsTable(data.traffic_manager?.endpoints || []);
+            
+            // Update routing info
+            document.getElementById('tmFqdn').textContent = data.traffic_manager?.dns_config?.fqdn || '—';
+            document.getElementById('routesTo').textContent = data.routing?.cname || '—';
+            document.getElementById('activeRegion').textContent = data.routing?.active_region || '—';
+            document.getElementById('lastCheck').textContent = new Date().toLocaleTimeString();
+            
+        } catch (e) {
+            console.error('Failed to load status:', e);
+        }
+    }
+    
+    const REGION_NAME = { A: 'East Asia', B: 'Southeast Asia' };
+    const MONITOR = {   // Traffic Manager monitor state -> [label, badge class]
+        Online: ['Online', 'pass'], CheckingEndpoint: ['Checking', 'info'], Degraded: ['Degraded', 'warn'],
+        Disabled: ['Disabled', 'neutral'], Inactive: ['Inactive', 'neutral'], Stopped: ['Stopped', 'neutral'],
+    };
+    // Azure's geo-replication states. CATCH_UP is the healthy steady state: the secondary is in sync and
+    // receives every committed change continuously (not a one-off job in progress).
+    const REPL = { CATCH_UP: r => `In sync · ${r} copy up to date`, SEEDING: r => `Initial copy to ${r} in progress`,
+                   PENDING: () => 'Replication starting', SUSPENDED: () => 'Replication suspended' };
+
+    function setCard(card, statusEl, detailEl, value, detail, cls) {
+        statusEl.textContent = value;
+        detailEl.textContent = detail;
+        detailEl.title = '';
+        card.classList.remove('pass', 'fail', 'warn', 'neutral');
+        if (cls) card.classList.add(cls);
+    }
+
+    // NotDeployed / error / ok handling shared by all cards; returns true when the caller should render data
+    function guard(card, statusEl, detailEl, data) {
+        if (data && data.state === 'NotDeployed') {
+            setCard(card, statusEl, detailEl, 'Not deployed', data.message || '', 'neutral');
+            detailEl.title = data.detail || '';
+            return false;
+        }
+        if (!data || data.error) {
+            setCard(card, statusEl, detailEl, 'Unavailable', 'Could not read status', 'warn');
+            detailEl.title = data?.error || '';
+            return false;
+        }
+        return true;
+    }
+
+    let lastStatus = null, summary = null;
+
+    // "Running" only means the server is switched on. A region is Healthy only if its /health check passes
+    // (app answers and can write to the database); otherwise we show why it fails.
+    function updateRegion(r, data) {
+        const card = document.getElementById('cardRegion' + r), status = document.getElementById('status' + r),
+              detail = document.getElementById('detail' + r);
+        const app = data && data['region_' + r.toLowerCase()];
+        if (!guard(card, status, detail, app)) return;
+        const primary = data.failover_group?.primary_region;
+        const role = data.routing?.active_region?.startsWith(r) ? 'Serving customers' : 'Standby';
+        if (app.state !== 'Running') { setCard(card, status, detail, app.state, `${role} · app is not running`, 'fail'); return; }
+        const h = summary?.health?.[r];
+        if (!h) { setCard(card, status, detail, 'Running', `${role} · health check pending`, 'neutral'); return; }
+        if (h.ok) {
+            setCard(card, status, detail, 'Healthy', `${role}${h.latency_ms ? ` · /health ${h.latency_ms} ms` : ''}${primary === r ? ' · database primary' : ''}`, 'pass');
+        } else {
+            setCard(card, status, detail, 'Unhealthy', `${role} · ${h.reason || 'health check failing'}`, 'fail');
+            detail.title = h.reason || '';
+        }
+    }
+
+    function updateTMCard(data) {
+        const card = document.getElementById('cardTM'), status = document.getElementById('statusTM'),
+              detail = document.getElementById('detailTM');
+        if (!guard(card, status, detail, data)) return;
+        const eps = data.endpoints || [];
+        const online = eps.filter(e => e.endpoint_monitor_status === 'Online').length;
+        const checking = eps.some(e => e.endpoint_monitor_status === 'CheckingEndpoint');
+        setCard(card, status, detail, `${online} of ${eps.length} online`,
+                `${checking ? 'Health checks starting · ' : ''}Priority routing · TTL ${data.dns_config?.ttl ?? '?'}s`,
+                online === eps.length && eps.length ? 'pass' : online > 0 ? 'warn' : (checking ? 'neutral' : 'fail'));
+        if (online < eps.length && !checking) {
+            const bad = eps.filter(e => e.endpoint_monitor_status !== 'Online').map(e => e.name === 'endpoint-b' ? 'Southeast Asia' : e.name === 'endpoint-a' ? 'East Asia' : e.name);
+            detail.textContent = `${bad.join(', ')} failing health checks · TTL ${data.dns_config?.ttl ?? '?'}s`;
+        }
+    }
+
+    function updateFOGCard(data) {
+        const card = document.getElementById('cardFOG'), status = document.getElementById('statusFOG'),
+              detail = document.getElementById('detailFOG');
+        if (!guard(card, status, detail, data)) return;
+        if (!data.primary_region) {
+            setCard(card, status, detail, 'Not deployed', 'Failover group is being created', 'neutral');
+            return;
+        }
+        const state = data.replication_state;
+        const secondary = REGION_NAME[data.primary_region === 'A' ? 'B' : 'A'];
+        setCard(card, status, detail, `Primary: ${REGION_NAME[data.primary_region] || data.primary_region}`,
+                REPL[state] ? REPL[state](secondary) : (state || ''), state === 'CATCH_UP' ? 'pass' : 'warn');
+    }
+
+    function updateEndpointsTable(endpoints) {
+        const tbody = document.getElementById('endpointsTable');
+        if (!endpoints || endpoints.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty">No endpoints yet</td></tr>';
+            return;
+        }
+        tbody.innerHTML = endpoints.map(ep => {
+            const region = ep.name === 'endpoint-a' ? 'A · East Asia' : ep.name === 'endpoint-b' ? 'B · Southeast Asia' : ep.name;
+            const [mon, monCls] = MONITOR[ep.endpoint_monitor_status] || [ep.endpoint_monitor_status, 'fail'];
+            return `
+                <tr>
+                    <td class="f">${AgentUI.esc(region)}</td>
+                    <td>${AgentUI.esc(ep.priority)}</td>
+                    <td><span class="st ${ep.endpoint_status === 'Enabled' ? 'pass' : 'neutral'}">${AgentUI.esc(ep.endpoint_status)}</span></td>
+                    <td><span class="st ${monCls}">${AgentUI.esc(mon)}</span></td>
+                </tr>`;
+        }).join('');
+    }
+
+    async function loadExercises() {
+        try {
+            const res = await fetch('/api/exercises');
+            const exercises = await res.json();
+            
+            const tbody = document.getElementById('exercisesTable');
+            
+            if (exercises.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ink-3);">No exercises yet</td></tr>';
+                return;
+            }
+            
+            allDrills = exercises;
+            renderDrills();
+        } catch (e) {
+            console.error('Failed to load exercises:', e);
+        }
+    }
+    
+    let allDrills = [], showAll = false;
+    function renderDrills() {
+        const tbody = document.getElementById('exercisesTable');
+        const chaos = new Set(summary?.drills?.chaos_ids || []);
+        const rtoT = (summary?.drills?.rto_target_min || 30) * 60, rpoT = (summary?.drills?.rpo_target_min || 15) * 60;
+        const rows = showAll ? allDrills : allDrills.slice(0, 5);
+        const more = document.getElementById('showAllDrills');
+        more.classList.toggle('hide', allDrills.length <= 5);
+        more.textContent = showAll ? 'Show latest 5' : `Show all ${allDrills.length}`;
+        more.onclick = () => { showAll = !showAll; renderDrills(); };
+        tbody.innerHTML = rows.map(ex => {
+            const statusClass = ex.status === 'completed' ? 'pass' : ex.status === 'failed' ? 'fail' :
+                                ex.status === 'running' ? 'info' : 'neutral';
+            const met = typeof ex.rto_s === 'number' && typeof ex.rpo_s === 'number'
+                ? (ex.rto_s <= rtoT && ex.rpo_s <= rpoT ? '<span class="st pass">Met</span>' : '<span class="st fail">Missed</span>') : '—';
+            return `
+                <tr>
+                    <td class="f">${AgentUI.esc(ex.PartitionKey)}${chaos.has(ex.PartitionKey) ? ' <span class="st warn" title="A surprise fault was injected mid-drill">chaos</span>' : ''}</td>
+                    <td><span class="st ${statusClass}">${AgentUI.esc(ex.status)}</span></td>
+                    <td>${ex.t0 ? new Date(ex.t0).toLocaleString() : '—'}</td>
+                    <td class="num">${typeof ex.rto_s === 'number' ? formatDuration(ex.rto_s) : '—'}</td>
+                    <td class="num">${typeof ex.rpo_s === 'number' ? formatDuration(ex.rpo_s) : '—'}</td>
+                    <td>${met}</td>
+                    <td><a href="/results/${encodeURIComponent(ex.PartitionKey)}">Report</a></td>
+                </tr>`;
+        }).join('');
+    }
+
+    // ---------------------------------------------------------------- autopilot
+    const ago = (iso) => { if (!iso) return '—'; const s = Math.round((Date.now() - Date.parse(iso)) / 1000);
+        return s < 60 ? `${s} s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`; };
+    const until = (iso) => { if (!iso) return ''; const s = Math.round((Date.parse(iso) - Date.now()) / 1000);
+        return s <= 0 ? 'due now' : s < 60 ? `in ${s} s` : `in ${Math.round(s / 60)} min`; };
+
+    async function loadAutopilot() {
+        let a;
+        try { a = await (await fetch('/api/autopilot', { cache: 'no-store' })).json(); } catch (e) { return; }
+        const st = a.settings || {}, last = a.last || {};
+        const pill = document.getElementById('apState');
+        pill.className = 'st ' + (st.enabled ? (last.go === false ? 'fail' : 'pass') : 'neutral');
+        pill.textContent = !st.enabled ? 'off' : a.running ? 'checking…' : last.go === false ? 'problem found' : 'watching';
+        document.getElementById('apSub').textContent = st.enabled
+            ? `Checks DR readiness by itself every ${st.interval_min} min · last check ${ago(a.last_run_at)} · next ${until(a.next_run_at)}. No one has to ask.`
+            : 'Autopilot is off.';
+        document.querySelectorAll('[data-level]').forEach(b => b.classList.toggle('active', b.dataset.level === st.level));
+        // strip of recent runs (oldest left)
+        const runs = (a.feed || []).filter(e => e.data && e.data.at && !e.data.skipped).slice(0, 20).reverse();
+        document.getElementById('apStrip').innerHTML = runs.length ? runs.map(e => {
+            const d = e.data, ok = d.go;
+            return `<span class="ap-dot ${ok ? 'ok' : 'bad'}" title="${esc(new Date(d.at).toLocaleString())} · ${esc(d.trigger)} · ${ok ? 'all checks pass' : esc(Object.keys(d.failing || {}).join(', '))}"></span>`;
+        }).join('') + `<span class="ap-strip-l">last ${runs.length} checks</span>` : '<span class="ap-strip-l">No checks yet: the first runs about a minute after start, or press Run check now.</span>';
+        // latest finding
+        const f = document.getElementById('apFinding');
+        if (last.go === false) {
+            const p = a.proposal, ai = last.ai || {};
+            f.innerHTML = `<div class="box ap-find">
+                <div class="ap-find-h"><span class="st fail">Found by Autopilot</span> <span>${esc(new Date(last.at).toLocaleString())} · ${esc(last.trigger === 'manual' ? 'manual check' : 'scheduled check, no one asked')}</span></div>
+                <ul>${Object.entries(last.failing || {}).map(([k, v]) => `<li><b>${esc(k)}</b>: ${esc(v)}</li>`).join('')}</ul>
+                ${ai.summary ? `<p class="ap-ai"><b>Readiness agent${ai.via === 'foundry-agent' ? ' (Azure AI Foundry)' : ''}:</b> ${esc(ai.summary)}</p>` : ''}
+                ${p ? `<div class="ap-prop"><span>Proposed fix: copy <b>${esc(p.keys.join(', '))}</b> to ${esc(p.to)} (allowlisted, DR side only).</span>
+                       <button class="btn btn-primary" id="apApprove" type="button">Approve fix</button></div>` : ''}
+                ${last.proposal && last.proposal.status === 'applied automatically' ? `<p class="ap-ai"><span class="st pass">Applied automatically</span> ${esc(last.proposal.result || '')}</p>` : ''}
+            </div>`;
+            const btn = document.getElementById('apApprove');
+            if (btn) btn.onclick = async () => {
+                const by = AgentUI.approverName(); if (by === null) return;
+                btn.disabled = true; btn.textContent = 'Applying…';
+                const out = await (await fetch('/api/autopilot/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ by }) })).json();
+                alert(out.error || out.message || 'Fix applied'); loadAutopilot();
+            };
+        } else {
+            f.innerHTML = last.at ? `<div class="ap-ok"><span class="st pass">All ${last.checks || 7} checks pass</span> <span class="sys-n">${esc(new Date(last.at).toLocaleString())} · ${esc(last.trigger)}${(last.resolved || []).length ? ' · resolved: ' + esc(last.resolved.join(', ')) : ''}</span></div>` : '';
+        }
+        if (a.trace && !apRunning) AgentUI.showSaved(document.getElementById('apTrace'), a.trace, last.at);
+    }
+    let apRunning = false;
+    document.getElementById('apRun').onclick = async () => {
+        const btn = document.getElementById('apRun');
+        btn.disabled = true; btn.textContent = 'Checking…'; apRunning = true;
+        try { await AgentUI.runWithTrace('/api/autopilot/run', document.getElementById('apTrace')); } catch (e) { alert(e.message); }
+        apRunning = false; btn.disabled = false; btn.textContent = 'Run check now';
+        loadAutopilot();
+    };
+    document.querySelectorAll('[data-level]').forEach(b => b.onclick = async () => {
+        const by = AgentUI.approverName(); if (by === null) return;
+        await fetch('/api/autopilot/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ level: b.dataset.level, by }) });
+        loadAutopilot();
+    });
+
+    // ---------------------------------------------------------------- overview summary
+    const esc = (v) => AgentUI.esc(v);
+    const when = (iso) => iso ? new Date(iso).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+
+    async function loadOverview() {
+        try {
+            const res = await fetch('/api/overview', { cache: 'no-store' });
+            const data = await res.json();
+            if (data.pending) { setTimeout(loadOverview, 2500); return; }
+            summary = data;
+            renderProof(data.drills);
+            renderSystem(data);
+            if (lastStatus) { updateRegion('A', lastStatus); updateRegion('B', lastStatus); }
+            renderDrills();
+        } catch (e) { console.error('overview failed', e); }
+    }
+
+    function renderProof(dr) {
+        const g = document.getElementById('proofGrid');
+        if (!dr || dr.error || !dr.latest) { g.innerHTML = '<div class="empty-note">No completed drill yet. Run one to prove recovery.</div>'; return; }
+        const last = dr.latest;
+        const rtoOk = last.rto_s <= dr.rto_target_min * 60, rpoOk = (last.rpo_s ?? 0) <= dr.rpo_target_min * 60;
+        const tile = (label, value, note, ok) => `<div class="proof"><div class="proof-l">${label}</div>
+            <div class="proof-v ${ok === true ? 'ok' : ok === false ? 'bad' : ''}">${value}</div><div class="proof-n">${note}</div></div>`;
+        g.innerHTML = [
+            tile('RTO, latest drill', formatDuration(last.rto_s), `target ${dr.rto_target_min} min · ${when(last.t0)}`, rtoOk),
+            tile('RPO, latest drill', formatDuration(last.rpo_s ?? 0), `target ${dr.rpo_target_min} min · no confirmed payment lost`, rpoOk),
+            tile('Median RTO', dr.median_rto_s != null ? formatDuration(dr.median_rto_s) : '—', `${dr.count_plain} drills · best ${dr.best_rto_s != null ? formatDuration(dr.best_rto_s) : '—'}${dr.chaos_ids?.length ? ` · ${dr.chaos_ids.length} chaos drill excluded` : ''}`),
+            tile('Failback, latest', last.failback_s != null ? formatDuration(last.failback_s) : '—', 'back to East Asia, no data loss'),
+            tile('VM recovery (Site Recovery)', dr.latest_iaas_s != null ? formatDuration(dr.latest_iaas_s) : '—', 'reports VM, proven inside the VM'),
+            tile('Worst RPO, all drills', dr.max_rpo_s != null ? formatDuration(dr.max_rpo_s) : '—', `across ${dr.count} drills`, dr.max_rpo_s === 0 ? true : null),
+        ].join('');
+        const a = document.getElementById('lastReport');
+        a.href = `/results/${last.id}`; a.classList.remove('hide');
+    }
+
+    function renderSystem(d) {
+        const asr = d.asr || {};
+        const asrOk = asr.protected && /normal/i.test(asr.health || asr.state || '');
+        const pill = (ok, text) => `<span class="st ${ok === true ? 'pass' : ok === false ? 'fail' : 'neutral'}">${esc(text)}</span>`;
+        const acc = d.access;
+        const items = [
+            ['Site Recovery (reports VM)', asr.protected ? `${pill(asrOk, asr.health || asr.state || 'protected')} ${asr.rpo_s != null ? `<span class="sys-n">replication RPO ${esc(asr.rpo_s)} s</span>` : ''}` : pill(false, asr.state || 'not protected')],
+            ['AI agents', `${pill(d.agents?.connected, d.agents?.connected ? '6 registered' : 'not configured')} <span class="sys-n">${esc(d.agents?.platform || '')}</span>`],
+            ['Demo app (Contoso)', acc ? pill(null, acc.public ? 'Public' : 'Private') + (acc.public && acc.public_until ? ` <span class="sys-n">until ${when(acc.public_until)}</span>` : ' <span class="sys-n">team access link only</span>') : '—'],
+        ];
+        document.getElementById('sysList').innerHTML = items.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+    }
+
+    // measured seconds exactly as recorded (2 decimals), same format as the Results page
+    function formatDuration(seconds) {
+        if (seconds < 60) return `${seconds.toFixed(2)}s`;
+        return `${Math.floor(seconds / 60)}m ${(seconds % 60).toFixed(2).padStart(5, '0')}s`;
+    }
+    
+    // Initial load
+    loadStatus();
+    loadExercises();
+    loadOverview();
+    setInterval(loadOverview, 15000);
+    loadAutopilot();
+    setInterval(() => { if (!apRunning) loadAutopilot(); }, 10000);
+    
+    // Poll every 2 seconds
+    setInterval(loadStatus, 2000);
+    setInterval(loadExercises, 10000);
+</script>
+{% endblock %}

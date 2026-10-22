@@ -1,0 +1,10 @@
+# Only for scripts/migrate_tables_to_cosmos.py (one-off move of the old Table Storage records)
+azure-data-tables==12.6.0
+
+# Eval harness (evals/: python -m evals.run / evals.online): Foundry evaluators, logged to the Foundry project.
+# azure-ai-evaluation needs openai>=1.108, newer than the console's runtime pin (requirements.txt: openai==1.58.1), so
+# install this file AFTER requirements.txt in a dev/eval environment: pip install -r requirements.txt && pip install -r
+# requirements-dev.txt. The console's own code paths work with both versions (the full test suite runs on 1.109.1).
+azure-ai-evaluation==1.18.9
+openai>=1.108,<2
+pytest>=8

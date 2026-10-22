@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}DR Agent Console{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/brand/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/virtusa.css?v=6">
+    <script>
+        (function () {  /* theme: system (default) | light | dark, remembered per browser */
+            try { var t = localStorage.getItem('dra-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+        })();
+    </script>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="nav" aria-label="Main">
+        <a href="/" class="nav-brand">
+            <img src="/static/brand/virtusa.svg" alt="Virtusa" class="brand-logo" style="height: 20px;">
+            <span class="brand-logo-dark" style="display: none;"><img src="/static/brand/virtusa-white.svg" alt="Virtusa" style="height: 20px;"></span>
+            <span class="product">DR Agent</span>
+        </a>
+
+        <div class="nav-links">
+            <div class="nav-section">Prepare</div>
+            <a href="/" class="nav-link {% if active_page == 'overview' %}active{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span>Overview</span></a>
+            <a href="/phase1" class="nav-link {% if active_page == 'phase1' %}active{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg><span>Design &amp; readiness</span></a>
+            <div class="nav-section">Exercise</div>
+            <a href="/plan" class="nav-link {% if active_page == 'plan' %}active{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg><span>Plan</span></a>
+            <a href="/exercise" class="nav-link {% if active_page == 'exercise' %}active{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"/></svg><span>Live exercise</span></a>
+            <a href="/results" class="nav-link {% if active_page == 'results' %}active{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Results</span></a>
+            <div class="nav-section">Present</div>
+            <a href="/live" class="nav-link {% if active_page == 'live' %}active{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg><span>Presenter view</span></a>
+            <a href="/map" class="nav-link {% if active_page == 'map' %}active{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 11.5l10-4.5M7 12.5l10 4.5"/></svg><span>Live map</span></a>
+            <div class="nav-section">Investigate</div>
+            <a href="/blackbox" class="nav-link {% if active_page == 'blackbox' %}active{% endif %}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="3"/><path d="M8 6V4h8v2"/></svg><span>Black box</span></a>
+        </div>
+
+        <div class="nav-right">
+            <div class="env-card">
+                <span class="t">Environment</span>
+                <span class="r"><span class="swatch a"></span>A · East Asia (primary)</span>
+                <span class="r"><span class="swatch b"></span>B · Southeast Asia (DR)</span>
+            </div>
+            <div class="azure-badge"><img src="/static/brand/azure.svg" alt=""><span>Built on Microsoft Azure</span></div>
+            <div class="nav-foot">
+                <div style="position: relative;">
+                    <button class="bell-btn" onclick="toggleNotifications()" title="Notifications" aria-label="Notifications">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                        <span class="bell-badge hide" id="bellBadge">0</span>
+                    </button>
+                    <div class="notif-dropdown hide" id="notifDropdown">
+                        <div class="notif-header">Notifications</div>
+                        <div id="notifList"><div style="padding: 16px; color: var(--mute); text-align: center;">No notifications</div></div>
+                    </div>
+                </div>
+                <button class="theme-toggle" id="themeToggle" type="button" title="Theme" aria-label="Theme">System</button>
+                <a href="/logout" class="btn btn-secondary" style="height: 30px; font-size: 13px;">Sign out</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="wrap">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        <p>© Virtusa · Team Azure Armada · Azure Day 2026</p>
+    </footer>
+
+    <script>
+        // Theme toggle: System -> Light -> Dark
+        (function () {
+            const order = ['system', 'light', 'dark'], label = { system: 'System', light: 'Light', dark: 'Dark' };
+            const btn = document.getElementById('themeToggle');
+            let cur = 'system';
+            try { cur = localStorage.getItem('dra-theme') || 'system'; } catch (e) {}
+            function apply(t) {
+                cur = t;
+                if (t === 'system') document.documentElement.removeAttribute('data-theme');
+                else document.documentElement.setAttribute('data-theme', t);
+                try { localStorage.setItem('dra-theme', t); } catch (e) {}
+                if (btn) btn.textContent = label[t];
+                const dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                document.querySelectorAll('.brand-logo').forEach(el => el.style.display = dark ? 'none' : 'inline');
+                document.querySelectorAll('.brand-logo-dark').forEach(el => el.style.display = dark ? 'inline' : 'none');
+            }
+            if (btn) btn.addEventListener('click', () => apply(order[(order.indexOf(cur) + 1) % order.length]));
+            apply(cur);
+        })();
+
+        
+        // Notification handling
+        let lastNotifId = null;
+        
+        function toggleNotifications() {
+            const dropdown = document.getElementById('notifDropdown');
+            dropdown.classList.toggle('hide');
+        }
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('notifDropdown');
+            const bellBtn = document.querySelector('.bell-btn');
+            if (!dropdown.contains(e.target) && !bellBtn.contains(e.target)) {
+                dropdown.classList.add('hide');
+            }
+        });
+        
+        const _e = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+        async function loadNotifications() {
+            try {
+                const url = lastNotifId 
+                    ? `/api/notifications?after=${lastNotifId}` 
+                    : '/api/notifications';
+                const res = await fetch(url);
+                const notifs = await res.json();
+                
+                const list = document.getElementById('notifList');
+                const badge = document.getElementById('bellBadge');
+                
+                if (notifs.length === 0 && !lastNotifId) {
+                    list.innerHTML = '<div style="padding: 16px; color: var(--ink-3); text-align: center;">No notifications</div>';
+                    badge.classList.add('hide');
+                    return;
+                }
+                
+                if (notifs.length > 0) {
+                    // Show new notification popup
+                    const newest = notifs[0];
+                    if (lastNotifId && newest.RowKey !== lastNotifId) {
+                        showNotificationPopup(newest);
+                    }
+                    lastNotifId = newest.RowKey;
+                    
+                    // Count unread
+                    const unread = notifs.filter(n => !n.read).length;
+                    if (unread > 0) {
+                        badge.textContent = unread;
+                        badge.classList.remove('hide');
+                    } else {
+                        badge.classList.add('hide');
+                    }
+                    
+                    // Render list
+                    list.innerHTML = notifs.slice(0, 10).map(n => `
+                        <div class="notif-item ${n.read ? '' : 'unread'}" data-id="${_e(n.RowKey)}" data-link="${_e(n.link || '')}" onclick="openNotification(this.dataset.id, this.dataset.link)">
+                            <div class="notif-kind ${_e(n.kind)}">${_e(n.kind)}</div>
+                            <div class="notif-title">${_e(n.title)}</div>
+                            <div class="notif-body">${_e(n.body)}</div>
+                            <div class="notif-time">${formatTime(n.ts)}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error('Failed to load notifications:', e);
+            }
+        }
+        
+        function openNotification(id, link) {
+            // Mark as read
+            fetch(`/api/notifications/${encodeURIComponent(id)}/read`, { method: 'POST' });
+            
+            // Navigate if link provided (console pages only)
+            if (link && link.startsWith('/') && !link.startsWith('//')) {
+                window.location.href = link;
+            }
+            
+            // Close dropdown
+            document.getElementById('notifDropdown').classList.add('hide');
+        }
+        
+        function showNotificationPopup(notif) {
+            // Request browser notification permission
+            if (Notification.permission === 'granted') {
+                new Notification(notif.title, {
+                    body: notif.body,
+                    icon: '',
+                    tag: notif.RowKey,
+                });
+            } else if (Notification.permission !== 'denied') {
+                Notification.requestPermission();
+            }
+        }
+        
+        function formatTime(isoString) {
+            if (!isoString) return '';
+            const d = new Date(isoString);
+            return d.toLocaleTimeString();
+        }
+        
+        // Poll for notifications
+        loadNotifications();
+        setInterval(loadNotifications, 5000);
+    </script>
+    
+    <script src="/static/agent-ui.js?v=7"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

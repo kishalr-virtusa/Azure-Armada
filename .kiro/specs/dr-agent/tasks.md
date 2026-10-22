@@ -29,14 +29,14 @@ Execute in order within each track. Tracks A and B can run in parallel. Referenc
 - [ ] B3 [Kiro] `startup.sh` (`gunicorn -k uvicorn.workers.UvicornWorker app.main:app`), `requirements.txt`. Test locally against the deployed DB, or via a docker SQL Edge container if no DB is ready yet. (R1.5)
 
 ## Track C: DR Console: foundations
-- [ ] C1 [Kiro] Skeleton `apps/dr-console`: `config.py` (env), `models.py` (exactly design §4.2), `store.py` (Tables/Blob), passcode auth, base layout + CSS (design §4.7). (R9)
+- [ ] C1 [Kiro] Skeleton `apps/dr-console`: `config.py` (env), `models.py` is ALREADY WRITTEN by Claude (do not modify; import from `dr_agent.models`), `store.py` (Tables/Blob), passcode auth, base layout + CSS (design §4.7). (R9)
 - [ ] C2 [Kiro] Tools: `azure_webapp.py`, `azure_trafficmanager.py`, `probes.py`, `notify.py`, `inventory.py` per design §4.5. Each has a tiny CLI `python -m dr_agent.tools.<x> --help` for manual testing. (R3, R5.6)
-- [ ] C3 [Claude] `azure_sql.py` (forced/planned failover on the correct server, FOG status) + `heartbeat.py` + `engine/measurements.py` + unit tests. (R5.6, R6)
-- [ ] C4 [Claude] `llm.py` (AzureOpenAI with Entra token provider, structured output helper, 20s timeout, fallback hook).
+- [x] C3 [Claude] `azure_sql.py` (forced/planned failover on the correct server, FOG status) + `heartbeat.py` + `engine/measurements.py` + unit tests. (R5.6, R6)
+- [x] C4 [Claude] `llm.py` (AzureOpenAI with Entra token provider, structured output helper, 20s timeout, fallback hook).
 
 ## Track D: Agents & engine
-- [ ] D1 [Claude] Agent prompts (`agents/prompts/*.md`) + Architect, Readiness, Runbook agents with fallbacks. (R3)
-- [ ] D2 [Claude] Planner agent + `default_plan.json` + plan validator (DAG, allowlist, mandatory order) + tests. (R4)
+- [x] D1 [Claude] Agent prompts (`agents/prompts/*.md`) + Architect, Readiness, Runbook agents with fallbacks. (R3)
+- [x] D2 [Claude] Planner agent + `default_plan.json` + plan validator (DAG, allowlist, mandatory order) + tests. (R4)
 - [ ] D3 [Claude] `engine/executor.py` + `engine/orchestrator.py`: step loop, human-step pause + notify (console + email), approvals, kill switch, retry/rollback, resume after restart, timestamps t0 / t_failover / t_recovered / t_failback_done. (R5, R7)
 - [ ] D4 [Claude] Validator (diagnosis) + Reporter agent + HTML report template (Kiro may style it). (R8)
 - [ ] D5 [Kiro] `docs/runbooks/payments-dr-runbook.md`: a realistic 12-step runbook with **2 deliberately stale steps**: it references a "Front Door profile fd-payments" (we actually use Traffic Manager) and an old server name `sql-payments-old`. (R3.4)
@@ -56,7 +56,11 @@ Execute in order within each track. Tracks A and B can run in parallel. Referenc
 - [ ] F4 [Claude] Update the deck, diagram and idea doc to the final two-phase design (Traffic Manager, console + email notifications, no Teams/Google Chat, no VMs/Site Recovery).
 - [ ] F5 [Team] Run `teardown.sh` when idle; redeploy before the demo (keep FOG seeding time in mind, ~10 min).
 
+## Core demo scenario: planted config gap (promoted from stretch S1)
+- [ ] G1 [Kiro] Demo app: require app setting `PAYMENT_PROVIDER` (e.g. `virtusa-pay-sandbox`). If it is missing, `/health` returns 503 with `{"status":"config_error","missing":["PAYMENT_PROVIDER"]}` and the page shows a "Configuration error" banner.
+- [ ] G2 [Kiro] Bicep: parameter `plantConfigGap` (default **true**). When true, the Region B web app is deployed WITHOUT `PAYMENT_PROVIDER`; Region A always has it.
+- [ ] G3 [Claude] Readiness parity check catches it (done in `agents/readiness.py`) + tool `sync_app_setting(key, from_region, to_region)` + console "Apply fix" action (approval required) + re-check turns green.
+
 ## Stretch (only if everything above is green)
-- [ ] S1 Parity-gap scenario: a missing app setting in Region B is caught by Readiness; the agent proposes the fix and applies it after approval. (R8.3)
 - [ ] S2 Chaos Studio App Service stop fault as the outage injector instead of an SDK stop.
 - [ ] S3 Entra ID sign-in for the console.

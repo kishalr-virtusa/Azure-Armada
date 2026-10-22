@@ -13,6 +13,20 @@ param projectTag string = 'dr-agent'
 @description('Tenant ID for RBAC')
 param tenantId string = subscription().tenantId
 
+@secure()
+param sqlAdminPassword string
+
+@secure()
+param consolePasscode string
+
+@secure()
+@description('Team access code for Contoso Payments while it is private')
+param appAccessCode string
+
+@secure()
+@description('Resend API key for instant email (optional)')
+param resendApiKey string = ''
+
 var keyVaultName = 'dra-kv-${suffix}'
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
@@ -37,6 +51,38 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
 }
 
 @description('Key Vault ID')
+resource sqlPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'sql-admin-password'
+  properties: {
+    value: sqlAdminPassword
+  }
+}
+
+resource resendSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(resendApiKey)) {
+  parent: keyVault
+  name: 'resend-api-key'
+  properties: {
+    value: resendApiKey
+  }
+}
+
+resource appAccessCodeSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'app-access-code'
+  properties: {
+    value: appAccessCode
+  }
+}
+
+resource consolePasscodeSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'console-passcode'
+  properties: {
+    value: consolePasscode
+  }
+}
+
 output keyVaultId string = keyVault.id
 
 @description('Key Vault Name')

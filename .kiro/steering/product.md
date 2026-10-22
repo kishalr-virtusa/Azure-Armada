@@ -16,7 +16,7 @@ An agentic system that covers the **full DR lifecycle** for an application, in t
 Discovery/inventory only supports the agents. It is NOT a headline feature.
 
 ## Demo story (everything must serve this)
-1. "Contoso Payments" (a small, nicely styled web app) runs in Region A (Central India). It writes a heartbeat transaction every 2s.
+1. "Contoso Payments" (a small, nicely styled web app) runs in Region A (East Asia, Hong Kong). It writes a heartbeat transaction every 2s.
 2. The console shows Phase 1: profile (Tier 1, RTO 30 min, RPO 15 min) → recommended strategy *warm standby* with costs → readiness checks → runbook review flags a stale step.
 3. Phase 2: the agent generates the exercise plan. A human step ("DB team confirms go") is approved in the console. The owner gets a console notification + an email.
 4. Outage injected: the Region A app is stopped. The agent fails over the SQL failover group, switches Traffic Manager to Region B and validates.

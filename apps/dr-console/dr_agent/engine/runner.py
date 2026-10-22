@@ -1,0 +1,741 @@
+"""Exercise engine: executes an approved plan step by step (requirements R5-R7, design §4.6).
+
+- One background thread per running exercise (single App Service instance).
+- Every transition is persisted (exercise row + events), so the UI only reads the store.
+- Human steps pause until confirmed in the console. Kill switch / retry / rollback / continue are
+  commands written to the exercise row by the web layer (see service.py) and polled here.
+- RTO/RPO are computed from recorded timestamps only (engine/measurements.py).
+"""
+from __future__ import annotations
+
+import json
+import math
+import itertools
+import logging
+import threading
+import time
+import traceback
+from datetime import datetime, timezone
+from typing import Any, Callable, Optional
+
+from dr_agent.config import config
+from dr_agent.engine import measurements as M
+from dr_agent.engine.plan import validate_plan
+from dr_agent.models import AppProfile, Diagnosis, ExercisePlan, PlanStep
+from dr_agent.tools import store
+
+log = logging.getLogger(__name__)
+
+REGION_NAMES = {"A": "East Asia", "B": "Southeast Asia"}
+FINAL = {"completed", "rolled_back", "aborted"}
+_RUNNERS: dict[str, "ExerciseRunner"] = {}
+_LOCK = threading.Lock()
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def iso(dt: Optional[datetime]) -> Optional[str]:
+    return dt.isoformat() if dt else None
+
+
+def parse_dt(s: Any) -> Optional[datetime]:
+    if not s:
+        return None
+    if isinstance(s, datetime):
+        return s.replace(tzinfo=None)
+    return datetime.fromisoformat(str(s).replace("Z", "+00:00")).replace(tzinfo=None)
+
+
+class StepFailed(Exception):
+    pass
+
+
+class Killed(Exception):
+    pass
+
+
+class RolledBack(Exception):
+    pass
+
+
+# ---------------------------------------------------------------- tool adapters
+def _fog():
+    from dr_agent.tools.azure_sql import FailoverGroupController
+    return FailoverGroupController(config.azure_subscription_id, config.workload_rg, config.sql_fog_name,
+                                   {"A": config.sql_server_a, "B": config.sql_server_b})
+
+
+def _sql_connect():
+    import os
+    from dr_agent.tools.heartbeat import sql_connector
+    return sql_connector(f"{config.sql_fog_name}.database.windows.net", os.environ.get("SQL_DB", "paymentsdb"),
+                         os.environ.get("SQL_USER", "sqladmin"), os.environ.get("SQL_PASSWORD", ""))
+
+
+def tm_resolve() -> dict:
+    """Fresh (uncached) DNS resolution of the Traffic Manager name -> the app hostname TM routes users to.
+
+    App Service on this subscription does not activate the trafficmanager.net hostname binding, so clients
+    follow TM's DNS answer and call the app's own hostname: the same routing decision, made by Traffic Manager.
+    """
+    import dns.resolver
+    r = dns.resolver.Resolver()
+    r.cache = None
+    try:
+        cname = str(r.resolve(config.tm_fqdn, "CNAME", lifetime=5)[0].target).rstrip(".")
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"DNS: {e}"[:200]}
+    region = "A" if config.webapp_a_name in cname else "B" if config.webapp_b_name in cname else None
+    return {"cname": cname, "dns_region": region, "url": f"https://{cname}"}
+
+
+def _probe(target: str) -> dict:
+    """target: tm | A | B. Adds `region_key` (A/B) derived from the app's reported region name."""
+    from dr_agent.tools import probes
+    if target == "tm":
+        dns_info = tm_resolve()
+        if "error" in dns_info:
+            r = {"ok": False, **dns_info}
+        else:
+            r = probes.probe(dns_info["url"] + "/health")
+            r.update({"tm_fqdn": config.tm_fqdn, "routed_to": dns_info["cname"], "dns_region": dns_info["dns_region"],
+                      "app_url": dns_info["url"]})
+    else:
+        r = probes.probe_direct(target)
+    name = (r.get("region") or "").lower()
+    r["region_key"] = next((k for k, v in REGION_NAMES.items() if v.lower() == name), None)
+    return r
+
+
+def iaas_report_summary(res: dict) -> str:
+    """What the recovered reports server proved (AsrTestFailover.verify result), as one clause."""
+    src, n, day = res.get("report_source"), res.get("payments_count"), res.get("report_date")
+    err = str(res.get("report_error") or "")[:120]
+    if src == "generated in DR":
+        return (f"the recovered server produced the daily payments report ({n} payments, {day}) in Southeast Asia, "
+                f"live from the database")
+    if src == "cached on replicated disk":
+        why = f"; live database read not possible from the isolated test network: {err}" if err else ""
+        return (f"the recovered server serves the daily payments report from its replicated disk ({n} payments, "
+                f"{day}, generated in {res.get('generated_in_region') or 'Region A'}){why}")
+    return "service verified inside the VM; no payments report available" + (f" ({err})" if err else "")
+
+
+class ExerciseRunner(threading.Thread):
+    def __init__(self, exercise_id: str):
+        super().__init__(name=f"exercise-{exercise_id}", daemon=True)
+        self.xid = exercise_id
+        self.heartbeats: list[M.HeartbeatRecord] = []
+        self.hb_writer = None
+        self.rolling_back = False
+
+    # ------------------------------------------------------------ state helpers
+    def meta(self) -> dict:
+        return store.get_exercise(self.xid) or {}
+
+    def update(self, **fields) -> None:
+        store.upsert_exercise(self.xid, {k: (iso(v) if isinstance(v, datetime) else v) for k, v in fields.items()})
+
+    def event(self, kind: str, message: str, step_id: Optional[str] = None, data: Optional[dict] = None) -> None:
+        try:
+            store.add_event(self.xid, kind, message, step_id, data)
+        except Exception:  # noqa: BLE001
+            log.exception("could not write event")
+
+    def notify(self, kind: str, title: str, body: str) -> None:
+        try:
+            from dr_agent.tools.notify import notify
+            notify(kind, title, body, link=f"/exercise/{self.xid}", exercise_id=self.xid,
+                   send_email=kind in ("action", "success", "failure"))
+        except Exception:  # noqa: BLE001
+            log.exception("notify failed")
+
+    def command(self) -> Optional[str]:
+        return (self.meta().get("command") or None)
+
+    def clear_command(self) -> None:
+        self.update(command="")
+
+    def check_kill(self) -> None:
+        if self.command() == "kill":
+            raise Killed()
+
+    def sleep(self, seconds: float) -> None:
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            self.check_kill()  # a storage read: it can outlast the time that was left
+            time.sleep(max(0.0, min(1.0, end - time.monotonic())))
+
+    def plan(self) -> ExercisePlan:
+        return ExercisePlan.model_validate_json(self.meta()["plan_json"])
+
+    def profile(self) -> AppProfile:
+        return AppProfile.model_validate_json(self.meta().get("profile_json") or AppProfile().model_dump_json())
+
+    # ------------------------------------------------------------ main loop
+    def run(self) -> None:
+        try:
+            m = self.meta()
+            plan = self.plan()
+            validate_plan(plan)
+            done = set(json.loads(m.get("completed_steps_json") or "[]"))
+            self.update(status="running", started_at=m.get("started_at") or iso(utcnow()))
+            hb_steps = {s.action: s.id for s in plan.steps if s.action in ("start_heartbeat", "stop_heartbeat")}
+            if hb_steps.get("start_heartbeat") in done and hb_steps.get("stop_heartbeat") not in done:
+                self.restore_heartbeat()
+            if not done:
+                self.event("info", "Exercise started")
+                self.notify("info", "DR exercise started",
+                            f"{self.profile().name}: targets RTO {self.profile().rto_min} min, RPO {self.profile().rpo_min} min.")
+            for step in plan.steps:
+                if step.id in done:
+                    continue
+                self.run_step(step)
+                done.add(step.id)
+                self.update(completed_steps_json=json.dumps(sorted(done)), current_step="")
+            self.update(status="completed", finished_at=iso(utcnow()))
+            self.event("info", "Exercise completed")
+        except RolledBack:
+            pass  # status already set by rollback()
+        except Killed:
+            self.update(status="killed", current_step="", finished_at=iso(utcnow()))
+            self.event("error", "Kill switch activated: engine stopped. Use Rollback to restore the primary region.")
+            self.notify("failure", "DR exercise stopped (kill switch)", "Rollback is available in the console.")
+            self.clear_command()
+            self.wait_for_rollback_after_kill()
+        except Exception as e:  # noqa: BLE001
+            log.exception("exercise crashed")
+            self.update(status="failed", error=f"{type(e).__name__}: {e}"[:1000], finished_at=iso(utcnow()))
+            self.event("error", f"Engine error: {e}", data={"trace": traceback.format_exc()[-2000:]})
+        finally:
+            self.stop_heartbeat()
+            with _LOCK:
+                _RUNNERS.pop(self.xid, None)
+
+    def wait_for_rollback_after_kill(self) -> None:
+        while True:
+            c = self.command()
+            if c == "rollback":
+                self.clear_command()
+                self.rollback()
+                return
+            if c == "abandon":
+                self.update(status="aborted", finished_at=iso(utcnow()))
+                return
+            time.sleep(1)
+
+    # ------------------------------------------------------------ steps
+    def run_step(self, step: PlanStep) -> None:
+        while True:
+            self.check_kill()
+            self.maybe_chaos(step.phase)
+            self.update(current_step=step.id)
+            self.event("step_start", step.title, step.id, {"type": step.type, "owner": step.owner_team,
+                                                          "action": step.action, "params": step.param_dict()})
+            started = time.monotonic()
+            try:
+                if step.type == "human":
+                    result = self.wait_human(step)
+                else:
+                    result = self.execute(step)
+                self.event("step_end", f"{step.title}: done", step.id,
+                           {"ok": True, "duration_s": round(time.monotonic() - started, 1), "result": result})
+                return
+            except (Killed, RolledBack):
+                raise
+            except Exception as e:  # noqa: BLE001
+                err = f"{type(e).__name__}: {e}"[:800]
+                self.event("step_end", f"{step.title}: FAILED: {err}", step.id,
+                           {"ok": False, "duration_s": round(time.monotonic() - started, 1), "error": err})
+                if not step.abort_on_failure:
+                    self.event("info", f"{step.id} failed but is non-blocking; continuing")
+                    return
+                decision = self.handle_failure(step, err)
+                if decision == "retry":
+                    self.apply_fix(step)
+                    continue
+                if decision == "continue":
+                    return
+                raise Killed() if decision == "kill" else StepFailed(err)
+
+    def wait_human(self, step: PlanStep) -> dict:
+        self.update(status="waiting_human", waiting_step=step.id)
+        self.notify("action", f"Action needed: {step.title}",
+                    f"Owner: {step.owner_team} team. Confirm in the DR console when done.")
+        while True:
+            self.check_kill()
+            conf = json.loads(self.meta().get("confirmations_json") or "{}")
+            if step.id in conf:
+                self.update(status="running", waiting_step="")
+                self.event("approval", f"Confirmed by {conf[step.id].get('by')}", step.id, conf[step.id])
+                return conf[step.id]
+            time.sleep(1.5)
+
+    def handle_failure(self, step: PlanStep, err: str) -> str:
+        from dr_agent.agents import validator
+        self.clear_command()  # a stale retry/rollback from an earlier failure must not approve this one unseen
+        recent = store.get_events(self.xid)[-15:]
+        diag = validator.run(step, err, recent, {"A": _safe(lambda: _probe("A")), "B": _safe(lambda: _probe("B")),
+                                                 "tm": _safe(lambda: _probe("tm"))}, deadline_s=VALIDATOR_DEADLINE_S)
+        self.update(status="paused_failed", failed_step=step.id, diagnosis_json=diag.output.model_dump_json(),
+                    diagnosis_source=diag.source, diagnosis_via=diag.via, diagnosis_version=diag.agent_version)
+        self.event("diagnosis", diag.output.likely_cause, step.id, diag.output.model_dump())
+        self.notify("failure", f"Step failed: {step.title}",
+                    f"{diag.output.likely_cause} Recommended: {diag.output.recommended_action}.")
+        while True:
+            c = self.command()
+            if c in ("retry", "continue", "rollback", "kill"):
+                self.clear_command()
+                self.update(status="running", failed_step="")
+                if c == "rollback":
+                    self.rollback()
+                    raise RolledBack()
+                return c
+            time.sleep(1)
+
+    # ------------------------------------------------------------ actions
+    def execute(self, step: PlanStep) -> dict:
+        p = step.param_dict()
+        a = step.action
+        if a == "snapshot_inventory":
+            from dr_agent.tools.inventory import snapshot_inventory
+            snap = snapshot_inventory()
+            key = "inventory_after_json" if step.phase == "closure" else "inventory_before_json"
+            self.update(**{key: json.dumps(snap, default=str)[:30000]})
+            return {"resources": len(snap.get("resources", [])) if isinstance(snap, dict) else None}
+        if a == "check_fog":
+            st = _fog().status()
+            if st.get("primary_region") != "A":
+                raise StepFailed(f"Region A must be SQL primary, found {st.get('primary_region')}")
+            return st
+        if a == "start_heartbeat":
+            return self.start_heartbeat()
+        if a == "inject_outage":
+            from dr_agent.tools.azure_webapp import stop_webapp_region
+            t0 = parse_dt(self.meta().get("t0")) or utcnow()
+            res = stop_webapp_region(p["region"])
+            self.update(t0=t0)
+            self.notify("info", "Outage injected", f"Region {p['region']} ({REGION_NAMES[p['region']]}) web app stopped. RTO clock started.")
+            return {"t0": iso(t0), **_jsonable(res)}
+        if a == "sql_failover":
+            target, forced = p["target_region"], p["allow_data_loss"].lower() == "true"
+            if forced and not self.rolling_back and not self.meta().get("t_failover"):
+                self.update(t_failover=utcnow())
+            res = _fog().failover(target, forced)
+            if forced and not self.rolling_back:
+                # RPO checks every write acknowledged until this moment, including those made during the failover
+                self.update(t_failover_done=utcnow())
+            return res
+        if a == "tm_set_endpoint":
+            from dr_agent.tools.azure_trafficmanager import set_endpoint_region
+            return _jsonable(set_endpoint_region(p["region"], p["enabled"].lower() == "true"))
+        if a == "wait_healthy":
+            return self.wait_healthy(p["target"], p["expect_region"], int(p.get("timeout_s", 900)), step.phase)
+        if a == "functional_txn_check":
+            return self.functional_check()
+        if a == "measure_rpo":
+            return self.measure_rpo()
+        if a == "start_webapp":
+            from dr_agent.tools.azure_webapp import start_webapp_region
+            if p["region"] == "A" and step.phase == "failback":
+                self.update(t_failback_start=utcnow())
+            return _jsonable(start_webapp_region(p["region"]))
+        if a == "stop_heartbeat":
+            return self.stop_heartbeat()
+        if a == "asr_test_failover":
+            from dr_agent.tools.azure_asr import AsrTestFailover
+            m = self.meta()
+            if m.get("iaas_started") and m.get("iaas_operation"):
+                # resumed after a console restart: the job is already running in Azure, so only watch it again
+                if not m.get("iaas_failover_done"):
+                    threading.Thread(target=self._watch_asr, args=(m["iaas_operation"],), daemon=True).start()
+                self.event("info", "ASR test failover already started before the restart; re-attached to its job", step.id)
+                return {"started": m["iaas_started"], "resumed": True}
+            started = utcnow()
+            res = AsrTestFailover.from_env().start()
+            self.update(iaas_started=started, iaas_operation=res.get("operation") or "", iaas_failover_done="")
+            threading.Thread(target=self._watch_asr, args=(res.get("operation") or None,), daemon=True).start()
+            return {"started": iso(started), "recovery_point": res.get("recovery_point")}
+        if a == "asr_verify_recovery":
+            from dr_agent.tools.azure_asr import AsrTestFailover
+            m = self.meta()
+            if not m.get("iaas_started"):
+                raise StepFailed("ASR test failover was not started")
+            asr = AsrTestFailover.from_env()
+            done = parse_dt(self.meta().get("iaas_failover_done"))
+            if not done:  # the watcher has not seen the job finish yet: wait for it here
+                asr.wait_done(m.get("iaas_operation") or None, int(p.get("timeout_s", 1200)))
+                done = parse_dt(self.meta().get("iaas_failover_done")) or utcnow()
+            res = asr.verify()
+            if (res.get("location") or "").lower() != asr.loc_b.lower():
+                raise StepFailed(f"recovered VM is in {res.get('location')}, expected {asr.loc_b}")
+            secs = round((done - parse_dt(m["iaas_started"])).total_seconds(), 1)
+            self.update(iaas_recovered_s=secs, iaas_result_json=json.dumps(res))
+            self.event("measurement", f"IaaS: Azure Site Recovery brought the reports VM up in Southeast Asia in "
+                                      f"{M.fmt_duration(secs)} (test failover job); {iaas_report_summary(res)}",
+                       step.id, {"iaas_recovered_s": secs, "job_done": iso(done), **res})
+            return {"iaas_recovered_s": secs, **res}
+        if a == "asr_test_cleanup":
+            from dr_agent.tools.azure_asr import AsrTestFailover
+            return AsrTestFailover.from_env().cleanup()
+        if a == "generate_report":
+            from dr_agent.engine.reporting import build_report
+            url = build_report(self.xid)
+            self.notify("success", "DR exercise report ready", "The DR exercise finished and the report is published.")
+            return {"report": url}
+        raise StepFailed(f"unknown action {a}")
+
+    def wait_healthy(self, target: str, expect: str, timeout_s: int, phase: str) -> dict:
+        deadline = time.monotonic() + timeout_s
+        attempts, last = 0, {}
+        measuring = target == "tm" and phase in ("validation", "failback")
+        interval = PROBE_INTERVAL_MEASURING_S if measuring else 5
+        last_bad_end: Optional[datetime] = None  # end of the last probe that proved the service NOT yet recovered
+        while time.monotonic() < deadline:
+            self.check_kill()
+            self.maybe_chaos(phase)
+            attempts += 1
+            if target == "tm":
+                self.assert_endpoint_enabled(expect)
+            p_start = utcnow()
+            last = _probe(target)
+            p_end = utcnow()
+            if last.get("ok") and last.get("db_ok") and last.get("region_key") == expect:
+                # recovery happened after last_bad_end and is PROVEN by p_end (the healthy response arrived)
+                evidence = {"probe_interval_s": interval, "attempts": attempts,
+                            "last_unhealthy_probe_end": iso(last_bad_end), "first_healthy_probe_start": iso(p_start),
+                            "first_healthy_probe_end": iso(p_end), "served_by": last.get("region"),
+                            "db_server": last.get("db_server"),
+                            "precision_s": round((p_end - last_bad_end).total_seconds(), 2) if last_bad_end else None}
+                if target == "tm" and phase == "validation" and expect == "B":
+                    self.record_recovery(p_end, evidence)
+                if target == "tm" and phase == "failback" and expect == "A":
+                    self.record_failback_done(p_end)
+                return {"attempts": attempts, "served_by": last.get("region"), "db_server": last.get("db_server"),
+                        "precision_s": evidence["precision_s"]}
+            last_bad_end = p_end
+            if attempts % 6 == 1:
+                self.event("info", f"waiting for {target} to serve from Region {expect} "
+                                   f"(now: {last.get('region') or last.get('error') or last.get('status_code')})")
+            self.sleep(interval)
+        raise StepFailed(f"{target} not healthy from Region {expect} within {timeout_s}s; last probe: {last}")
+
+    def assert_endpoint_enabled(self, region: str) -> None:
+        """Fail fast (instead of waiting for the timeout) if Traffic Manager cannot route to `region` at all."""
+        from dr_agent.tools.azure_trafficmanager import get_endpoint
+        ep = _safe(lambda: get_endpoint(ENDPOINTS[region]))
+        if isinstance(ep, dict) and ep.get("endpoint_status") == "Disabled":
+            raise StepFailed(f"Traffic Manager endpoint {ENDPOINTS[region]} (Region {region}) is Disabled, so Traffic "
+                             f"Manager has no endpoint to route users to Region {region}.")
+
+    def _watch_asr(self, operation: Optional[str]) -> None:
+        """Record when the ASR test-failover job completes (polled every 5 s), independent of the drill's pace."""
+        from dr_agent.tools.azure_asr import AsrTestFailover
+        try:
+            AsrTestFailover.from_env().wait_done(operation, 1500, poll_s=5)
+            self.update(iaas_failover_done=utcnow())
+        except Exception as e:  # noqa: BLE001 - the verify step reports the failure
+            log.warning("ASR watcher: %s", e)
+
+    # ------------------------------------------------------------ chaos + remediation
+    def maybe_chaos(self, phase: str) -> None:
+        """Inject the armed surprise fault: disable the Region B endpoint (a bad change made during the incident)."""
+        m = self.meta()
+        if str(m.get("chaos_armed")).lower() != "true" or m.get("chaos_injected") or m.get("t_recovered"):
+            return
+        if phase not in ("failover", "validation") or self.rolling_back:
+            return
+        from dr_agent.tools.azure_trafficmanager import set_endpoint_region
+        set_endpoint_region("B", False)
+        self.update(chaos_injected=iso(utcnow()))
+        self.event("chaos", "Surprise fault injected: Region B Traffic Manager endpoint disabled")
+        self.notify("info", "Surprise fault injected", "The Region B Traffic Manager endpoint was disabled mid-failover.")
+
+    def apply_fix(self, step: PlanStep) -> None:
+        """Run the Validator's remediation (already approved by the human who clicked retry)."""
+        raw = self.meta().get("diagnosis_json")
+        if not raw:
+            return
+        diag = Diagnosis.model_validate_json(raw)
+        if diag.fix_action == "none":
+            return
+        params = {p.key: p.value.strip().lower() for p in diag.fix_params}
+        problem = check_fix(diag.fix_action, params, step.phase)
+        if problem:
+            self.event("error", f"Proposed fix rejected by the engine: {problem}", step.id)
+            return
+        from dr_agent.tools.azure_trafficmanager import set_endpoint_region
+        from dr_agent.tools.azure_webapp import start_webapp_region
+        if diag.fix_action == "tm_set_endpoint":
+            res = set_endpoint_region(params["region"].upper(), params["enabled"] == "true")
+        else:
+            res = start_webapp_region(params["region"].upper())
+        self.update(diagnosis_json="")
+        self.event("remediation", f"Approved fix applied: {diag.fix_action} {params}", step.id, _jsonable(res))
+
+    def record_recovery(self, t: datetime, evidence: Optional[dict] = None) -> None:
+        m = self.meta()
+        t0 = parse_dt(m.get("t0"))
+        rto = M.compute_rto(t0, t)
+        prof = self.profile()
+        ev = M.evaluate(rto, _num(m.get("rpo_s")), prof.rto_min, prof.rpo_min)
+        self.update(t_recovered=t, rto_s=rto, rto_met=ev["rto_met"], rto_evidence_json=json.dumps(evidence or {}))
+        self.event("measurement", f"Recovered in {M.fmt_duration(rto)} (target {prof.rto_min} min): "
+                                  f"{'MET' if ev['rto_met'] else 'MISSED'}", data={"rto_s": rto, "t0": iso(t0), "t_recovered": iso(t)})
+        self.notify("success" if ev["rto_met"] else "failure", "Application recovered in Region B",
+                    f"RTO {M.fmt_duration(rto)} vs target {prof.rto_min} min.")
+
+    def record_failback_done(self, t: datetime) -> None:
+        start = parse_dt(self.meta().get("t_failback_start"))
+        fb = M.compute_rto(start, t)
+        self.update(t_failback_done=t, failback_s=fb)
+        self.event("measurement", f"Failback completed in {M.fmt_duration(fb)}", data={"failback_s": fb})
+
+    def functional_check(self) -> dict:
+        import httpx
+        dns_info = tm_resolve()
+        if "error" in dns_info:
+            raise StepFailed(dns_info["error"])
+        base = dns_info["url"]
+        import os
+        hdr = {"X-Access-Code": os.environ.get("APP_ACCESS_CODE", "")}  # the agent works in private mode too
+        r = httpx.post(f"{base}/api/txn", timeout=10, headers=hdr)
+        r.raise_for_status()
+        txn = r.json()
+        recent = httpx.get(f"{base}/api/recent", timeout=10, headers=hdr).json()
+        if not any(str(x.get("id")) == str(txn.get("id")) for x in recent):
+            raise StepFailed("payment written but not readable via Traffic Manager")
+        return {"txn": txn}
+
+    # ------------------------------------------------------------ heartbeat / RPO
+    def start_heartbeat(self, resumed: bool = False) -> dict:
+        from dr_agent.tools.heartbeat import HeartbeatWriter, ensure_table
+        connect = _sql_connect()
+        ensure_table(connect)
+        if not resumed:
+            self.update(hb_started=utcnow())
+
+        def on_result(seq, ts, acked, error):
+            self.heartbeats.append(M.HeartbeatRecord(seq, ts, acked))
+            try:
+                store.record_heartbeat(seq, ts, acked, error)
+            except Exception:  # noqa: BLE001
+                pass
+        # Load mode: N parallel writers share one sequence counter (each write opens its own connection to the
+        # listener, ~0.3-0.6 s cross-region, so one writer manages ~2 writes/s). Every write is still checked.
+        rate = max(1.0, float(self.meta().get("load_writes_per_s") or 1))
+        n = 1 if rate <= 1 else int(math.ceil(rate / 2))
+        counter = itertools.count(int(time.time() * 1000))
+        lock = threading.Lock()
+
+        def next_seq() -> int:
+            with lock:
+                return next(counter)
+        writers = [HeartbeatWriter(connect, on_result, interval=n / rate, label=f"dr-engine-{i}", next_seq=next_seq)
+                   for i in range(n)]
+        for w in writers:
+            w.start()
+        self.hb_writer = _WriterGroup(writers)
+        if resumed:
+            return {"resumed": True}
+        self.sleep(5)
+        acked = sum(1 for h in self.heartbeats if h.acked)
+        if not acked:
+            raise StepFailed("heartbeat writer could not write to the database")
+        return {"acked": acked}
+
+    def restore_heartbeat(self) -> None:
+        """After a console restart mid-drill: reload this drill's heartbeats from storage and restart the writer,
+        so the RPO is still measured over every write."""
+        started = parse_dt(self.meta().get("hb_started"))
+        if not started:
+            return
+        rows = store.get_heartbeats_since(int(started.timestamp() * 1000))
+        self.heartbeats = [M.HeartbeatRecord(int(r["RowKey"]), parse_dt(r["client_ts"]), bool(r.get("acked"))) for r in rows]
+        self.heartbeats.sort(key=lambda h: h.client_ts)
+        self.start_heartbeat(resumed=True)
+        self.event("info", f"Console restarted: heartbeat writer resumed; {len(rows)} earlier writes restored from storage")
+
+    def stop_heartbeat(self) -> dict:
+        if self.hb_writer:
+            self.hb_writer.stop()
+            self.hb_writer = None
+        return {"written": len(self.heartbeats), "acked": sum(1 for h in self.heartbeats if h.acked)}
+
+    def measure_rpo(self) -> dict:
+        from dr_agent.tools.heartbeat import newest_present
+        m = self.meta()
+        t_fo = parse_dt(m.get("t_failover"))
+        if not t_fo:
+            raise StepFailed("no failover timestamp recorded")
+        t_end = parse_dt(m.get("t_failover_done")) or utcnow()
+        _, present = newest_present(_sql_connect(), t_end)
+        res = M.compute_rpo(self.heartbeats, t_end, present, t_fo)
+        prof = self.profile()
+        ev = M.evaluate(_num(m.get("rto_s")), res.rpo_s, prof.rto_min, prof.rpo_min)
+        evidence = {"t_failover": iso(t_fo), "t_failover_done": iso(t_end), "checked_writes": res.checked,
+                    "acked_during_failover": res.acked_during_failover, "write_interval_s": HEARTBEAT_INTERVAL_S,
+                    "last_acked_seq": res.last_acked_seq, "last_acked_ts": iso(res.last_acked_ts),
+                    "newest_present_ts": iso(res.newest_present_ts), "lost_writes": len(res.lost_seqs),
+                    # which acknowledged writes are missing, so an auditor can check each one (seq = write time in ms)
+                    "lost_seqs": res.lost_seqs[:50],
+                    "lost_write_times": [iso(h.client_ts) for h in self.heartbeats if h.seq in set(res.lost_seqs)][:50],
+                    "note": res.note}
+        series = M.write_series(self.heartbeats)[-300:]  # the chart of this drill's writes, kept for afterwards
+        self.update(rpo_s=res.rpo_s, rpo_met=ev["rpo_met"], rpo_evidence_json=json.dumps(evidence),
+                    write_series_json=json.dumps(series)[:30000])
+        self.event("measurement", f"RPO {M.fmt_duration(res.rpo_s)} (target {prof.rpo_min} min): "
+                                  f"{'MET' if ev['rpo_met'] else 'MISSED'}. {res.note}", data=evidence)
+        return evidence
+
+    # ------------------------------------------------------------ rollback
+    def rollback(self) -> None:
+        """Restore Region A as primary (used after kill or on a failed step)."""
+        from dr_agent.tools.azure_trafficmanager import set_endpoint_region
+        from dr_agent.tools.azure_webapp import start_webapp_region
+        self.rolling_back = True
+        self.update(status="rolling_back")
+        self.event("info", "Rollback started: restoring Region A")
+        try:
+            start_webapp_region("A")
+            self.wait_healthy_simple("A", 600)
+            if _fog().status().get("primary_region") != "A":
+                _fog().failover("A", False)
+            set_endpoint_region("A", True)
+            set_endpoint_region("B", True)  # a chaos fault may have disabled the DR endpoint
+            if self.meta().get("iaas_started"):
+                try:
+                    from dr_agent.tools.azure_asr import AsrTestFailover
+                    AsrTestFailover.from_env().cleanup()
+                except Exception as e:  # noqa: BLE001 - report, but finish restoring production
+                    self.event("error", f"ASR test cleanup during rollback failed: {e}"[:300])
+            deadline = time.monotonic() + 300
+            while time.monotonic() < deadline and _safe(lambda: _probe("tm")).get("region_key") != "A":
+                time.sleep(5)
+            self.stop_heartbeat()
+            self.update(status="rolled_back", current_step="", finished_at=iso(utcnow()))
+            self.event("info", "Rollback complete: Region A is primary again")
+            self.notify("success", "Rollback complete", "Region A (East Asia) is serving again.")
+        except Exception as e:  # noqa: BLE001
+            self.update(status="failed", error=f"rollback failed: {e}"[:1000])
+            self.event("error", f"Rollback failed: {e}")
+            self.notify("failure", "Rollback failed", str(e)[:300])
+
+    def wait_healthy_simple(self, region: str, timeout_s: int) -> None:
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            r = _probe(region)
+            if r.get("ok") and r.get("db_ok") is not False:
+                return
+            time.sleep(5)
+        raise StepFailed(f"Region {region} not healthy after {timeout_s}s")
+
+
+class _WriterGroup:
+    """Several heartbeat writers stopped together."""
+    def __init__(self, writers: list) -> None:
+        self.writers = writers
+
+    def stop(self) -> None:
+        for w in self.writers:
+            w._stop_event.set()
+        for w in self.writers:
+            w.join(10)
+
+
+ENDPOINTS = {"A": "endpoint-a", "B": "endpoint-b"}
+PROBE_INTERVAL_MEASURING_S = 1    # RTO is measured to about one probe interval
+HEARTBEAT_INTERVAL_S = 1.0        # RPO resolution: one confirmed write per second
+FIX_PARAMS = {"tm_set_endpoint": {"region", "enabled"}, "start_webapp": {"region"}}
+VALIDATOR_DEADLINE_S = 25         # a paused drill waits on the diagnosis: the Validator must answer fast
+
+
+def check_fix(action: str, params: dict, phase: str) -> Optional[str]:
+    """Allowlist for Validator remediations. During the drill Region A must stay down (no cheating the outage)."""
+    if action not in FIX_PARAMS:
+        return f"action {action!r} not allowed"
+    if set(params) != FIX_PARAMS[action]:
+        return f"params must be {sorted(FIX_PARAMS[action])}"
+    if params.get("region", "").upper() not in ("A", "B"):
+        return "region must be A or B"
+    if params.get("enabled", "true") not in ("true", "false"):
+        return "enabled must be true/false"
+    if phase in ("outage", "failover", "validation") and params["region"].upper() == "A":
+        return "Region A must stay down during the outage"
+    if phase in ("outage", "failover", "validation") and params.get("enabled") == "false":
+        return "disabling the DR region during the outage is not allowed"
+    return None
+
+
+def _safe(fn: Callable[[], Any]) -> Any:
+    try:
+        return fn()
+    except Exception as e:  # noqa: BLE001
+        return {"error": str(e)}
+
+
+def _num(v: Any) -> Optional[float]:
+    try:
+        return None if v in (None, "") else float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _jsonable(v: Any) -> Any:
+    return json.loads(json.dumps(v, default=str))
+
+
+# ---------------------------------------------------------------- public API
+def start(exercise_id: str) -> None:
+    with _LOCK:
+        if exercise_id in _RUNNERS:
+            return
+        if any(r.is_alive() for r in _RUNNERS.values()):
+            raise RuntimeError("another exercise is already running")
+        r = ExerciseRunner(exercise_id)
+        _RUNNERS[exercise_id] = r
+        r.start()
+
+
+def start_rollback(exercise_id: str) -> None:
+    """Roll back an exercise whose runner is gone (crash, restart). Counts as running, so no drill starts meanwhile."""
+    with _LOCK:
+        if any(r.is_alive() for r in _RUNNERS.values()):
+            raise RuntimeError("another exercise is running")
+        t = threading.Thread(target=ExerciseRunner(exercise_id).rollback, daemon=True, name=f"rollback-{exercise_id}")
+        _RUNNERS[exercise_id] = t
+        t.start()
+
+
+def any_running() -> bool:
+    with _LOCK:
+        return any(r.is_alive() for r in _RUNNERS.values())
+
+
+def is_running(exercise_id: str) -> bool:
+    r = _RUNNERS.get(exercise_id)
+    return bool(r and r.is_alive())
+
+
+def resume_interrupted() -> list[str]:
+    """Called at app startup: restart runners for exercises that were mid-flight when the app restarted."""
+    resumed = []
+    recent = sorted((e for e in store.list_exercises(1000) if e.get("PartitionKey", "").startswith("ex-")),
+                    key=lambda e: e["PartitionKey"], reverse=True)[:20]   # newest first
+    for e in recent:
+        xid = e["PartitionKey"]
+        full = store.get_exercise(xid) or {}
+        status = full.get("status")
+        if is_running(xid):
+            continue
+        if status in ("running", "waiting_human", "paused_failed"):
+            store.add_event(xid, "info", "Console restarted: resuming exercise")
+            start(xid)
+            resumed.append(xid)
+        elif status == "rolling_back":
+            store.add_event(xid, "info", "Console restarted: resuming rollback")
+            start_rollback(xid)
+            resumed.append(xid)
+    return resumed
