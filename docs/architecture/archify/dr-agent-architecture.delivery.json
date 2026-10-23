@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
-  "receiptId": "a5d1df5c-6bfc-46f0-a4f4-51f49dd15bc7",
+  "receiptId": "84f1e91f-fa26-4e71-a0e8-dcd3a85bbab3",
   "status": "current",
   "command": "deliver",
   "type": "architecture",
   "input": "/home/ubuntu/agents/azure-armada-foundry/docs/architecture/archify/candidate.json",
   "output": "/home/ubuntu/agents/azure-armada-foundry/docs/architecture/archify/dr-agent-architecture.html",
   "specification": {
-    "sha256": "677f079a8b378783332be4c8160985be737eaaae0915e49d992fe62f8a1535cb",
-    "bytes": 9493
+    "sha256": "892184b9e090426f39a6bce5c4279bf62ffcfdb8d8f7609cfc050203fd1060ac",
+    "bytes": 9514
   },
   "artifact": {
-    "sha256": "9cf14823bacaff39c959ed23164fde0daf9663962fadfb14fa3b683f0227f0f0",
-    "bytes": 847256
+    "sha256": "a90e5db1fc8b1df8bae6deec6bce6c56725bec4298f101a6610f81281a071602",
+    "bytes": 847310
   }
 }
