@@ -572,6 +572,12 @@ async def api_notifications(after: Optional[str] = None):
     return await run_in_threadpool(store.get_notifications, after)
 
 
+@app.post("/api/notifications/read-all", dependencies=[api])
+def api_notifications_read_all():
+    from dr_agent.tools import store
+    return {"ok": True, "marked": store.mark_all_notifications_read()}
+
+
 @app.post("/api/notifications/{nid}/read", dependencies=[api])
 def api_notification_read(nid: str):
     from dr_agent.tools import store

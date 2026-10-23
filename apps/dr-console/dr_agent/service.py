@@ -881,7 +881,7 @@ def public_live() -> dict:
         return _live_cache["v"]
     now = datetime.now(timezone.utc)
     out: dict[str, Any] = {
-        "state": "normal", "exercise_id": None, "headline": "All systems normal. DR drills verified by DR Agent.",
+        "state": "normal", "exercise_id": None, "headline": "All systems normal. DR drills verified by DR Sentinel.",
         "primary_region": "East Asia", "serving_region": _serving_region(), "server_time": now.isoformat(),
         "t0": None, "elapsed_s": None, "eta_s": None, "eta_basis": "", "rto_target_s": None, "rpo_target_s": None,
         "rto_s": None, "rpo_s": None, "rto_met": None, "rpo_met": None, "current_step": "", "steps_done": 0,
@@ -926,7 +926,7 @@ def public_live() -> dict:
                 eta, basis = _eta_basis(xid)
                 out.update(state="paused" if status == "paused_failed" else "outage",
                            eta_s=round(max(0.0, eta - out["elapsed_s"]), 1), eta_basis=basis,
-                           headline="East Asia is down. DR Agent is failing over to Southeast Asia.")
+                           headline="East Asia is down. DR Sentinel is failing over to Southeast Asia.")
             elif status in ("approved", "running", "waiting_human"):
                 out.update(state="armed", headline="A DR drill is about to start. Keep paying!")
             evs = [e for e in store.get_events(xid) if e.get("kind") in PUBLIC_EVENT_KINDS][-8:]

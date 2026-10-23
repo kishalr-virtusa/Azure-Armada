@@ -99,7 +99,7 @@ button{{width:100%;min-height:48px;font-size:16px;font-weight:600;color:#fff;bac
 <p>This demo is in <b>private preview</b>. Enter the team access code, or wait until the presenter opens it to everyone.</p>
 {error}<input name="code" type="password" autocomplete="one-time-code" placeholder="Access code" required>
 <input type="hidden" name="next" value="{next}"><button type="submit">Enter</button>
-<div class="f">DR protected by Virtusa DR Agent · Powered by Microsoft Azure</div></form></body></html>"""
+<div class="f">DR protected by DR Sentinel · Powered by Microsoft Azure</div></form></body></html>"""
 
 
 async def gate_middleware(request: Request, call_next):

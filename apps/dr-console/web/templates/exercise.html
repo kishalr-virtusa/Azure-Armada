@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Exercise {{ exercise_id }} — DR Agent Console{% endblock %}
+{% block title %}Exercise {{ exercise_id }} — DR Sentinel Console{% endblock %}
 
 {% block content %}
 <header>
@@ -26,7 +26,7 @@
     <div class="kpi">
         <div class="l">Current Step</div>
         <div class="v" id="currentStep">—</div>
-        <div class="x" id="currentStepTitle">Waiting...</div>
+        <div class="x" id="currentStepTitle">Loading…</div>
     </div>
     
     <!-- Progress -->
@@ -220,6 +220,19 @@
                     } else {
                         document.getElementById('humanStepBox').classList.add('hide');
                     }
+                } else {
+                    // every step has run: show the outcome instead of leaving the placeholder text
+                    const OUTCOME = {
+                        completed: ['Done', 'All steps completed'],
+                        rolled_back: ['Rolled back', 'Region A restored after a rollback'],
+                        killed: ['Stopped', 'Stopped by the kill switch'],
+                        failed: ['Failed', 'The exercise failed: see the timeline'],
+                    };
+                    const [label, title] = OUTCOME[data.raw_status || data.status] || ['Finishing', 'Writing the report…'];
+                    document.getElementById('currentStep').textContent = label;
+                    document.getElementById('currentStepTitle').textContent = title;
+                    document.getElementById('progressPhase').textContent = label === 'Finishing' ? 'Closure' : 'Finished';
+                    document.getElementById('humanStepBox').classList.add('hide');
                 }
             }
             
@@ -286,6 +299,7 @@
             // Update exercise state for chaos button
             exerciseState = data.status;
             updateChaosButton(data);
+            updateControls(data);
             
             // Handle killed status - show prominent rollback
             if (data.status === 'killed') {
@@ -520,6 +534,20 @@
         }
     }
     
+    // Same rule as the server (service.COMMANDS_BY_STATUS): a button is only clickable when its command is allowed
+    const ALLOWED = {
+        running: ['kill'], waiting_human: ['kill'],
+        paused_failed: ['kill', 'rollback'],
+        killed: ['rollback'], failed: ['rollback'],
+    };
+    function updateControls(data) {
+        const ok = ALLOWED[data.raw_status || data.status] || [];
+        for (const [id, cmd] of [['killBtn', 'kill'], ['rollbackBtn', 'rollback']]) {
+            const b = document.getElementById(id);
+            if (b) b.disabled = !ok.includes(cmd);
+        }
+    }
+
     function updateChaosButton(data) {
         const chaosBtn = document.getElementById('chaosBtn');
         // Enable chaos button only during running state and chaos not already injected

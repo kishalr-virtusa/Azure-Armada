@@ -136,9 +136,9 @@ def _send_via_resend(kind: str, title: str, body: str, link: str | None) -> None
     html = _build_html(kind, title, body, full_link)
     r = httpx.post("https://api.resend.com/emails", timeout=10,
                    headers={"Authorization": f"Bearer {_resend_key()}"},
-                   json={"from": os.getenv("RESEND_FROM", "Virtusa DR Agent <onboarding@resend.dev>"),
+                   json={"from": os.getenv("RESEND_FROM", "DR Sentinel <onboarding@resend.dev>"),
                          "to": [a.strip() for a in config.notify_email_to.split(",") if a.strip()],
-                         "subject": f"[DR Agent] {title}", "html": html})
+                         "subject": f"[DR Sentinel] {title}", "html": html})
     if r.status_code >= 300:
         raise RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
 
@@ -250,7 +250,7 @@ def _build_html(kind: str, title: str, body: str, link: str | None) -> str:
             <p>{body}</p>
             {f'<a href="{link}" class="btn">Open Console</a>' if link else ''}
             <div class="footer">
-                DR Agent Console — Virtusa Azure Day 2026
+                DR Sentinel Console — Azure Day 2026
             </div>
         </div>
     </body>
@@ -270,7 +270,7 @@ def _send_email(kind: NotifyKind, title: str, body: str, link: str | None) -> No
             "to": [{"address": config.notify_email_to}],
         },
         "content": {
-            "subject": f"[DR Agent] {title}",
+            "subject": f"[DR Sentinel] {title}",
             "html": html_content,
         },
     }

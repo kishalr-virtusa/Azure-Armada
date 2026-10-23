@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Live map — DR Agent Console{% endblock %}
+{% block title %}Live map — DR Sentinel Console{% endblock %}
 
 {% block content %}
 <style>
@@ -76,7 +76,7 @@
     <div>
         <span class="eyebrow">Present</span>
         <h1>Live map</h1>
-        <p class="sub" style="margin-top: 4px;">What the DR Agent is doing to the real Azure resources, as it happens.</p>
+        <p class="sub" style="margin-top: 4px;">What the DR Sentinel is doing to the real Azure resources, as it happens.</p>
     </div>
 </header>
 
@@ -151,7 +151,7 @@
 
     const NAMES = {
         azure: { phones: ["Customers' phones", 'Contoso Payments app'], tm: ['Traffic Manager', 'sends users to a healthy region'],
-                 console: ['DR Agent console', 'engine · South India'], agents: ['AI agents', 'Azure AI Foundry · East US 2'],
+                 console: ['DR Sentinel console', 'engine · South India'], agents: ['AI agents', 'Azure AI Foundry · East US 2'],
                  app: ['App Service', 'payments web app'], sql: ['Azure SQL', 'failover group'],
                  // the VM lane is not in the payment path: say so on the node itself (second line = sub2)
                  vmA: ['Reports server (VM)', 'daily payments report', 'not in payment path'],

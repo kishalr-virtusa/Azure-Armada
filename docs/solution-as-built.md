@@ -16,7 +16,7 @@ This document describes the solution **as built and running** (21 Oct 2026). The
 
 Scope: **validation**, not DR design. DR comes in many patterns (backup & restore, pilot light, warm standby, active-passive, active-active). Our validator is pattern-aware; we have built and proven it on **warm standby**, the most common enterprise pattern, and adding a pattern means adding engine actions, not a redesign.
 
-**Where it runs:** full drills in staging or isolated test networks; production gets continuous read-only validation. Enterprises do not take production down casually, and neither does the DR Agent: the readiness checks are read-only and safe to run against production every 10 minutes; full failover drills run in a staging copy or in an isolated test network (as an Azure Site Recovery test failover does), and a production "game day" happens only when the business plans and approves it. Our demo runs a full drill on a test workload.
+**Where it runs:** full drills in staging or isolated test networks; production gets continuous read-only validation. Enterprises do not take production down casually, and neither does DR Sentinel: the readiness checks are read-only and safe to run against production every 10 minutes; full failover drills run in a staging copy or in an isolated test network (as an Azure Site Recovery test failover does), and a production "game day" happens only when the business plans and approves it. Our demo runs a full drill on a test workload.
 
 ---
 
@@ -37,7 +37,7 @@ Every enterprise has a DR plan. Very few can prove, on an ordinary Tuesday, that
 
 ## 3. What is your detailed proposed solution (as built)
 
-The **DR Agent** turns DR validation from a manual weekend drill into a **continuous, autonomous and auditable** process, in three layers:
+**DR Sentinel** turns DR validation from a manual weekend drill into a **continuous, autonomous and auditable** process, in three layers:
 
 1. **Always on: continuous readiness.** Every 10 minutes, **Autopilot** checks 7 readiness signals, one for each component the failover depends on:
    - SQL failover group health and replication lag

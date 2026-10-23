@@ -2,7 +2,7 @@
   "schema_version": 1,
   "diagram_type": "architecture",
   "meta": {
-    "title": "DR Agent: Autonomous Disaster Recovery Validation on Azure",
+    "title": "DR Sentinel: Autonomous Disaster Recovery Validation on Azure",
     "output": "docs/architecture/archify/dr-agent-architecture.html",
     "quality_profile": "showcase",
     "locale": "en"
@@ -71,7 +71,7 @@
     {
       "id": "engine",
       "type": "security",
-      "label": "DR console + engine",
+      "label": "DR Sentinel console + engine",
       "sublabel": "FastAPI · 15 actions · approvals",
       "pos": [
         690,
@@ -420,7 +420,7 @@
     },
     {
       "dot": "cyan",
-      "title": "DR console (App Service azure-armada)",
+      "title": "DR Sentinel console (App Service azure-armada)",
       "items": [
         "Autopilot: readiness checks every 10 min",
         "Readiness gate: drill blocked unless a GO from the last 60 min",
