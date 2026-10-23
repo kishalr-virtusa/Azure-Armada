@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Live Presenter View — DR Agent Console{% endblock %}
+{% block title %}Live Presenter View — DR Sentinel Console{% endblock %}
 
 {% block head %}
 <style>
@@ -477,7 +477,7 @@
     <div>
         <span class="eyebrow">Presenter view</span>
         <h1>Live demo</h1>
-        <p class="lede">What customers see on their phones, and what the DR Agent is doing behind the scenes.</p>
+        <p class="lede">What customers see on their phones, and what the DR Sentinel is doing behind the scenes.</p>
     </div>
     <span class="st" id="stateTag">Loading</span>
 </header>
@@ -525,7 +525,7 @@
             <div class="pv-card-head">
                 <div>
                     <h2>Agent timeline</h2>
-                    <p class="sub">Decisions and actions of the DR Agent, newest first</p>
+                    <p class="sub">Decisions and actions of the DR Sentinel, newest first</p>
                 </div>
                 <button class="btn btn-secondary chaos-btn" id="chaosBtn" onclick="injectChaos()" disabled
                         title="Disables the Southeast Asia traffic endpoint mid-failover to test the Validator agent">Inject surprise fault</button>

@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Overview — DR Agent Console{% endblock %}
+{% block title %}Overview — DR Sentinel Console{% endblock %}
 
 {% block content %}
 <header>
     <div>
-        <span class="eyebrow">DR Agent Console</span>
+        <span class="eyebrow">DR Sentinel Console</span>
         <h1>System Overview</h1>
     </div>
 </header>
@@ -39,7 +39,7 @@
     <div class="card-head-row" style="flex-wrap: wrap;">
         <div>
             <h2 style="display: flex; align-items: center; gap: 10px;">Autopilot <span class="st neutral" id="apState">loading</span></h2>
-            <p class="sub" style="margin-top: 4px;" id="apSub">The DR Agent checks readiness on its own. No one has to ask.</p>
+            <p class="sub" style="margin-top: 4px;" id="apSub">The DR Sentinel checks readiness on its own. No one has to ask.</p>
         </div>
         <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
             <div class="tabs" role="tablist" aria-label="Autonomy level">
@@ -69,7 +69,7 @@
     </div>
     <div class="card">
         <h2>System</h2>
-        <p class="sub" style="margin-top: 4px;">What the DR Agent depends on</p>
+        <p class="sub" style="margin-top: 4px;">What the DR Sentinel depends on</p>
         <dl class="sys" id="sysList"><dt>Loading…</dt><dd></dd></dl>
     </div>
 </div>
