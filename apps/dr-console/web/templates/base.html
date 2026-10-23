@@ -14,12 +14,23 @@
             try { var t = localStorage.getItem('dra-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
         })();
     </script>
+    <style>
+        /* brand lockup in the sidebar: shield mark + name + tagline */
+        .nav-brand { gap: 10px; padding: 2px 8px 6px; }
+        .nav-brand .brand-mark { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 9px; display: grid; place-items: center;
+            color: #fff; background: linear-gradient(135deg, var(--accent), #c105b2); box-shadow: 0 4px 12px rgba(94, 44, 254, .28); }
+        .nav-brand .brand-mark svg { width: 20px; height: 20px; }
+        .nav-brand .brand-text { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+        .nav-brand .brand-name { font-size: 16px; font-weight: 700; color: var(--ink); letter-spacing: -0.2px; }
+        .nav-brand .brand-tag { font-size: 11px; font-weight: 500; color: var(--mute); margin-top: 2px; }
+    </style>
     {% block head %}{% endblock %}
 </head>
 <body>
     <nav class="nav" aria-label="Main">
         <a href="/" class="nav-brand">
-            <span class="product" style="font-size: 16px; font-weight: 700; color: var(--ink); padding-left: 0; border-left: 0;">DR Sentinel</span>
+            <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7.5 3v5.5c0 4.7-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.8-7.5-9.5V6z"/><path d="M8.8 12.2l2.2 2.2 4.4-4.6"/></svg></span>
+            <span class="brand-text"><span class="brand-name">DR Sentinel</span><span class="brand-tag">Autonomous DR validation</span></span>
         </a>
 
         <div class="nav-links">

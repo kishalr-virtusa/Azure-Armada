@@ -1,7 +1,7 @@
 {
   "name": "Contoso Payments",
   "short_name": "Contoso Pay",
-  "description": "Demo payment app for DR Agent - Virtusa Azure Day 2026",
+  "description": "Demo payment app protected by DR Sentinel - Azure Day 2026",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F7F7F9",
